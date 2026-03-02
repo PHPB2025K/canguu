@@ -1,11 +1,34 @@
-import { MessageSquare } from 'lucide-react';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ConversationList } from "@/components/conversations/ConversationList";
+import { ConversationChat } from "@/components/conversations/ConversationChat";
 
-const Conversations = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-    <MessageSquare className="h-24 w-24 text-muted-foreground/20 mb-4" />
-    <h2 className="text-2xl font-semibold text-foreground">Conversas</h2>
-    <p className="text-muted-foreground mt-1">Em construção...</p>
-  </div>
-);
+const Conversations = () => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const handleSelect = (id: string) => {
+    // On mobile (<lg), navigate to detail route
+    if (window.innerWidth < 1024) {
+      navigate(`/conversations/${id}`);
+    } else {
+      setSelectedId(id);
+    }
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-4rem)] -m-6">
+      {/* Left panel - always visible on desktop, always visible on mobile */}
+      <div className="w-full lg:w-96 lg:border-r border-border flex flex-col">
+        <ConversationList selectedId={selectedId} onSelect={handleSelect} />
+      </div>
+
+      {/* Right panel - hidden on mobile */}
+      <div className="hidden lg:flex flex-1 flex-col">
+        <ConversationChat conversationId={selectedId} />
+      </div>
+    </div>
+  );
+};
 
 export default Conversations;
