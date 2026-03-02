@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Menu, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,16 @@ const AppLayout = () => {
   const basePath = '/' + location.pathname.split('/').filter(Boolean).slice(0, 1).join('/');
   const title = pageTitles[basePath] || 'Budamix AI Agent';
   const initials = user?.email?.slice(0, 2).toUpperCase() || 'U';
+
+  // Dynamic page title
+  useEffect(() => {
+    document.title = `${title} — Budamix AI Agent`;
+  }, [title]);
+
+  // Close mobile sidebar on navigate
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen flex bg-background">

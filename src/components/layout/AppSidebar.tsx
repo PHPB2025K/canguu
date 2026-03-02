@@ -2,25 +2,26 @@ import {
   LayoutDashboard, MessageSquare, Package, FileText,
   Users, AlertTriangle, BarChart3, Settings, LogOut, Bot,
 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useSidebarCounts } from '@/hooks/useSidebarCounts';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: MessageSquare, label: 'Conversas', path: '/conversations' },
-  { icon: Package, label: 'Produtos', path: '/products' },
-  { icon: FileText, label: 'Políticas/FAQ', path: '/policies' },
-  { icon: Users, label: 'Clientes', path: '/customers' },
-  { icon: AlertTriangle, label: 'Escalonamentos', path: '/escalations' },
-  { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', badgeKey: null },
+  { icon: MessageSquare, label: 'Conversas', path: '/conversations', badgeKey: 'activeConversations' as const },
+  { icon: Package, label: 'Produtos', path: '/products', badgeKey: null },
+  { icon: FileText, label: 'Políticas/FAQ', path: '/policies', badgeKey: null },
+  { icon: Users, label: 'Clientes', path: '/customers', badgeKey: null },
+  { icon: AlertTriangle, label: 'Escalonamentos', path: '/escalations', badgeKey: 'pendingEscalations' as const },
+  { icon: BarChart3, label: 'Analytics', path: '/analytics', badgeKey: null },
 ];
 
 const AppSidebar = () => {
   const { user, signOut } = useAuthStore();
   const navigate = useNavigate();
+  const counts = useSidebarCounts();
 
   const handleSignOut = async () => {
     await signOut();
@@ -39,17 +40,29 @@ const AppSidebar = () => {
 
       {/* Nav */}
       <nav className="flex-1 px-3 space-y-1">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-sm"
-            activeClassName="bg-primary/10 text-primary font-medium"
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+        {navItems.map((item) => {
+          const count = item.badgeKey ? counts[item.badgeKey] : 0;
+          const badgeColor = item.badgeKey === 'pendingEscalations'
+            ? 'bg-destructive text-destructive-foreground'
+            : 'bg-primary text-primary-foreground';
+
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-sm"
+              activeClassName="bg-primary/10 text-primary font-medium"
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              <span className="flex-1">{item.label}</span>
+              {count > 0 && (
+                <span className={`h-5 min-w-[1.25rem] px-1 flex items-center justify-center rounded-full text-xs font-bold ${badgeColor}`}>
+                  {count}
+                </span>
+              )}
+            </NavLink>
+          );
+        })}
 
         <Separator className="my-3" />
 
