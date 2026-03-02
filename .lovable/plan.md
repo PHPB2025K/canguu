@@ -1,102 +1,97 @@
 
-# Sprint 7 — Escalonamentos + Analytics
+# Sprint 8 — Configuracoes + Polish Global
 
-Implementar `/escalations` com cards por status e acoes de assumir/resolver, e `/analytics` com graficos Recharts, summary cards e exportacao CSV.
+## Descoberta Importante: agent_config e key-value
 
-## Schema Real Confirmado
+A tabela `agent_config` NAO tem colunas por campo (como agent_name, system_prompt, etc.). Ela usa um padrao **key-value** com colunas `config_key` (varchar) e `config_value` (text). Cada configuracao e uma row separada.
 
-**escalations**: id, conversation_id, reason, urgency, status, notes, resolved_by, escalated_at, resolved_at
+Keys existentes no banco:
+- `agent_name` = "Giovana"
+- `system_prompt` = (texto longo do system prompt)
+- `model` = "claude-sonnet-4-20250514"
+- `max_tokens` = "500"
+- `greeting_message` = mensagem de boas-vindas
+- `away_message` = mensagem fora do horario
+- `escalation_keywords` = JSON array de strings
+- `max_messages_before_escalation` = "10"
+- `notification_phone` = telefone
+- `max_chars_per_chunk` = "200"
+- `max_chunks_per_response` = "4"
+- `max_total_chars` = "600"
+- `message_buffer_seconds` = "8"
+- `temperature` (se existir, senao default 0.7)
 
-**analytics_daily**: id, date, total_conversations, total_messages, avg_response_time_ms, resolution_rate, escalation_rate, sentiment_positive, sentiment_negative, sentiment_neutral, top_categories (jsonb), top_products_asked (jsonb), estimated_cost (numeric), avg_messages_per_conversation, total_tokens_used
+Nao existem campos dedicados para: ferramentas habilitadas, horario de atendimento, ou limites complexos de escalonamento como jsonb separado. Os dados de escalonamento sao campos individuais (max_messages_before_escalation, escalation_keywords).
 
-Tipos TypeScript ja existem em `src/types/database.ts` (Escalation, EscalationWithDetails, AnalyticsDaily).
+## Arquivos a Criar/Modificar
 
-## Arquivos a Criar
+### 1. `src/hooks/useSettings.ts` (CRIAR)
+- `useAgentConfig()` — query SELECT * FROM agent_config, retorna como Record (config_key -> config_value)
+- `useUpdateAgentConfig()` — mutation que recebe Record parcial, faz UPSERT por config_key
+- `useIntegrationStats()` — queries count de products, customers, conversations para card Supabase
 
-### 1. `src/hooks/useEscalations.ts`
-- **`useEscalationList(statusFilter?)`** — query escalations JOIN conversations(*, customers(*)), filtro por status, ORDER BY escalated_at DESC. Tambem busca 2 ultimas mensagens de cada conversation_id para preview.
-- **`useEscalationCounts()`** — 3 queries count (pending, in_progress, resolved) para badges das tabs.
-- **`useAssignEscalation()`** — mutation UPDATE status='in_progress', resolved_by=email do user.
-- **`useResolveEscalation()`** — mutation UPDATE status='resolved', notes=texto, resolved_at=now().
-- Realtime subscription na tabela escalations para invalidar queries.
+### 2. `src/hooks/useSidebarCounts.ts` (CRIAR)
+- Query count de escalations WHERE status='pending' e conversations WHERE status='active'
+- Realtime subscription em ambas tabelas para invalidar
+- Retorna { pendingEscalations: number, activeConversations: number }
 
-### 2. `src/hooks/useAnalytics.ts`
-- **`useAnalyticsSummary(startDate, endDate)`** — query analytics_daily no periodo, calcula SUM/AVG dos campos para os 4 KPI cards.
-- **`useAnalyticsDaily(startDate, endDate)`** — query analytics_daily no periodo, retorna array ordenado por date ASC para graficos.
+### 3. `src/pages/Settings.tsx` (REESCREVER)
+Layout com tabs verticais (desktop) / horizontais (mobile):
 
-### 3. `src/components/escalations/EscalationCard.tsx`
-Card individual de escalonamento:
-- Borda lateral esquerda por urgencia (critical=red, high=orange, medium=blue, low=gray)
-- Header: UrgencyBadge + "#XXXX" + RelativeTime
-- Body: nome/telefone cliente, razao, preview 2 ultimas mensagens com icones por sender
-- Se resolved_by preenchido: "Atribuido a: {email}"
-- Se resolved_at: data formatada + notas
-- Footer: botoes "Ver Conversa", "Assumir" (se nao resolved), "Resolver" (se nao resolved)
+**Tab "Agente IA":**
+- Secao Identidade: agent_name (Input), system_prompt (Textarea 8 rows + contador chars), nao tem campo "ativo" dedicado no banco
+- Secao Modelo: model (Select com opcoes LLM), temperature (Slider 0-2 step 0.1 — ler do config ou default 0.7), max_tokens (Input number)
+- Secao Mensagens: greeting_message (Textarea), away_message (Textarea)
+- Secao Limites de Resposta: max_chars_per_chunk, max_chunks_per_response, max_total_chars, message_buffer_seconds
+- Secao Escalonamento: max_messages_before_escalation (Input number), escalation_keywords (chip input — parsear JSON array)
+- Botao "Salvar Configuracoes" sticky no bottom
 
-### 4. `src/components/escalations/ResolveDialog.tsx`
-Dialog para resolver escalonamento:
-- Textarea "Notas de resolucao" (4 rows, obrigatorio)
-- Botoes Cancelar + Resolver (bg-green-600)
+Ao salvar: iterar sobre os campos modificados, fazer UPSERT (INSERT ON CONFLICT ou UPDATE) por config_key. Toast sucesso/erro.
 
-### 5. `src/components/analytics/DateRangePicker.tsx`
-Controle de periodo:
-- ToggleGroup: "7d" | "30d" | "90d" (default "30d")
-- 2 date inputs (De / Ate) usando shadcn Popover + Calendar
-- Ao mudar: callback com startDate e endDate
+**Tab "Integracoes":**
+4 cards de status: WhatsApp (info estatica), Supabase (contagens reais), OpenAI/LLM (modelo do config), N8N (info estatica)
 
-### 6. `src/components/analytics/AnalyticsCharts.tsx`
-Componente com os 8 graficos Recharts em grid 2 colunas:
-1. Conversas por Dia (BarChart)
-2. Tempo Medio de Resposta (LineChart, ms->s)
-3. Resolucao vs Escalonamento (AreaChart stacked)
-4. Distribuicao de Sentimento (PieChart)
-5. Top Categorias (BarChart horizontal, agregar jsonb)
-6. Top Produtos Consultados (BarChart horizontal, agregar jsonb top_products_asked)
-7. Mensagens por Dia (AreaChart)
-8. Custo Acumulado (AreaChart, running sum de estimated_cost * 5.0)
+**Tab "Conta":**
+Email do user (read-only), botao Sair com ConfirmDialog
 
-Cada grafico em card bg-gray-900 com titulo e ResponsiveContainer height=280.
+### 4. `src/components/layout/AppSidebar.tsx` (MODIFICAR)
+- Importar e usar useSidebarCounts
+- Adicionar badge vermelho no item "Escalonamentos" se pendingEscalations > 0
+- Adicionar badge azul no item "Conversas" se activeConversations > 0
+- Badges: pequeno circulo h-5 w-5 rounded-full text-xs font-bold
 
-### 7. Paginas
+### 5. `src/components/layout/AppLayout.tsx` (MODIFICAR)
+- Adicionar useEffect para atualizar document.title por rota: "Dashboard -- Budamix AI Agent"
+- Fechar Sheet mobile ao navegar (useEffect em location.pathname que seta sheetOpen=false)
 
-**`src/pages/Escalations.tsx`** (reescrever):
-- PageHeader "Escalonamentos"
-- Tabs: Pendentes(N) | Em Andamento(N) | Resolvidos(N) | Todos
-- Badge pendentes em vermelho se > 0
-- Grid de EscalationCards filtrados pela tab
-- Empty states customizados por tab
-- Estado para ResolveDialog (escalation selecionado)
-
-**`src/pages/Analytics.tsx`** (reescrever):
-- PageHeader "Analytics" com botao "Exportar CSV"
-- DateRangePicker
-- 4 KPICards (Total Conversas, Total Mensagens, Taxa Resolucao, Custo Total em BRL)
-- AnalyticsCharts
+### 6. Polish em arquivos existentes (MODIFICAR minimamente)
+- Adicionar `transition-all duration-200` em hover de cards existentes onde faltar
+- Verificar que `hover:bg-muted/50` esta nas rows de tabela
 
 ## Detalhes Tecnicos
 
-**Preview de mensagens no card de escalonamento:** Para cada escalation, buscar as 2 ultimas mensagens via `messages WHERE conversation_id ORDER BY created_at DESC LIMIT 2`. Feito em batch na query principal (coletar todos conversation_ids, buscar mensagens, agrupar por conversation_id).
+**Leitura do agent_config:** Carregar todas as rows, converter para um objeto `Record<string, string>`. Para campos numericos, parsear com Number(). Para escalation_keywords, parsear com JSON.parse().
 
-**Agregacao de top_categories e top_products_asked (jsonb):** Iterar sobre todos os registros do periodo, parsear cada jsonb como Record<string, number>, somar valores por key, ordenar e pegar top 8.
+**Salvamento:** Para cada key modificada, fazer:
+```sql
+UPDATE agent_config SET config_value = $value, updated_at = now() WHERE config_key = $key
+```
+Se a key nao existir, fazer INSERT.
 
-**Custo acumulado:** Iterar array ordenado por date, acumular soma de estimated_cost * 5.0 (conversao USD->BRL), gerar array com running total.
+**Slider de temperatura:** Ler config_value de "temperature" (se nao existir, default "0.7"). Exibir valor atual a direita. Ao salvar, converter para string.
 
-**Exportar CSV:** Montar string CSV com headers em portugues, iterar dados do periodo, formatar cada linha, criar Blob text/csv, forcar download via URL.createObjectURL + click em link temporario.
+**Chip input de keywords:** Mesmo padrao usado no FaqDialog — Input + Enter para add, X para remover. Parsear JSON array do config_value, ao salvar converter de volta para JSON string.
 
-**Realtime (escalations):** Canal postgres_changes na tabela escalations, evento *, invalidar queries ["escalations"] e ["escalation-counts"].
+**Sidebar badges:** O hook useSidebarCounts faz 2 queries count com head:true. Realtime em escalations e conversations invalida o cache. Badges renderizados condicionalmente (count > 0).
 
-**User email para atribuicao:** Obter de `useAuthStore` via `state.user?.email`.
+**Titulo dinamico:** useEffect no AppLayout que seta `document.title = title + " -- Budamix AI Agent"` sempre que basePath mudar.
 
-## Componentes Reutilizados
-PageHeader, KPICard, UrgencyBadge, RelativeTime, LoadingState, EmptyState, StatusBadge, SentimentBadge, formatCurrency, formatPercent, truncateText, useAuthStore
+**Mobile sidebar close:** useEffect em AppLayout que observa location.pathname e seta setSheetOpen(false).
 
 ## Ordem de Implementacao
 
-1. `src/hooks/useEscalations.ts`
-2. `src/components/escalations/ResolveDialog.tsx`
-3. `src/components/escalations/EscalationCard.tsx`
-4. `src/pages/Escalations.tsx`
-5. `src/hooks/useAnalytics.ts`
-6. `src/components/analytics/DateRangePicker.tsx`
-7. `src/components/analytics/AnalyticsCharts.tsx`
-8. `src/pages/Analytics.tsx`
+1. `src/hooks/useSettings.ts`
+2. `src/hooks/useSidebarCounts.ts`
+3. `src/pages/Settings.tsx`
+4. `src/components/layout/AppSidebar.tsx` (adicionar badges)
+5. `src/components/layout/AppLayout.tsx` (titulo dinamico + mobile close)
