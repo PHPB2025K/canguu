@@ -26,6 +26,8 @@ const LLM_MODELS = [
   { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
   { value: 'gpt-4o', label: 'GPT-4o' },
   { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
   { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
   { value: 'claude-haiku-4-20250414', label: 'Claude Haiku 4' },
 ];
