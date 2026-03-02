@@ -1,114 +1,117 @@
 
-# Sprint 5 — Pagina de Produtos (CRUD Completo)
+# Sprint 6 — Politicas/FAQ + Clientes
 
-Implementar `/products` com listagem tabela/cards, busca, filtros, criacao/edicao via dialog, e exclusao com confirmacao.
+Implementar `/policies` com tabs e CRUD para policies e faq, e `/customers` com listagem e detalhe.
 
-## Mapeamento Real do Schema (Correcoes ao Prompt)
+## Schema Real Confirmado
 
-O prompt do usuario usa nomes de colunas diferentes do banco real. Aqui esta o mapeamento correto que sera usado:
+**policies**: id, title (varchar), category (varchar), marketplace (varchar), content (text), summary (text), priority (integer), is_active (boolean), created_at, updated_at
 
-| Prompt diz | Banco real | Tipo |
-|---|---|---|
-| `line` | `product_line` | varchar |
-| `description` | `short_description` | text |
-| `stock` | `stock_quantity` | integer |
-| `active` | `is_active` | boolean |
-| `suggestions` | `usage_suggestions` | text |
-| `link_site` | `site_link` | text |
-| `link_marketplace` | `marketplace_links` | jsonb |
-| `price_marketplace` | `price_marketplace` | jsonb (nao numeric) |
-| `dimensions` | `dimensions` | jsonb (nao text) |
-| `images` | `images` | jsonb (nao text[]) |
+**faq**: id, question (text), answer (text), category (varchar), keywords (array), usage_count (integer), is_active (boolean), created_at, updated_at
 
-Linhas existentes no banco: BSP, CQT, Hermetica, JGR, KBT, MDL, MXG, PNH, TBC
+**customers**: id, name (varchar), phone (varchar), email (varchar), source (varchar), tags (array), notes (text), marketplace_user_id (varchar), total_conversations (integer), first_contact_at, last_contact_at, created_at, updated_at
 
 ## Arquivos a Criar
 
-### 1. `src/hooks/useProducts.ts`
+### 1. `src/hooks/usePolicies.ts`
+- `usePolicyList(categoryFilter)` — query policies com filtro opcional por category, ORDER BY priority DESC
+- `useCreatePolicy()` — mutation INSERT + invalidate
+- `useUpdatePolicy()` — mutation UPDATE + invalidate
+- `useDeletePolicy()` — mutation DELETE + invalidate
+- `useTogglePolicyActive()` — mutation UPDATE is_active inline
+- `useFaqList(categoryFilter)` — query faq com filtro, ORDER BY usage_count DESC
+- `useCreateFaq()` — mutation INSERT
+- `useUpdateFaq()` — mutation UPDATE
+- `useDeleteFaq()` — mutation DELETE
+- `useToggleFaqActive()` — mutation UPDATE is_active inline
+- `useFaqCategories()` — SELECT DISTINCT category FROM faq
 
-Hooks React Query para a pagina de produtos:
+### 2. `src/hooks/useCustomers.ts`
+- `useCustomerList(search)` — query customers com search ilike em name, phone, email. ORDER BY last_contact_at DESC
+- `useCustomer(id)` — single customer by id
+- `useCustomerConversations(customerId)` — conversations WHERE customer_id, com join ultima mensagem
+- `useUpdateCustomerTags()` — mutation UPDATE tags
+- `useUpdateCustomerNotes()` — mutation UPDATE notes
+- `useCustomerSentimentStats(customerId)` — busca sentiments das conversas do cliente para calcular predominante
 
-- **`useProductList(filters)`** — busca products com filtros opcionais (search em name/sku via ilike, product_line via eq, is_active via eq). Ordenacao por coluna configuravel. staleTime 60s.
-- **`useProduct(id)`** — busca produto individual por id.
-- **`useCreateProduct()`** — mutation INSERT com invalidacao do cache.
-- **`useUpdateProduct()`** — mutation UPDATE com invalidacao do cache.
-- **`useDeleteProduct()`** — mutation DELETE com invalidacao do cache.
-- **`useToggleProductActive()`** — mutation UPDATE is_active com invalidacao do cache (para o switch inline).
-- **`useProductLines()`** — query SELECT DISTINCT product_line para popular o select de filtro.
+### 3. `src/components/policies/PolicyDialog.tsx`
+Dialog criar/editar politica (max-w-2xl):
+- Campos: Titulo* (Input), Categoria* (Select: Troca/Entrega/Garantia/Pagamento/Geral), Marketplace (Input), Conteudo* (Textarea 8 rows), Resumo (Textarea 3 rows + contador "/500"), Prioridade (Input number), Ativo (Switch)
+- Validacao: titulo, categoria, conteudo obrigatorios
+- Insert/Update + toast + close
 
-### 2. `src/components/products/ProductToolbar.tsx`
+### 4. `src/components/policies/PolicyTable.tsx`
+Tabela com colunas: Titulo, Categoria (badge), Marketplace, Prioridade, Ativo (Switch), Acoes (editar/excluir)
 
-Toolbar no topo com:
-- SearchBar (placeholder "Buscar por nome ou SKU...")
-- Select "Linha" com valores dinamicos do hook useProductLines
-- Select "Status" (Todos/Ativos/Inativos)
-- ToggleGroup (Table2/LayoutGrid) para alternar visualizacao
-- Botao "Adicionar Produto" (azul, icone Plus)
+### 5. `src/components/policies/FaqDialog.tsx`
+Dialog criar/editar FAQ (max-w-2xl):
+- Campos: Pergunta* (Textarea 2 rows), Resposta* (Textarea 6 rows), Categoria* (Input), Keywords (chip input com Enter para add, X para remove), Ativo (Switch)
+- Em edicao: exibir "Utilizado X vezes" read-only
+- Validacao: pergunta, resposta, categoria obrigatorios
 
-### 3. `src/components/products/ProductTable.tsx`
+### 6. `src/components/policies/FaqTable.tsx`
+Tabela com colunas: Pergunta (truncar 80 chars), Categoria (badge), Keywords (chips max 3 + "+N"), Uso (badge numero), Ativo (Switch), Acoes (editar/excluir)
 
-Tabela shadcn com colunas: SKU, Nome, Linha, Material, Preco Site, Estoque (badge colorido), Ativo (Switch inline), Acoes (editar/excluir).
-- Headers clicaveis para ordenacao (name, sku, price_site, stock_quantity)
-- Seta indicadora de direcao da ordenacao
+### 7. `src/components/customers/CustomerTable.tsx`
+Tabela com colunas: Nome, Telefone (formatPhone), Origem (badge colorido), Total Conversas, Ultimo Contato (RelativeTime), Tags (chips max 2 + "+N"), Acoes (Eye)
+- Click na row navega para /customers/:id
+- Ordenacao por nome, total_conversations, last_contact_at
 
-### 4. `src/components/products/ProductCards.tsx`
+### 8. `src/components/customers/CustomerInfo.tsx`
+Card coluna esquerda do detalhe: avatar iniciais, nome, telefone, email, badge origem
 
-Grid de cards responsivo (3/2/1 colunas).
-- Imagem ou placeholder, SKU, nome, linha, preco, badge estoque, switch ativo, botoes editar/excluir.
-- Imagem: extrair primeira URL do campo images (jsonb — pode ser array de strings ou array de objetos).
+### 9. `src/components/customers/CustomerTags.tsx`
+Card de tags editaveis: chips removiveis + input para adicionar via Enter. UPDATE customers SET tags.
 
-### 5. `src/components/products/ProductDialog.tsx`
+### 10. `src/components/customers/CustomerNotes.tsx`
+Card de notas: Textarea + botao "Salvar Notas". UPDATE customers SET notes.
 
-Dialog shadcn (max-w-3xl) para criar/editar:
-- Form em grid 2 colunas
-- Campos: SKU (disabled em edicao), Nome, Linha, Material, Preco Site, Estoque, Dimensoes (tratado como texto para o usuario, convertido para jsonb), Descricao Curta, Descricao Completa, Imagens (textarea URLs por linha), Sugestoes de Uso, Diferenciais, Link Site, Link Marketplace (campo simples texto — o jsonb sera tratado internamente), Ativo (switch)
-- Validacao: SKU e Nome obrigatorios
-- Ao salvar: insert/update no Supabase + toast + fechar + invalidar cache
+### 11. `src/components/customers/CustomerHistory.tsx`
+Lista de conversas do cliente: StatusBadge + categoria + preview ultima mensagem + RelativeTime. Click navega para /conversations/:id.
 
-### 6. Paginas atualizadas
+### 12. Paginas
 
-**`src/pages/Products.tsx`** (reescrever):
-- Composicao: PageHeader + ProductToolbar + ProductTable ou ProductCards (conforme toggle)
-- Estado local: viewMode, search, filters, sortColumn, sortDirection
-- Estado para dialog criar/editar (open + produto selecionado)
-- Estado para ConfirmDialog de exclusao
+**`src/pages/Policies.tsx`** (reescrever):
+- Tabs "Politicas" | "FAQ"
+- Tab Politicas: Select categoria + botao Adicionar + PolicyTable + PolicyDialog + ConfirmDialog exclusao
+- Tab FAQ: Select categoria + botao Adicionar + FaqTable + FaqDialog + ConfirmDialog exclusao
 
-**`src/pages/ProductDetail.tsx`** (reescrever):
-- Pagina full-width de edicao
-- Botao "Voltar para produtos" no topo
-- Carrega produto por id com useProduct
-- Form identico ao dialog mas inline na pagina
-- Botoes Cancelar (navega para /products) + Atualizar
+**`src/pages/Customers.tsx`** (reescrever):
+- PageHeader + SearchBar + CustomerTable
+
+**`src/pages/CustomerDetail.tsx`** (reescrever):
+- Botao voltar + layout 2 colunas
+- Esquerda: CustomerInfo + CustomerTags + CustomerNotes
+- Direita: 3 stat cards (Total Conversas, Sentimento Medio, Ultima Interacao) + CustomerHistory
 
 ## Detalhes Tecnicos
 
-**Campo `price_marketplace` (jsonb):** No banco e jsonb, nao numeric. No formulario sera exibido como campo texto simples. Ao salvar, se o usuario digitar um numero, sera armazenado como `{"default": valor}`. Ao exibir, tentar extrair um valor numerico do jsonb.
+**Chip Input (keywords/tags):** Componente inline dentro dos dialogs/cards. Input controlado + onKeyDown Enter para push ao array + map de badges com botao X.
 
-**Campo `dimensions` (jsonb):** Similar — exibido como texto no formulario. Ao salvar como `{"raw": texto}`. Ao exibir, mostrar como string.
+**Contador de caracteres (resumo):** `{value.length}/500` renderizado abaixo do Textarea.
 
-**Campo `images` (jsonb):** Textarea com URLs por linha. Ao salvar, converter para array de strings `["url1", "url2"]`. Ao carregar, converter jsonb para array e juntar com newlines.
+**Badge de origem (customers):** whatsapp = bg-green-500/10 text-green-400, site = bg-blue-500/10 text-blue-400, marketplace = bg-purple-500/10 text-purple-400.
 
-**Campo `marketplace_links` (jsonb):** Campo texto simples. Salvar como `{"url": texto}`.
+**Sentimento medio (detalhe cliente):** Contar sentiments das conversas do cliente (positive/negative/neutral), exibir o predominante com emoji.
 
-**Ordenacao:** Estado local no componente Products (sortColumn + sortDirection "asc"/"desc"). Passado como .order() na query Supabase.
-
-**Toggle tabela/cards:** Estado local, nao persistido (localStorage seria ideal mas nao essencial).
+**Total conversas e ultimo contato:** Usar campos `total_conversations` e `last_contact_at` ja existentes na tabela customers (populados por trigger). Nao precisa de subquery.
 
 ## Componentes Reutilizados
-
-- `PageHeader` — titulo + botao adicionar
-- `SearchBar` — busca com debounce
-- `LoadingState` — skeleton para tabela e cards
-- `EmptyState` — quando nao ha produtos
-- `ConfirmDialog` — confirmacao de exclusao
-- `formatCurrency` — precos em BRL
+PageHeader, SearchBar, LoadingState, EmptyState, ConfirmDialog, StatusBadge, SentimentBadge, RelativeTime, formatPhone, formatCurrency, truncateText
 
 ## Ordem de Implementacao
 
-1. `src/hooks/useProducts.ts`
-2. `src/components/products/ProductDialog.tsx`
-3. `src/components/products/ProductTable.tsx`
-4. `src/components/products/ProductCards.tsx`
-5. `src/components/products/ProductToolbar.tsx`
-6. `src/pages/Products.tsx` (reescrever)
-7. `src/pages/ProductDetail.tsx` (reescrever)
+1. `src/hooks/usePolicies.ts`
+2. `src/components/policies/PolicyDialog.tsx`
+3. `src/components/policies/PolicyTable.tsx`
+4. `src/components/policies/FaqDialog.tsx`
+5. `src/components/policies/FaqTable.tsx`
+6. `src/pages/Policies.tsx`
+7. `src/hooks/useCustomers.ts`
+8. `src/components/customers/CustomerTable.tsx`
+9. `src/components/customers/CustomerInfo.tsx`
+10. `src/components/customers/CustomerTags.tsx`
+11. `src/components/customers/CustomerNotes.tsx`
+12. `src/components/customers/CustomerHistory.tsx`
+13. `src/pages/Customers.tsx`
+14. `src/pages/CustomerDetail.tsx`
