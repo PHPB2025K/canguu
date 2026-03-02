@@ -1,0 +1,148 @@
+import type { Json } from "@/integrations/supabase/types";
+
+export interface Customer {
+  id: string;
+  name: string | null;
+  phone: string;
+  email: string | null;
+  source: string | null;
+  tags: string[] | null;
+  notes: string | null;
+  marketplace_user_id: string | null;
+  total_conversations: number | null;
+  first_contact_at: string | null;
+  last_contact_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface Conversation {
+  id: string;
+  customer_id: string;
+  status: string | null;
+  channel: string | null;
+  category: string | null;
+  subcategory: string | null;
+  sentiment: string | null;
+  priority: string | null;
+  assigned_to: string | null;
+  pending_since: string | null;
+  pending_message_count: number | null;
+  last_customer_message_at: string | null;
+  started_at: string | null;
+  resolved_at: string | null;
+  resolution_summary: string | null;
+  satisfaction_score: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ConversationWithCustomer extends Conversation {
+  customers: Customer;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender: string;
+  content: string;
+  message_type: string | null;
+  original_audio_url: string | null;
+  whatsapp_message_id: string | null;
+  response_time_ms: number | null;
+  tokens_used: number | null;
+  metadata: Json | null;
+  created_at: string | null;
+}
+
+export interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  product_line: string | null;
+  material: string | null;
+  short_description: string | null;
+  full_description: string | null;
+  dimensions: Json | null;
+  price_site: number | null;
+  price_marketplace: Json | null;
+  stock_quantity: number | null;
+  stock_status: string | null;
+  images: Json | null;
+  usage_suggestions: string | null;
+  differentials: string | null;
+  site_link: string | null;
+  marketplace_links: Json | null;
+  variations: Json | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface Policy {
+  id: string;
+  title: string;
+  category: string;
+  marketplace: string | null;
+  content: string;
+  summary: string | null;
+  priority: number | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface FAQ {
+  id: string;
+  question: string;
+  answer: string;
+  category: string | null;
+  keywords: string[] | null;
+  usage_count: number | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface Escalation {
+  id: string;
+  conversation_id: string;
+  reason: string;
+  urgency: string | null;
+  status: string | null;
+  notes: string | null;
+  resolved_by: string | null;
+  escalated_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface EscalationWithDetails extends Escalation {
+  conversations: ConversationWithCustomer;
+}
+
+export interface AgentConfig {
+  id: string;
+  config_key: string;
+  config_value: string;
+  description: string | null;
+  updated_at: string | null;
+}
+
+export interface AnalyticsDaily {
+  id: string;
+  date: string;
+  total_conversations: number | null;
+  total_messages: number | null;
+  avg_response_time_ms: number | null;
+  resolution_rate: number | null;
+  escalation_rate: number | null;
+  sentiment_positive: number | null;
+  sentiment_negative: number | null;
+  sentiment_neutral: number | null;
+  top_categories: Json | null;
+  top_products_asked: Json | null;
+  estimated_cost: number | null;
+  avg_messages_per_conversation: number | null;
+  total_tokens_used: number | null;
+  created_at: string | null;
+}
