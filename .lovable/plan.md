@@ -1,118 +1,96 @@
 
 
-# Sprint 1 — Login, AuthGuard, Layout Shell e Rotas
+# Sprint 2 — Tipos, Componentes Reutilizaveis e Utilitarios
 
-Implementacao da fundacao do dashboard Budamix AI Agent: autenticacao com Supabase Auth, sidebar de navegacao, header dinamico e rotas protegidas. Zero alteracoes no Supabase.
+Criar a camada de tipos TypeScript mapeados ao schema real do Supabase, componentes UI reutilizaveis para estados comuns, e funcoes utilitarias de formatacao.
+
+## 1. Tipos TypeScript
+
+Criar `src/types/database.ts` com interfaces para todas as 9 tabelas. Os nomes dos campos seguem o schema REAL do banco (nao o prompt original):
+
+- `Customer` — campos: `id`, `name`, `phone`, `email`, `source`, `tags`, `notes`, `marketplace_user_id`, `total_conversations`, `first_contact_at`, `last_contact_at`, `created_at`, `updated_at`
+- `Conversation` — usa `assigned_to` (nao `managed_by`), `channel`, `subcategory`, `pending_since`, `pending_message_count`, `last_customer_message_at`, `started_at`, `resolved_at`, `resolution_summary`, `satisfaction_score`
+- `ConversationWithCustomer` — extends Conversation com `customers: Customer`
+- `Message` — usa `sender` (nao `role`), `original_audio_url`; nao tem `cost_usd`
+- `Product` — usa `product_line`, `short_description`, `stock_quantity`, `is_active`, `usage_suggestions`, `site_link`, `marketplace_links` (jsonb), `price_marketplace` (jsonb), `images` (jsonb), `stock_status`, `dimensions` (jsonb)
+- `Policy` — usa `is_active` (nao `active`)
+- `FAQ` — usa `is_active` (nao `active`)
+- `Escalation` — usa `notes` (nao `resolution_notes`), `escalated_at`, `resolved_by`
+- `EscalationWithDetails` — extends com conversations join
+- `AgentConfig` — usa `config_key`/`config_value` (text), `description`
+- `AnalyticsDaily` — usa `estimated_cost`, `top_products_asked`, `avg_messages_per_conversation`, `total_tokens_used`
+
+## 2. Funcoes Utilitarias
+
+Criar `src/lib/formatters.ts`:
+- `formatCurrency(value)` — "R$ 1.234,56" (locale pt-BR)
+- `formatPhone(phone)` — "(11) 99999-9999" a partir de "5511999999999"
+- `formatPercent(value)` — "85,3%"
+- `truncateText(text, maxLength)` — trunca com "..."
+- `getRelativeTime(isoDate)` — "agora", "ha 5 min", "ha 2h", "ontem", "ha 3 dias"
+
+## 3. Componentes Reutilizaveis
+
+Criar na pasta `src/components/common/`:
+
+**Badges (StatusBadge, SentimentBadge, PriorityBadge, UrgencyBadge)**
+- Cada um com mapeamento de cores e labels em portugues
+- Baseados no componente Badge do shadcn com classes Tailwind customizadas
+- UrgencyBadge "critical" e PriorityBadge "urgent" com animacao pulse
+
+**KPICard**
+- Props: title, value, icon, trend (opcional), format
+- Card bg-card com icone no canto, valor grande, seta de trend colorida
+
+**RelativeTime**
+- Usa `getRelativeTime()` do formatters
+- Auto-atualiza a cada 60s via setInterval
+
+**LoadingState**
+- Props: type ("card" | "table" | "list" | "chat")
+- Usa Skeleton do shadcn para cada variante
+
+**ErrorState**
+- Card com icone AlertCircle + mensagem + botao "Tentar Novamente"
+
+**EmptyState**
+- Icone grande opacity-20 + titulo + descricao + botao de acao opcional
+
+**SearchBar**
+- Input com icone Search, debounce 300ms via useEffect/setTimeout
+
+**ConfirmDialog**
+- Wrapper do AlertDialog shadcn com props simplificadas
+
+**PageHeader**
+- Flex row com titulo/descricao a esquerda e children (acoes) a direita
 
 ## Arquivos a Criar
 
-### 1. `src/stores/useAuthStore.ts`
-Store Zustand para gerenciar estado de autenticacao:
-- Estado: `user`, `session`, `loading`, `initialized`
-- Action `initialize()`: chama `getSession()` e registra listener `onAuthStateChange()`
-- Action `signOut()`: chama `supabase.auth.signOut()`
-
-### 2. `src/pages/Login.tsx`
-Pagina publica de login:
-- Fundo bg-gray-950, card centralizado com shadcn Card
-- Titulo "Budamix AI Agent" + subtitulo "Painel de Gestao"
-- Campos email e senha com labels em portugues
-- Botao "Entrar" azul (#3B82F6) full-width com spinner durante loading
-- Chama `supabase.auth.signInWithPassword()`
-- Toast destructive em caso de erro
-- Redirect para /dashboard se ja autenticado ou apos login
-
-### 3. `src/components/layout/AuthGuard.tsx`
-Componente wrapper de protecao de rotas:
-- Inicializa o auth store
-- Exibe spinner/skeleton centralizado enquanto `loading` e true
-- Redireciona para `/login` se nao autenticado
-- Renderiza `<Outlet />` se autenticado
-
-### 4. `src/components/layout/AppSidebar.tsx`
-Sidebar fixa com navegacao:
-- w-64, bg-gray-900, h-screen, border-r border-gray-800
-- Logo "Budamix AI" no topo
-- 8 itens de navegacao usando NavLink com icones Lucide
-- Item ativo: bg-blue-500/10, text-blue-400
-- Separador antes de Configuracoes
-- Bottom: email do usuario truncado + botao "Sair" vermelho
-- Mobile: renderiza como Sheet/Drawer
-
-### 5. `src/components/layout/AppLayout.tsx`
-Layout shell principal:
-- Desktop: sidebar fixa + conteudo com ml-64
-- Mobile: sidebar como Sheet + header com hamburger
-- Header sticky com titulo dinamico da pagina + icone de notificacoes + avatar
-- Conteudo: p-6, bg-gray-950, min-h-screen, overflow-y auto
-- `<Outlet />` do React Router
-
-### 6. Paginas Placeholder (11 arquivos)
-Componentes simples para cada rota:
-- `Dashboard.tsx`, `Conversations.tsx`, `ConversationDetail.tsx`
-- `Products.tsx`, `ProductDetail.tsx`, `Policies.tsx`
-- `Customers.tsx`, `CustomerDetail.tsx`
-- `Escalations.tsx`, `Analytics.tsx`, `Settings.tsx`
-- Cada uma com icone grande (opacity-20) + titulo + "Em construcao..."
-
-## Arquivos a Modificar
-
-### 7. `index.html`
-- Adicionar classe `dark` no `<html>` para tema escuro padrao
-- Atualizar `<title>` para "Budamix AI Agent"
-- Adicionar link para font Inter do Google Fonts
-
-### 8. `src/index.css`
-- Atualizar CSS variables do tema escuro com cores mais adequadas ao design (gray-950 como background)
-- Configurar sidebar colors para gray-900
-- Manter primary azul (#3B82F6 = HSL 217 91% 60%)
-
-### 9. `src/App.tsx`
-- Configurar React Router com todas as rotas:
-  - `/login` publica
-  - `/` redirect para `/dashboard`
-  - Rotas protegidas dentro de AuthGuard + AppLayout
-  - Rotas com `:id` para conversations, products, customers
-
-## Estrutura de Rotas
-
 ```text
-BrowserRouter
-  /login          → Login (publica)
-  /               → redirect /dashboard
-  [AuthGuard]     → verifica sessao
-    [AppLayout]   → sidebar + header + outlet
-      /dashboard
-      /conversations
-      /conversations/:id
-      /products
-      /products/:id
-      /policies
-      /customers
-      /customers/:id
-      /escalations
-      /analytics
-      /settings
-  *               → NotFound
+src/types/database.ts          — interfaces para 9 tabelas + joins
+src/lib/formatters.ts          — formatCurrency, formatPhone, formatPercent, truncateText, getRelativeTime
+src/components/common/StatusBadge.tsx
+src/components/common/SentimentBadge.tsx
+src/components/common/PriorityBadge.tsx
+src/components/common/UrgencyBadge.tsx
+src/components/common/KPICard.tsx
+src/components/common/RelativeTime.tsx
+src/components/common/LoadingState.tsx
+src/components/common/ErrorState.tsx
+src/components/common/EmptyState.tsx
+src/components/common/SearchBar.tsx
+src/components/common/ConfirmDialog.tsx
+src/components/common/PageHeader.tsx
 ```
 
-## Detalhes Tecnicos
+## Arquivos Modificados
 
-- Supabase client ja existe em `src/integrations/supabase/client.ts`
-- NavLink ja existe em `src/components/NavLink.tsx` — sera usado para highlighting ativo
-- Sidebar shadcn existe mas NAO sera usada (o prompt pede sidebar custom com estilos especificos)
-- Em vez disso, sidebar sera um componente custom usando Tailwind puro + Sheet do shadcn para mobile
-- Zustand ja esta no package.json
-- Nenhuma migracao SQL ou alteracao no Supabase
+Nenhum arquivo existente sera modificado. Todos os arquivos sao novos. Sprint 1 permanece intacto.
 
 ## Ordem de Implementacao
 
-1. Atualizar `index.html` e `index.css` (tema escuro)
-2. Criar `useAuthStore.ts`
-3. Criar `Login.tsx`
-4. Criar `AuthGuard.tsx`
-5. Criar `AppSidebar.tsx`
-6. Criar `AppLayout.tsx`
-7. Criar 11 paginas placeholder
-8. Atualizar `App.tsx` com rotas
+1. `src/types/database.ts`
+2. `src/lib/formatters.ts`
+3. Todos os 10 componentes em `src/components/common/` (podem ser criados em paralelo)
 
