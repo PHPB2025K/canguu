@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Bot, Save, MessageSquare, Database, Sparkles, GitBranch,
-  LogOut, X, Plus,
+  LogOut, X, Plus, Wrench, Clock, Phone,
 } from 'lucide-react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { LoadingState } from '@/components/common/LoadingState';
@@ -17,6 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -32,6 +34,49 @@ const LLM_MODELS = [
   { value: 'claude-haiku-4-20250414', label: 'Claude Haiku 4' },
 ];
 
+const DEFAULT_TOOLS: Record<string, boolean> = {
+  consultar_produtos: true,
+  verificar_politicas: true,
+  buscar_faq: true,
+  rastrear_pedido: true,
+  consultar_estoque: true,
+  recomendar_produtos: true,
+};
+
+const TOOL_LABELS: Record<string, string> = {
+  consultar_produtos: 'Consultar Produtos',
+  verificar_politicas: 'Verificar Políticas',
+  buscar_faq: 'Buscar FAQ',
+  rastrear_pedido: 'Rastrear Pedido',
+  consultar_estoque: 'Consultar Estoque',
+  recomendar_produtos: 'Recomendar Produtos',
+};
+
+const DAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+interface BusinessHours {
+  days: boolean[];
+  start: string;
+  end: string;
+  timezone: string;
+  away_message: string;
+}
+
+const DEFAULT_HOURS: BusinessHours = {
+  days: [true, true, true, true, true, false, false],
+  start: '08:00',
+  end: '18:00',
+  timezone: 'America/Sao_Paulo',
+  away_message: '',
+};
+
+const TIMEZONES = [
+  { value: 'America/Sao_Paulo', label: 'São Paulo (BRT)' },
+  { value: 'America/Manaus', label: 'Manaus (AMT)' },
+  { value: 'America/Bahia', label: 'Bahia (BRT)' },
+  { value: 'America/Recife', label: 'Recife (BRT)' },
+];
+
 const tabs = [
   { id: 'agent', label: 'Agente IA' },
   { id: 'integrations', label: 'Integrações' },
@@ -39,6 +84,11 @@ const tabs = [
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
+
+function parseJson<T>(str: string | undefined, fallback: T): T {
+  if (!str) return fallback;
+  try { return JSON.parse(str); } catch { return fallback; }
+}
 
 const Settings = () => {
   const { data: config, isLoading } = useAgentConfig();
@@ -52,7 +102,12 @@ const Settings = () => {
   const [form, setForm] = useState<Record<string, string>>({});
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
+  const [tools, setTools] = useState<Record<string, boolean>>(DEFAULT_TOOLS);
+  const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS);
   const [confirmLogout, setConfirmLogout] = useState(false);
+
+  // Original snapshot for dirty-checking
+  const originalRef = useRef<string>('');
 
   // Sync form from config
   useEffect(() => {
@@ -63,6 +118,14 @@ const Settings = () => {
       } catch {
         setKeywords([]);
       }
+      setTools(parseJson(config.enabled_tools, DEFAULT_TOOLS));
+      setHours(parseJson(config.business_hours, DEFAULT_HOURS));
+
+      // Store original snapshot
+      const kw = (() => { try { return JSON.parse(config.escalation_keywords || '[]'); } catch { return []; } })();
+      const t = parseJson(config.enabled_tools, DEFAULT_TOOLS);
+      const h = parseJson(config.business_hours, DEFAULT_HOURS);
+      originalRef.current = JSON.stringify({ form: config, keywords: kw, tools: t, hours: h });
     }
   }, [config]);
 
@@ -70,9 +133,16 @@ const Settings = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const isDirty = useMemo(() => {
+    const current = JSON.stringify({ form, keywords, tools, hours });
+    return current !== originalRef.current;
+  }, [form, keywords, tools, hours]);
+
   const handleSave = () => {
     const updates: Record<string, string> = { ...form };
     updates.escalation_keywords = JSON.stringify(keywords);
+    updates.enabled_tools = JSON.stringify(tools);
+    updates.business_hours = JSON.stringify(hours);
     updateConfig.mutate(updates);
   };
 
@@ -113,7 +183,7 @@ const Settings = () => {
                 'px-4 py-2 rounded-lg text-sm font-medium text-left whitespace-nowrap transition-colors',
                 activeTab === tab.id
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10',
               )}
             >
               {tab.label}
@@ -132,6 +202,10 @@ const Settings = () => {
               setKeywordInput={setKeywordInput}
               addKeyword={addKeyword}
               removeKeyword={removeKeyword}
+              tools={tools}
+              setTools={setTools}
+              hours={hours}
+              setHours={setHours}
             />
           )}
           {activeTab === 'integrations' && (
@@ -148,7 +222,7 @@ const Settings = () => {
         <div className="sticky bottom-4 z-10">
           <Button
             onClick={handleSave}
-            disabled={updateConfig.isPending}
+            disabled={updateConfig.isPending || !isDirty}
             className="w-full"
             size="lg"
           >
@@ -181,9 +255,13 @@ interface AgentTabProps {
   setKeywordInput: (v: string) => void;
   addKeyword: () => void;
   removeKeyword: (kw: string) => void;
+  tools: Record<string, boolean>;
+  setTools: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  hours: BusinessHours;
+  setHours: React.Dispatch<React.SetStateAction<BusinessHours>>;
 }
 
-function AgentTab({ form, set, keywords, keywordInput, setKeywordInput, addKeyword, removeKeyword }: AgentTabProps) {
+function AgentTab({ form, set, keywords, keywordInput, setKeywordInput, addKeyword, removeKeyword, tools, setTools, hours, setHours }: AgentTabProps) {
   const temperature = Number(form.temperature ?? '0.7');
 
   return (
@@ -204,6 +282,23 @@ function AgentTab({ form, set, keywords, keywordInput, setKeywordInput, addKeywo
               <span className="text-xs text-muted-foreground">{(form.system_prompt ?? '').length} chars</span>
             </div>
             <Textarea id="system_prompt" rows={8} value={form.system_prompt ?? ''} onChange={(e) => set('system_prompt', e.target.value)} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-border p-4">
+            <div className="space-y-0.5">
+              <Label>Agente Ativo</Label>
+              <p className="text-xs text-muted-foreground">Quando desativado, todas as conversas serão direcionadas para atendimento humano</p>
+            </div>
+            <Switch
+              checked={form.is_active !== 'false'}
+              onCheckedChange={(checked) => set('is_active', checked ? 'true' : 'false')}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="notification_phone">Telefone de Notificação</Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input id="notification_phone" className="pl-10" placeholder="Ex: +5511999999999" value={form.notification_phone ?? ''} onChange={(e) => set('notification_phone', e.target.value)} />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -310,7 +405,91 @@ function AgentTab({ form, set, keywords, keywordInput, setKeywordInput, addKeywo
           </div>
         </CardContent>
       </Card>
+
+      {/* Ferramentas */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Wrench className="h-4 w-4" /> Ferramentas</CardTitle>
+          <CardDescription>Habilite ou desabilite as ferramentas disponíveis para o agente IA</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Object.keys(tools).length === 0
+            ? Object.entries(DEFAULT_TOOLS).map(([key]) => (
+                <ToolSwitch key={key} toolKey={key} checked={true} onToggle={(k, v) => setTools((prev) => ({ ...prev, [k]: v }))} />
+              ))
+            : Object.entries(tools).map(([key, checked]) => (
+                <ToolSwitch key={key} toolKey={key} checked={checked} onToggle={(k, v) => setTools((prev) => ({ ...prev, [k]: v }))} />
+              ))
+          }
+        </CardContent>
+      </Card>
+
+      {/* Horário de Atendimento */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4" /> Horário de Atendimento</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Dias da Semana</Label>
+            <div className="flex flex-wrap gap-3">
+              {DAY_LABELS.map((day, i) => (
+                <label key={day} className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={hours.days[i] ?? false}
+                    onCheckedChange={(checked) => {
+                      setHours((prev) => {
+                        const days = [...prev.days];
+                        days[i] = !!checked;
+                        return { ...prev, days };
+                      });
+                    }}
+                  />
+                  <span className="text-sm">{day}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="hours_start">Horário Início</Label>
+              <Input id="hours_start" type="time" value={hours.start} onChange={(e) => setHours((prev) => ({ ...prev, start: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hours_end">Horário Fim</Label>
+              <Input id="hours_end" type="time" value={hours.end} onChange={(e) => setHours((prev) => ({ ...prev, end: e.target.value }))} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Fuso Horário</Label>
+            <Select value={hours.timezone} onValueChange={(v) => setHours((prev) => ({ ...prev, timezone: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="away_msg_hours">Mensagem Fora do Horário</Label>
+            <Textarea id="away_msg_hours" rows={2} placeholder="No momento estamos fora do horário de atendimento..." value={hours.away_message} onChange={(e) => setHours((prev) => ({ ...prev, away_message: e.target.value }))} />
+          </div>
+        </CardContent>
+      </Card>
     </>
+  );
+}
+
+/* ---- Tool Switch ---- */
+
+function ToolSwitch({ toolKey, checked, onToggle }: { toolKey: string; checked: boolean; onToggle: (key: string, val: boolean) => void }) {
+  const label = TOOL_LABELS[toolKey] || toolKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+      <span className="text-sm font-medium">{label}</span>
+      <Switch checked={checked} onCheckedChange={(v) => onToggle(toolKey, v)} />
+    </div>
   );
 }
 
@@ -377,20 +556,23 @@ function IntegrationsTab({ stats, modelName }: { stats?: { products: number; cus
 /* ---- Account Tab ---- */
 
 function AccountTab({ email, onLogout }: { email?: string; onLogout: () => void }) {
+  const initials = email ? email.charAt(0).toUpperCase() : '?';
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Informações da Conta</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label>Email</Label>
-            <Input value={email ?? ''} readOnly className="bg-muted" />
-          </div>
-          <div className="space-y-1">
-            <Label>Status</Label>
-            <p className="text-sm text-muted-foreground">Sessão ativa</p>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-xl font-bold text-foreground shrink-0">
+              {initials}
+            </div>
+            <div className="space-y-1 min-w-0">
+              <p className="text-lg font-medium truncate">{email ?? '—'}</p>
+              <p className="text-sm text-muted-foreground">Sessão ativa</p>
+            </div>
           </div>
         </CardContent>
       </Card>
