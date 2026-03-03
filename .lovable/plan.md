@@ -1,58 +1,65 @@
 
 
-# Completar Página de Configurações (/settings)
+# Polimento Final — Budamix AI Agent
 
-## Estado Atual vs Requisitos
+## Análise do Estado Atual
 
-A página já tem: identidade (nome, prompt), modelo (select, slider, max_tokens), mensagens (boas-vindas, fora do horário), limites de resposta (4 campos), escalonamento (max_messages + keywords), integrações (4 cards com contagens), conta (email + logout + confirmação).
+Boa parte dos requisitos já está implementada:
+- **Sidebar badges com realtime**: `useSidebarCounts` + badges no `AppSidebar` já existem e funcionam
+- **Título dinâmico**: `AppLayout` já define `document.title` baseado na rota
+- **Mobile sidebar**: já fecha ao navegar (useEffect em AppLayout)
+- **Dialogs com scroll**: ProductDialog, PolicyDialog, FaqDialog já têm `max-h-[90vh] overflow-y-auto`
+- **LoadingState e EmptyState**: todas as páginas já usam
+- **PageHeader**: todas as páginas relevantes já usam
 
-### Faltam implementar:
+## O que falta
 
-1. **Switch "Agente Ativo"** na seção Identidade — nova config key `is_active` (valor `"true"`/`"false"`)
-2. **Telefone de Notificação** — já existe no banco (`notification_phone`), mas não está na UI
-3. **Seção "Ferramentas"** — não existe no banco ainda. Criar como config key `enabled_tools` com valor JSON string de objeto `{ tool_name: boolean }`. Renderizar cada ferramenta como Switch
-4. **Seção "Horário de Atendimento"** — não existe no banco. Criar como config key `business_hours` com valor JSON string contendo `{ days: boolean[], start: string, end: string, timezone: string, away_message: string }`. Renderizar com 7 checkboxes + inputs time + select timezone
-5. **Dirty-checking** no botão Salvar — comparar form state com config original para disabled
-6. **Avatar com iniciais** na tab Conta
+### 1. Criar hook `usePageTitle` e usar em cada página
+O AppLayout já faz isso globalmente, mas para garantir títulos mais específicos (ex: "Editar Produto" em ProductDetail vs "Produtos" genérico), criar o hook e adicioná-lo em cada página. Isso também cobre ConversationDetail que não tem mapeamento no AppLayout.
 
-## Alterações por Arquivo
+**Novo arquivo:** `src/hooks/usePageTitle.ts`
 
-### `src/pages/Settings.tsx`
+**Páginas a atualizar (adicionar 1 linha em cada):**
+- Dashboard, Conversations, ConversationDetail, Products, ProductDetail, Policies, Customers, CustomerDetail, Escalations, Analytics, Settings, Login
 
-**Seção Identidade — adicionar:**
-- Switch "Agente Ativo" com descrição (usando `form.is_active === 'true'`)
-- Input "Telefone de Notificação" (`notification_phone`)
+### 2. Adicionar `transition-colors` em table rows
+- `ProductTable.tsx` — TableRow (line 62)
+- `PolicyTable.tsx` — TableRow (line 34)
+- `FaqTable.tsx` — TableRow (line 39)
+- `CustomerTable.tsx` — já tem `hover:bg-muted/50` mas verificar `transition-colors`
 
-**Nova seção "Ferramentas"** (após Escalonamento):
-- Parse `form.enabled_tools` como JSON objeto `{ key: boolean }`
-- Se não existir, usar defaults: `consultar_produtos`, `verificar_politicas`, `buscar_faq`, `rastrear_pedido`, `consultar_estoque`, `recomendar_produtos` (todos true)
-- Cada ferramenta: Switch + label formatado em português
-- Ao salvar: `JSON.stringify(toolsState)` → config key `enabled_tools`
+### 3. Adicionar `transition-colors` em cards clicáveis
+- `ProductCards.tsx` — div do card (line 35): adicionar `transition-colors hover:shadow-md`
+- `EscalationCard.tsx` — Card (line 36): adicionar `transition-colors`
 
-**Nova seção "Horário de Atendimento"** (após Ferramentas):
-- Parse `form.business_hours` como JSON
-- 7 checkboxes inline (Seg-Dom)
-- 2 inputs `type="time"` (início/fim)
-- Select timezone (4 opções brasileiras)
-- Textarea mensagem fora do horário (2 rows)
-- Ao salvar: `JSON.stringify(hoursState)` → config key `business_hours`
+### 4. Adicionar `hover:bg-muted/50` em table rows que não têm
+- `ProductTable.tsx` rows
+- `PolicyTable.tsx` rows  
+- `FaqTable.tsx` rows
 
-**Dirty-checking:**
-- Manter `originalConfig` ref ao lado do `form` state
-- Comparar `JSON.stringify(form) + JSON.stringify(keywords) + JSON.stringify(tools) + JSON.stringify(hours)` com original
-- Botão Salvar: `disabled={!isDirty || isPending}`
+### 5. ResolveDialog — adicionar `max-h-[90vh] overflow-y-auto`
+- `ResolveDialog.tsx` line 31 — DialogContent falta essas classes
 
-**Tab Conta — Avatar:**
-- Extrair iniciais do email (primeira letra antes do @)
-- Círculo `w-16 h-16 rounded-full bg-muted flex items-center justify-center text-xl font-bold`
+## Arquivos modificados (total: ~15)
+1. **Novo:** `src/hooks/usePageTitle.ts`
+2. `src/pages/Dashboard.tsx` — +1 linha
+3. `src/pages/Conversations.tsx` — +1 linha
+4. `src/pages/ConversationDetail.tsx` — +1 linha
+5. `src/pages/Products.tsx` — +1 linha
+6. `src/pages/ProductDetail.tsx` — +1 linha
+7. `src/pages/Policies.tsx` — +1 linha
+8. `src/pages/Customers.tsx` — +1 linha
+9. `src/pages/CustomerDetail.tsx` — +1 linha
+10. `src/pages/Escalations.tsx` — +1 linha
+11. `src/pages/Analytics.tsx` — +1 linha
+12. `src/pages/Settings.tsx` — +1 linha
+13. `src/pages/Login.tsx` — +1 linha
+14. `src/components/products/ProductTable.tsx` — hover + transition
+15. `src/components/policies/PolicyTable.tsx` — hover + transition
+16. `src/components/policies/FaqTable.tsx` — hover + transition
+17. `src/components/products/ProductCards.tsx` — transition
+18. `src/components/escalations/EscalationCard.tsx` — transition
+19. `src/components/escalations/ResolveDialog.tsx` — max-h + overflow
 
-### `src/hooks/useSettings.ts`
-
-Sem alterações necessárias — o hook já é genérico (key-value). Novas keys (`is_active`, `enabled_tools`, `business_hours`) serão inseridas automaticamente pelo upsert existente.
-
-## Schema do Banco
-
-Nenhuma alteração de schema. As novas config keys serão criadas automaticamente pelo fallback insert no `useUpdateAgentConfig`.
-
-## Arquivos modificados: 1 (`src/pages/Settings.tsx`)
+Nenhuma lógica de negócio, query ou mutation será alterada. Apenas adições visuais e o hook de título.
 
