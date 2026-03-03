@@ -501,19 +501,19 @@ function IntegrationsTab({ stats, modelName }: { stats?: { products: number; cus
   const integrations = [
     {
       icon: MessageSquare,
-      iconBg: 'bg-green-500/10',
-      iconColor: 'text-green-500',
+      iconBg: 'bg-success/10',
+      iconColor: 'text-success',
       title: 'WhatsApp',
       description: 'Integração via Evolution API para envio e recebimento de mensagens',
-      badge: <Badge className="bg-green-500/20 text-green-400 border-0">Conectado</Badge>,
+      badge: <Badge className="bg-success/15 text-success border-0">Conectado</Badge>,
     },
     {
       icon: Database,
-      iconBg: 'bg-emerald-500/10',
-      iconColor: 'text-emerald-500',
+      iconBg: 'bg-success/10',
+      iconColor: 'text-success',
       title: 'Supabase',
       description: `Banco de dados principal — ${stats ? `${stats.products} produtos, ${stats.customers} clientes, ${stats.conversations} conversas` : 'Carregando...'}`,
-      badge: <Badge className="bg-green-500/20 text-green-400 border-0">Conectado</Badge>,
+      badge: <Badge className="bg-success/15 text-success border-0">Conectado</Badge>,
     },
     {
       icon: Sparkles,
@@ -521,15 +521,15 @@ function IntegrationsTab({ stats, modelName }: { stats?: { products: number; cus
       iconColor: 'text-purple-500',
       title: 'OpenAI / LLM',
       description: `Motor de IA — modelo: ${modelName || 'não configurado'}`,
-      badge: <Badge className="bg-green-500/20 text-green-400 border-0">Configurado</Badge>,
+      badge: <Badge className="bg-success/15 text-success border-0">Configurado</Badge>,
     },
     {
       icon: GitBranch,
-      iconBg: 'bg-orange-500/10',
-      iconColor: 'text-orange-500',
+      iconBg: 'bg-accent/10',
+      iconColor: 'text-accent',
       title: 'N8N',
       description: 'Workflows de automação — gerenciado via painel N8N',
-      badge: <Badge className="bg-yellow-500/20 text-yellow-400 border-0">Externo</Badge>,
+      badge: <Badge className="bg-warning/15 text-warning border-0">Externo</Badge>,
     },
   ];
 

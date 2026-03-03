@@ -21,7 +21,7 @@ const tooltipStyle = { backgroundColor: "hsl(var(--card))", border: "1px solid h
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card className="border-border p-4">
+    <Card className="border-border p-4 shadow-sm">
       <p className="text-sm font-medium text-muted-foreground mb-4">{title}</p>
       <ResponsiveContainer width="100%" height={280}>
         {children as React.ReactElement}
@@ -61,9 +61,9 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
     const neg = data.reduce((s, r) => s + (r.sentiment_negative ?? 0), 0);
     const neu = data.reduce((s, r) => s + (r.sentiment_neutral ?? 0), 0);
     return [
-      { name: "Positivo", value: pos, color: "#22C55E" },
-      { name: "Negativo", value: neg, color: "#EF4444" },
-      { name: "Neutro", value: neu, color: "#6B7280" },
+      { name: "Positivo", value: pos, color: "#18794E" },
+      { name: "Negativo", value: neg, color: "#E53935" },
+      { name: "Neutro", value: neu, color: "#7EADAD" },
     ];
   }, [data]);
 
@@ -87,7 +87,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
           <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <Tooltip contentStyle={tooltipStyle} />
-          <Bar dataKey="conversations" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Conversas" />
+          <Bar dataKey="conversations" fill="#004D4D" radius={[4, 4, 0, 0]} name="Conversas" />
         </BarChart>
       </ChartCard>
 
@@ -98,7 +98,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
           <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="s" />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v.toFixed(1)}s`, "Tempo"]} />
-          <Line type="monotone" dataKey="responseTime" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} name="Tempo (s)" />
+          <Line type="monotone" dataKey="responseTime" stroke="#004D4D" strokeWidth={2} dot={{ r: 3 }} name="Tempo (s)" />
         </LineChart>
       </ChartCard>
 
@@ -109,8 +109,8 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
           <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="%" />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v.toFixed(1)}%`]} />
-          <Area type="monotone" dataKey="resolutionRate" stackId="1" stroke="#22C55E" fill="#22C55E" fillOpacity={0.3} name="Resolução" />
-          <Area type="monotone" dataKey="escalationRate" stackId="1" stroke="#EF4444" fill="#EF4444" fillOpacity={0.3} name="Escalonamento" />
+          <Area type="monotone" dataKey="resolutionRate" stackId="1" stroke="#18794E" fill="#18794E" fillOpacity={0.3} name="Resolução" />
+          <Area type="monotone" dataKey="escalationRate" stackId="1" stroke="#E53935" fill="#E53935" fillOpacity={0.3} name="Escalonamento" />
         </AreaChart>
       </ChartCard>
 
@@ -132,7 +132,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
           <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={120} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Bar dataKey="value" fill="#3B82F6" radius={[0, 4, 4, 0]} name="Ocorrências" />
+          <Bar dataKey="value" fill="#004D4D" radius={[0, 4, 4, 0]} name="Ocorrências" />
         </BarChart>
       </ChartCard>
 
@@ -143,7 +143,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
           <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={120} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Bar dataKey="value" fill="#3B82F6" radius={[0, 4, 4, 0]} name="Consultas" />
+          <Bar dataKey="value" fill="#7EADAD" radius={[0, 4, 4, 0]} name="Consultas" />
         </BarChart>
       </ChartCard>
 
@@ -154,7 +154,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
           <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <Tooltip contentStyle={tooltipStyle} />
-          <Area type="monotone" dataKey="messages" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.1} name="Mensagens" />
+          <Area type="monotone" dataKey="messages" stroke="#004D4D" fill="#004D4D" fillOpacity={0.1} name="Mensagens" />
         </AreaChart>
       </ChartCard>
 
@@ -165,7 +165,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
           <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatCurrency(v)} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatCurrency(v), "Custo"]} />
-          <Area type="monotone" dataKey="cost" stroke="#22C55E" fill="#22C55E" fillOpacity={0.2} name="Custo (R$)" />
+          <Area type="monotone" dataKey="cost" stroke="#18794E" fill="#18794E" fillOpacity={0.2} name="Custo (R$)" />
         </AreaChart>
       </ChartCard>
     </div>

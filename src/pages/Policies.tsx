@@ -81,7 +81,7 @@ export default function Policies() {
                 {POLICY_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button onClick={() => { setEditingPolicy(null); setPolicyDialogOpen(true); }} className="bg-blue-600 hover:bg-blue-700 ml-auto">
+            <Button onClick={() => { setEditingPolicy(null); setPolicyDialogOpen(true); }} className="bg-primary hover:bg-primary/90 ml-auto">
               <Plus className="h-4 w-4 mr-1" /> Adicionar Política
             </Button>
           </div>
@@ -110,7 +110,7 @@ export default function Policies() {
                 {(faqCatsQuery.data ?? []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button onClick={() => { setEditingFaq(null); setFaqDialogOpen(true); }} className="bg-blue-600 hover:bg-blue-700 ml-auto">
+            <Button onClick={() => { setEditingFaq(null); setFaqDialogOpen(true); }} className="bg-primary hover:bg-primary/90 ml-auto">
               <Plus className="h-4 w-4 mr-1" /> Adicionar Pergunta
             </Button>
           </div>

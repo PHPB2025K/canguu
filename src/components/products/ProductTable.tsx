@@ -21,10 +21,10 @@ function StockBadge({ qty }: { qty: number | null }) {
   const v = qty ?? 0;
   const cls =
     v > 10
-      ? "bg-green-500/10 text-green-400"
+      ? "bg-success/15 text-success"
       : v > 0
-        ? "bg-yellow-500/10 text-yellow-400"
-        : "bg-red-500/10 text-red-400";
+        ? "bg-warning/15 text-warning"
+        : "bg-destructive/15 text-destructive";
   return <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{v}</span>;
 }
 
@@ -59,7 +59,7 @@ export function ProductTable({ products, sortColumn, sortDirection, onSort, onEd
       </TableHeader>
       <TableBody>
         {products.map((p) => (
-          <TableRow key={p.id} className="hover:bg-muted/50 transition-colors">
+          <TableRow key={p.id} className="hover:bg-porcelain transition-colors">
             <TableCell className="text-sm font-mono text-muted-foreground">{p.sku}</TableCell>
             <TableCell className="font-medium">{p.name}</TableCell>
             <TableCell>

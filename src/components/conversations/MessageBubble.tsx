@@ -11,23 +11,23 @@ const senderConfig: Record<string, { label: string; icon: typeof User; bubbleCla
   customer: {
     label: "Cliente",
     icon: User,
-    bubbleClass: "bg-muted/50 border border-border rounded-2xl rounded-bl-md",
+    bubbleClass: "bg-muted border border-border rounded-2xl rounded-bl-md",
     labelClass: "text-muted-foreground",
     timeClass: "text-muted-foreground/50",
   },
   agent: {
     label: "Agente IA",
     icon: Bot,
-    bubbleClass: "bg-blue-600/20 border border-blue-500/20 rounded-2xl rounded-br-md",
-    labelClass: "text-blue-400",
-    timeClass: "text-blue-300/50",
+    bubbleClass: "bg-porcelain border border-porcelain rounded-2xl rounded-br-md",
+    labelClass: "text-primary",
+    timeClass: "text-muted-foreground/50",
   },
   human_agent: {
     label: "Atendente",
     icon: UserCheck,
-    bubbleClass: "bg-green-600/20 border border-green-500/20 rounded-2xl rounded-br-md",
-    labelClass: "text-green-400",
-    timeClass: "text-green-300/50",
+    bubbleClass: "bg-primary/15 border border-primary/20 rounded-2xl rounded-br-md",
+    labelClass: "text-primary",
+    timeClass: "text-muted-foreground/50",
   },
 };
 

@@ -2,11 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const statusMap: Record<string, { label: string; className: string }> = {
-  active: { label: "Ativo", className: "bg-green-500/10 text-green-400 border-green-500/20" },
+  active: { label: "Ativo", className: "bg-success/15 text-success border-success/20" },
   resolved: { label: "Resolvido", className: "bg-muted text-muted-foreground border-muted" },
-  escalated: { label: "Escalonado", className: "bg-destructive/10 text-destructive border-destructive/20" },
-  pending: { label: "Pendente", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
-  in_progress: { label: "Em Andamento", className: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  escalated: { label: "Escalonado", className: "bg-destructive/15 text-destructive border-destructive/20" },
+  pending: { label: "Pendente", className: "bg-warning/15 text-warning border-warning/20" },
+  in_progress: { label: "Em Andamento", className: "bg-primary/10 text-primary border-primary/20" },
 };
 
 interface StatusBadgeProps {

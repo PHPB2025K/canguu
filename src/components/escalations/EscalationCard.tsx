@@ -9,10 +9,10 @@ import { cn } from "@/lib/utils";
 import type { EscalationWithMessages } from "@/hooks/useEscalations";
 
 const borderByUrgency: Record<string, string> = {
-  critical: "border-l-4 border-l-red-500",
-  high: "border-l-4 border-l-orange-500",
-  medium: "border-l-4 border-l-blue-500",
-  low: "border-l-4 border-l-gray-500",
+  critical: "border-l-4 border-l-destructive",
+  high: "border-l-4 border-l-accent",
+  medium: "border-l-4 border-l-primary",
+  low: "border-l-4 border-l-border",
 };
 
 const senderIcon: Record<string, typeof User> = {
@@ -33,7 +33,7 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
   const isResolved = escalation.status === "resolved";
 
   return (
-    <Card className={cn("p-5 border-border transition-colors", borderByUrgency[escalation.urgency ?? "medium"] ?? borderByUrgency.medium)}>
+    <Card className={cn("p-5 border-border shadow-sm transition-colors", borderByUrgency[escalation.urgency ?? "medium"] ?? borderByUrgency.medium)}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -58,7 +58,7 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
 
         {/* Message preview */}
         {escalation.recentMessages.length > 0 && (
-          <div className="bg-muted/50 rounded-md p-2 mt-2 space-y-1">
+          <div className="bg-porcelain rounded-md p-2 mt-2 space-y-1">
             {escalation.recentMessages.map((msg) => {
               const Icon = senderIcon[msg.sender] ?? User;
               return (
@@ -72,7 +72,7 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
         )}
 
         {escalation.resolved_by && !isResolved && (
-          <p className="text-sm text-blue-400 mt-2">Atribuído a: {escalation.resolved_by}</p>
+          <p className="text-sm text-primary mt-2">Atribuído a: {escalation.resolved_by}</p>
         )}
 
         {isResolved && escalation.resolved_at && (
@@ -99,11 +99,11 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
         </Button>
         {!isResolved && (
           <>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onAssign}>
+            <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onAssign}>
               <UserCheck className="h-3.5 w-3.5 mr-1" />
               Assumir
             </Button>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={onResolve}>
+            <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={onResolve}>
               <CheckCircle className="h-3.5 w-3.5 mr-1" />
               Resolver
             </Button>

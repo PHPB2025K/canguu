@@ -43,7 +43,7 @@ const AppLayout = () => {
     <div className="min-h-screen flex bg-background">
       {/* Desktop sidebar */}
       {!isMobile && (
-        <aside className="w-64 shrink-0 border-r border-border bg-card fixed inset-y-0 left-0 z-30">
+        <aside className="w-64 shrink-0 border-r border-sidebar-border bg-[hsl(var(--sidebar-background))] fixed inset-y-0 left-0 z-30">
           <AppSidebar />
         </aside>
       )}
@@ -60,7 +60,7 @@ const AppLayout = () => {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0">
+                <SheetContent side="left" className="w-64 p-0 bg-[hsl(var(--sidebar-background))] border-sidebar-border">
                   <AppSidebar />
                 </SheetContent>
               </Sheet>

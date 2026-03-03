@@ -36,7 +36,7 @@ export function FaqTable({ faqs, onEdit, onDelete }: FaqTableProps) {
           const visibleKws = kws.slice(0, 3);
           const extra = kws.length - 3;
           return (
-            <TableRow key={f.id} className="hover:bg-muted/50 transition-colors">
+            <TableRow key={f.id} className="hover:bg-porcelain transition-colors">
               <TableCell className="font-medium text-foreground max-w-[300px]">{truncateText(f.question, 80)}</TableCell>
               <TableCell>{f.category ? <Badge variant="secondary">{f.category}</Badge> : "—"}</TableCell>
               <TableCell>
