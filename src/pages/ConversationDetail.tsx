@@ -1,7 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { ConversationChat } from "@/components/conversations/ConversationChat";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ConversationDetail = () => {
+  usePageTitle("Conversa");
   const { id } = useParams();
   const navigate = useNavigate();
 

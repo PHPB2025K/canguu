@@ -33,7 +33,7 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
   const isResolved = escalation.status === "resolved";
 
   return (
-    <Card className={cn("p-5 border-border", borderByUrgency[escalation.urgency ?? "medium"] ?? borderByUrgency.medium)}>
+    <Card className={cn("p-5 border-border transition-colors", borderByUrgency[escalation.urgency ?? "medium"] ?? borderByUrgency.medium)}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

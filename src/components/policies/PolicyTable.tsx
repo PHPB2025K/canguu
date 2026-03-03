@@ -31,7 +31,7 @@ export function PolicyTable({ policies, onEdit, onDelete }: PolicyTableProps) {
       </TableHeader>
       <TableBody>
         {policies.map((p) => (
-          <TableRow key={p.id}>
+          <TableRow key={p.id} className="hover:bg-muted/50 transition-colors">
             <TableCell className="font-medium text-foreground">{p.title}</TableCell>
             <TableCell><Badge variant="secondary">{p.category}</Badge></TableCell>
             <TableCell className="text-muted-foreground">{p.marketplace || "—"}</TableCell>

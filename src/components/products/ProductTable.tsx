@@ -59,7 +59,7 @@ export function ProductTable({ products, sortColumn, sortDirection, onSort, onEd
       </TableHeader>
       <TableBody>
         {products.map((p) => (
-          <TableRow key={p.id}>
+          <TableRow key={p.id} className="hover:bg-muted/50 transition-colors">
             <TableCell className="text-sm font-mono text-muted-foreground">{p.sku}</TableCell>
             <TableCell className="font-medium">{p.name}</TableCell>
             <TableCell>

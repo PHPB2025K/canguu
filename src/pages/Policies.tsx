@@ -13,11 +13,13 @@ import { FaqTable } from "@/components/policies/FaqTable";
 import { FaqDialog } from "@/components/policies/FaqDialog";
 import { usePolicyList, useDeletePolicy, useFaqList, useFaqCategories, useDeleteFaq } from "@/hooks/usePolicies";
 import { toast } from "@/hooks/use-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import type { Tables } from "@/integrations/supabase/types";
 
 const POLICY_CATEGORIES = ["Troca", "Entrega", "Garantia", "Pagamento", "Geral"];
 
 export default function Policies() {
+  usePageTitle("Políticas / FAQ");
   // Policy state
   const [policyCatFilter, setPolicyCatFilter] = useState<string>("");
   const [policyDialogOpen, setPolicyDialogOpen] = useState(false);

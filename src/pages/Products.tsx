@@ -10,11 +10,13 @@ import { ProductCards } from "@/components/products/ProductCards";
 import { ProductDialog } from "@/components/products/ProductDialog";
 import { useProductList, useDeleteProduct } from "@/hooks/useProducts";
 import { useToast } from "@/hooks/use-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
 
 export default function Products() {
+  usePageTitle("Produtos");
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [lineFilter, setLineFilter] = useState("all");
