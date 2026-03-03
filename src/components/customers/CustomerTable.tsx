@@ -10,8 +10,8 @@ import type { Tables } from "@/integrations/supabase/types";
 type Customer = Tables<"customers">;
 
 const sourceColors: Record<string, string> = {
-  whatsapp: "bg-green-500/10 text-green-400 border-green-500/20",
-  site: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  whatsapp: "bg-success/15 text-success border-success/20",
+  site: "bg-primary/10 text-primary border-primary/20",
   marketplace: "bg-purple-500/10 text-purple-400 border-purple-500/20",
 };
 
@@ -53,7 +53,7 @@ export function CustomerTable({ customers, sortColumn, sortDirection, onSort }: 
           const visibleTags = tags.slice(0, 2);
           const extra = tags.length - 2;
           return (
-            <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate(`/customers/${c.id}`)}>
+            <TableRow key={c.id} className="cursor-pointer hover:bg-porcelain transition-colors" onClick={() => navigate(`/customers/${c.id}`)}>
               <TableCell className="font-medium text-foreground">{c.name || "Sem nome"}</TableCell>
               <TableCell className="text-muted-foreground">{formatPhone(c.phone)}</TableCell>
               <TableCell>

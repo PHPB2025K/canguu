@@ -91,7 +91,7 @@ export function ConversationChat({ conversationId, onBack, showBackButton }: Con
             variant={isAgent ? "default" : "outline"}
             size="sm"
             onClick={() => setConfirmDialog(isAgent ? "assume" : "return")}
-            className={isAgent ? "bg-blue-600 hover:bg-blue-700" : ""}
+            className={isAgent ? "bg-primary hover:bg-primary/90" : ""}
           >
             {isAgent ? <UserCheck className="h-4 w-4 mr-1.5" /> : <Bot className="h-4 w-4 mr-1.5" />}
             {isAgent ? "Assumir" : "Devolver"}

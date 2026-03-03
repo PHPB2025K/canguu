@@ -2,7 +2,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recha
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const COLORS = ["#22C55E", "#EF4444", "#6B7280"];
+const COLORS = ["#18794E", "#E53935", "#7EADAD"];
 
 interface SentimentChartProps {
   positive: number;
@@ -21,7 +21,7 @@ export function SentimentChart({ positive, negative, neutral, isLoading }: Senti
   const total = positive + negative + neutral;
 
   return (
-    <Card className="border-border">
+    <Card className="border-border shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-medium">Sentimento</CardTitle>
       </CardHeader>

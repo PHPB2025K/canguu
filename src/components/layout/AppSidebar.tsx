@@ -32,10 +32,10 @@ const AppSidebar = () => {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="p-6 flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+          <Bot className="h-4 w-4 text-white" />
         </div>
-        <span className="font-bold text-lg text-foreground">Budamix AI</span>
+        <span className="font-bold text-lg text-white">Budamix AI</span>
       </div>
 
       {/* Nav */}
@@ -44,14 +44,14 @@ const AppSidebar = () => {
           const count = item.badgeKey ? counts[item.badgeKey] : 0;
           const badgeColor = item.badgeKey === 'pendingEscalations'
             ? 'bg-destructive text-destructive-foreground'
-            : 'bg-primary text-primary-foreground';
+            : 'bg-white/20 text-white';
 
           return (
             <NavLink
               key={item.path}
               to={item.path}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-sm"
-              activeClassName="bg-primary/10 text-primary font-medium"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm"
+              activeClassName="bg-white/15 text-white font-medium"
             >
               <item.icon className="h-4 w-4 shrink-0" />
               <span className="flex-1">{item.label}</span>
@@ -64,12 +64,12 @@ const AppSidebar = () => {
           );
         })}
 
-        <Separator className="my-3" />
+        <Separator className="my-3 bg-white/10" />
 
         <NavLink
           to="/settings"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-sm"
-          activeClassName="bg-primary/10 text-primary font-medium"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm"
+          activeClassName="bg-white/15 text-white font-medium"
         >
           <Settings className="h-4 w-4 shrink-0" />
           <span>Configurações</span>
@@ -77,11 +77,11 @@ const AppSidebar = () => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border space-y-2">
-        <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+      <div className="p-4 border-t border-white/10 space-y-2">
+        <p className="text-xs text-white/50 truncate">{user?.email}</p>
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-2 text-xs text-destructive hover:text-destructive/80 transition-colors"
+          className="flex items-center gap-2 text-xs text-red-300 hover:text-red-200 transition-colors"
         >
           <LogOut className="h-3.5 w-3.5" />
           Sair

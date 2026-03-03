@@ -46,7 +46,7 @@ export function ResolveDialog({ open, onOpenChange, onConfirm, loading }: Resolv
           <Button
             onClick={handleSubmit}
             disabled={!notes.trim() || loading}
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="bg-success hover:bg-success/90 text-white"
           >
             Resolver
           </Button>

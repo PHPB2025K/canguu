@@ -120,8 +120,8 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
                   key={conv.id}
                   onClick={() => onSelect(conv.id)}
                   className={cn(
-                    "w-full flex items-start gap-3 p-3 text-left transition-colors hover:bg-muted/50",
-                    isSelected && "bg-blue-500/10 border-l-2 border-blue-400",
+                    "w-full flex items-start gap-3 p-3 text-left transition-colors hover:bg-porcelain",
+                    isSelected && "bg-primary/10 border-l-2 border-primary",
                     !isSelected && "border-l-2 border-transparent"
                   )}
                 >
@@ -137,7 +137,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
                         {conv.customers?.name || "Sem nome"}
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {isUnread && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
+                        {isUnread && <div className="w-2 h-2 bg-primary rounded-full" />}
                         {conv.updated_at && (
                           <RelativeTime date={conv.updated_at} className="text-xs text-muted-foreground" />
                         )}

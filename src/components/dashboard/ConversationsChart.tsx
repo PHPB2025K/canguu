@@ -14,7 +14,7 @@ interface ConversationsChartProps {
 
 export function ConversationsChart({ data, isLoading }: ConversationsChartProps) {
   return (
-    <Card className="border-border">
+    <Card className="border-border shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-medium">Conversas por Hora</CardTitle>
       </CardHeader>
@@ -26,8 +26,8 @@ export function ConversationsChart({ data, isLoading }: ConversationsChartProps)
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="colorConv" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(180, 100%, 15%)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(180, 100%, 15%)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis
@@ -56,7 +56,7 @@ export function ConversationsChart({ data, isLoading }: ConversationsChartProps)
               <Area
                 type="monotone"
                 dataKey="count"
-                stroke="hsl(217, 91%, 60%)"
+                stroke="hsl(180, 100%, 15%)"
                 fillOpacity={1}
                 fill="url(#colorConv)"
                 strokeWidth={2}

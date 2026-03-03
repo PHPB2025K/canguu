@@ -40,7 +40,7 @@ export function ChatInput({ onSend, disabled = false, isSending = false }: ChatI
   return (
     <div className="border-t border-border p-4">
       {disabled && (
-        <div className="flex items-center gap-2 mb-3 text-sm text-yellow-400">
+        <div className="flex items-center gap-2 mb-3 text-sm text-warning">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>Assuma o atendimento para enviar mensagens</span>
         </div>
@@ -66,7 +66,7 @@ export function ChatInput({ onSend, disabled = false, isSending = false }: ChatI
           size="icon"
           onClick={handleSend}
           disabled={disabled || isSending || !value.trim()}
-          className="h-10 w-10 rounded-full bg-blue-600 hover:bg-blue-700 shrink-0"
+          className="h-10 w-10 rounded-full bg-primary hover:bg-primary/90 shrink-0"
         >
           <Send className="h-4 w-4" />
         </Button>
