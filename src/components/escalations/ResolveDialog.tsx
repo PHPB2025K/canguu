@@ -28,7 +28,7 @@ export function ResolveDialog({ open, onOpenChange, onConfirm, loading }: Resolv
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setNotes(""); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Resolver Escalonamento</DialogTitle>
         </DialogHeader>

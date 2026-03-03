@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConversationList } from "@/components/conversations/ConversationList";
 import { ConversationChat } from "@/components/conversations/ConversationChat";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const Conversations = () => {
+  usePageTitle("Conversas");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const navigate = useNavigate();
 

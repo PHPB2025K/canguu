@@ -23,6 +23,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 const LLM_MODELS = [
   { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
@@ -91,6 +92,7 @@ function parseJson<T>(str: string | undefined, fallback: T): T {
 }
 
 const Settings = () => {
+  usePageTitle("Configurações");
   const { data: config, isLoading } = useAgentConfig();
   const updateConfig = useUpdateAgentConfig();
   const { data: stats } = useIntegrationStats();

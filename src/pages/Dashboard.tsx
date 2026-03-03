@@ -15,6 +15,7 @@ import {
   useRecentConversations,
 } from "@/hooks/useDashboardData";
 import { formatCurrency } from "@/lib/formatters";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function getDominantSentiment(pos: number, neg: number, neu: number): string {
   if (pos === 0 && neg === 0 && neu === 0) return "😐 --";
@@ -24,6 +25,7 @@ function getDominantSentiment(pos: number, neg: number, neu: number): string {
 }
 
 const Dashboard = () => {
+  usePageTitle("Dashboard");
   const escalations = usePendingEscalations();
   const conversationsToday = useConversationsToday();
   const analytics = useTodayAnalytics();

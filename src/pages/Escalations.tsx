@@ -10,8 +10,10 @@ import { ResolveDialog } from "@/components/escalations/ResolveDialog";
 import { useEscalationList, useEscalationCounts, useAssignEscalation, useResolveEscalation } from "@/hooks/useEscalations";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "@/hooks/use-toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const Escalations = () => {
+  usePageTitle("Escalonamentos");
   const [tab, setTab] = useState("pending");
   const [resolveId, setResolveId] = useState<string | null>(null);
   const user = useAuthStore((s) => s.user);

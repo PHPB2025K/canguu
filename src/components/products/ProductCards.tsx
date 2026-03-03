@@ -32,7 +32,7 @@ export function ProductCards({ products, onEdit, onDelete }: ProductCardsProps) 
       {products.map((p) => {
         const img = getFirstImage(p.images);
         return (
-          <div key={p.id} className="rounded-lg border border-border bg-card overflow-hidden">
+          <div key={p.id} className="rounded-lg border border-border bg-card overflow-hidden transition-colors hover:shadow-md">
             {img ? (
               <img src={img} alt={p.name} className="h-48 w-full object-cover" />
             ) : (

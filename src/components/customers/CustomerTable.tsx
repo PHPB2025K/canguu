@@ -53,7 +53,7 @@ export function CustomerTable({ customers, sortColumn, sortDirection, onSort }: 
           const visibleTags = tags.slice(0, 2);
           const extra = tags.length - 2;
           return (
-            <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/customers/${c.id}`)}>
+            <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate(`/customers/${c.id}`)}>
               <TableCell className="font-medium text-foreground">{c.name || "Sem nome"}</TableCell>
               <TableCell className="text-muted-foreground">{formatPhone(c.phone)}</TableCell>
               <TableCell>

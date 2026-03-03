@@ -9,6 +9,7 @@ import { DateRangePicker } from "@/components/analytics/DateRangePicker";
 import { AnalyticsCharts } from "@/components/analytics/AnalyticsCharts";
 import { useAnalyticsSummary, useAnalyticsDaily } from "@/hooks/useAnalytics";
 import { formatCurrency } from "@/lib/formatters";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function exportCSV(data: any[], startDate: string, endDate: string) {
   const headers = "Data,Conversas,Mensagens,Tempo Médio (s),Taxa Resolução (%),Taxa Escalonamento (%),Sentimento Positivo,Sentimento Negativo,Sentimento Neutro,Custo (R$)\n";
@@ -37,6 +38,7 @@ function exportCSV(data: any[], startDate: string, endDate: string) {
 }
 
 const Analytics = () => {
+  usePageTitle("Analytics");
   const [startDate, setStartDate] = useState(() => format(subDays(new Date(), 30), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
 

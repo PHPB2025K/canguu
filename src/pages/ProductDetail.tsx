@@ -13,8 +13,10 @@ import {
   imagesToText, textToImages, dimensionsToText,
   extractMarketplacePrice, extractMarketplaceLink,
 } from "@/hooks/useProducts";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function ProductDetail() {
+  usePageTitle("Editar Produto");
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();

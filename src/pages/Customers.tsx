@@ -8,8 +8,10 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { CustomerTable } from "@/components/customers/CustomerTable";
 import { useCustomerList } from "@/hooks/useCustomers";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function Customers() {
+  usePageTitle("Clientes");
   const [search, setSearch] = useState("");
   const [sortColumn, setSortColumn] = useState("last_contact_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");

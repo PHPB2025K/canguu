@@ -10,8 +10,10 @@ import { CustomerTags } from "@/components/customers/CustomerTags";
 import { CustomerNotes } from "@/components/customers/CustomerNotes";
 import { CustomerHistory } from "@/components/customers/CustomerHistory";
 import { useCustomer, useCustomerSentimentStats } from "@/hooks/useCustomers";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function CustomerDetail() {
+  usePageTitle("Detalhe do Cliente");
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: customer, isLoading } = useCustomer(id);
