@@ -145,8 +145,8 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                     type="number"
                     step="0.01"
                     placeholder="R$ 0,00"
-                    value={form.mp_prices[key] ?? ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, mp_prices: { ...prev.mp_prices, [key]: e.target.value } }))}
+                    value={form.mp_prices?.[key] ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, mp_prices: { ...(prev.mp_prices ?? {}), [key]: e.target.value } }))}
                   />
                 </div>
               ))}
@@ -194,8 +194,8 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                     id={`ml_${key}`}
                     type="url"
                     placeholder={MARKETPLACE_LINK_PLACEHOLDERS[key]}
-                    value={form.mp_links[key] ?? ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, mp_links: { ...prev.mp_links, [key]: e.target.value } }))}
+                    value={form.mp_links?.[key] ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, mp_links: { ...(prev.mp_links ?? {}), [key]: e.target.value } }))}
                   />
                 </div>
               ))}
