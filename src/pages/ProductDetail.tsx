@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import {
   useProduct, useUpdateProduct,
   imagesToText, textToImages, dimensionsToText,
-  extractMarketplaceLink, extractAllMarketplacePrices, buildMarketplacePriceJson,
-  MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS,
+  extractAllMarketplacePrices, buildMarketplacePriceJson,
+  extractAllMarketplaceLinks, buildMarketplaceLinkJson,
+  MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS, MARKETPLACE_LINK_PLACEHOLDERS,
 } from "@/hooks/useProducts";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
@@ -43,7 +44,7 @@ export default function ProductDetail() {
         usage_suggestions: product.usage_suggestions ?? "",
         differentials: product.differentials ?? "",
         site_link: product.site_link ?? "",
-        marketplace_links: extractMarketplaceLink(product.marketplace_links),
+        mp_links: extractAllMarketplaceLinks(product.marketplace_links),
         is_active: product.is_active ?? true,
       });
     }
@@ -73,7 +74,7 @@ export default function ProductDetail() {
         usage_suggestions: form.usage_suggestions.trim() || null,
         differentials: form.differentials.trim() || null,
         site_link: form.site_link.trim() || null,
-        marketplace_links: form.marketplace_links.trim() ? { url: form.marketplace_links.trim() } : null,
+        marketplace_links: buildMarketplaceLinkJson(form.mp_links),
         is_active: form.is_active,
       } as any);
       toast({ title: "Produto atualizado com sucesso" });
@@ -164,9 +165,21 @@ export default function ProductDetail() {
           <Label>Diferenciais</Label>
           <Textarea rows={2} value={form.differentials ?? ""} onChange={(e) => set("differentials", e.target.value)} />
         </div>
-        <div>
-          <Label>Link Marketplace</Label>
-          <Input type="url" value={form.marketplace_links ?? ""} onChange={(e) => set("marketplace_links", e.target.value)} />
+        <div className="sm:col-span-2 space-y-2">
+          <Label className="text-sm font-semibold">Links dos Anúncios</Label>
+          <div className="grid grid-cols-1 gap-3">
+            {MARKETPLACE_PLATFORMS.map((key) => (
+              <div key={key}>
+                <Label className="text-xs">{MARKETPLACE_LABELS[key]}</Label>
+                <Input
+                  type="url"
+                  placeholder={MARKETPLACE_LINK_PLACEHOLDERS[key]}
+                  value={form.mp_links?.[key] ?? ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, mp_links: { ...prev.mp_links, [key]: e.target.value } }))}
+                />
+              </div>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-3 pt-6">
           <Switch checked={form.is_active ?? true} onCheckedChange={(v) => set("is_active", v)} />

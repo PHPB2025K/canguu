@@ -231,3 +231,31 @@ export function extractMarketplaceLink(ml: unknown): string {
   }
   return "";
 }
+
+// Helper: extract all platform links as strings for form state
+export function extractAllMarketplaceLinks(ml: unknown): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of MARKETPLACE_PLATFORMS) {
+    const val = ml && typeof ml === "object" ? (ml as Record<string, unknown>)[key] : undefined;
+    result[key] = typeof val === "string" ? val : "";
+  }
+  return result;
+}
+
+// Helper: build jsonb from form links (only non-empty values)
+export function buildMarketplaceLinkJson(links: Record<string, string>): Record<string, string> | null {
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(links)) {
+    if (val && val.trim() !== "") result[key] = val.trim();
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+export const MARKETPLACE_LINK_PLACEHOLDERS: Record<string, string> = {
+  mercadolivre: "https://mercadolivre.com.br/...",
+  shopee: "https://shopee.com.br/...",
+  amazon: "https://amazon.com.br/...",
+  tiktok: "https://tiktok.com/shop/...",
+  site: "https://budamix.com.br/...",
+  whatsapp: "https://wa.me/...",
+};
