@@ -185,7 +185,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
             <Textarea id="differentials" rows={2} value={form.differentials} onChange={(e) => set("differentials", e.target.value)} />
           </div>
           <div className="sm:col-span-2 space-y-2">
-            <Label className="text-sm font-semibold">Links dos Anúncios</Label>
+            <Label className="text-sm font-semibold">Links do Anúncio nos Marketplaces</Label>
             <div className="grid grid-cols-1 gap-3">
               {MARKETPLACE_PLATFORMS.map((key) => (
                 <div key={key}>
