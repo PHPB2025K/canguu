@@ -174,7 +174,7 @@ export function dimensionsToText(dim: unknown): string {
 }
 
 // Marketplace platform keys
-export const MARKETPLACE_PLATFORMS = ["mercadolivre", "shopee", "amazon", "tiktok", "site", "whatsapp"] as const;
+export const MARKETPLACE_PLATFORMS = ["mercadolivre", "shopee", "amazon", "tiktok", "site"] as const;
 
 export const MARKETPLACE_LABELS: Record<string, string> = {
   mercadolivre: "Mercado Livre",
@@ -182,7 +182,6 @@ export const MARKETPLACE_LABELS: Record<string, string> = {
   amazon: "Amazon",
   tiktok: "TikTok Shop",
   site: "Site Próprio",
-  whatsapp: "WhatsApp Direto",
 };
 
 // Helper: extract marketplace price number from jsonb (with optional platform key)
@@ -257,5 +256,4 @@ export const MARKETPLACE_LINK_PLACEHOLDERS: Record<string, string> = {
   amazon: "https://amazon.com.br/...",
   tiktok: "https://tiktok.com/shop/...",
   site: "https://budamix.com.br/...",
-  whatsapp: "https://wa.me/...",
 };
