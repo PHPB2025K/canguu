@@ -1,0 +1,4 @@
+UPDATE agent_config
+SET config_value = config_value || E'\n\n---\n\nREGRA DE IDENTIFICAÇÃO DE PLATAFORMA:\nNo início de TODA conversa com o cliente, antes de responder qualquer\npergunta sobre preço, você DEVE perguntar em qual plataforma o cliente\nestá comprando ou pretende comprar. As opções são:\nMercado Livre, Shopee, Amazon, TikTok Shop, Site Próprio ou WhatsApp Direto.\n\nSomente após o cliente informar a plataforma, consulte o preço\ncorrespondente nos dados do produto e informe o valor correto.\n\nSe o produto não tiver preço cadastrado para a plataforma informada,\nresponda: "Não tenho o preço dessa plataforma no momento. Pode me informar\nse tem interesse por outra plataforma ou aguardar nossa atualização?"\n\nSe após 2 perguntas o cliente não informar a plataforma, utilize o preço\ndo WhatsApp Direto como referência e informe que pode variar por canal.',
+    updated_at = now()
+WHERE config_key = 'system_prompt';

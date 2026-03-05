@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateProduct, useUpdateProduct, imagesToText, textToImages, dimensionsToText, extractMarketplacePrice, extractMarketplaceLink } from "@/hooks/useProducts";
+import { useCreateProduct, useUpdateProduct, imagesToText, textToImages, dimensionsToText, extractMarketplaceLink, extractAllMarketplacePrices, buildMarketplacePriceJson, MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS } from "@/hooks/useProducts";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
@@ -26,9 +26,7 @@ function getInitial(product?: Product | null) {
     product_line: product?.product_line ?? "",
     material: product?.material ?? "",
     price_site: product?.price_site != null ? String(product.price_site) : "",
-    price_marketplace: extractMarketplacePrice(product?.price_marketplace) != null
-      ? String(extractMarketplacePrice(product?.price_marketplace))
-      : "",
+    mp_prices: extractAllMarketplacePrices(product?.price_marketplace),
     stock_quantity: product?.stock_quantity != null ? String(product.stock_quantity) : "0",
     dimensions: dimensionsToText(product?.dimensions),
     short_description: product?.short_description ?? "",
@@ -74,9 +72,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       product_line: form.product_line.trim() || null,
       material: form.material.trim() || null,
       price_site: form.price_site ? parseFloat(form.price_site) : null,
-      price_marketplace: form.price_marketplace
-        ? { default: parseFloat(form.price_marketplace) }
-        : null,
+      price_marketplace: buildMarketplacePriceJson(form.mp_prices),
       stock_quantity: form.stock_quantity ? parseInt(form.stock_quantity, 10) : 0,
       dimensions: form.dimensions.trim() ? { raw: form.dimensions.trim() } : null,
       short_description: form.short_description.trim() || null,
@@ -140,9 +136,23 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
             <Label htmlFor="price_site">Preço Site R$</Label>
             <Input id="price_site" type="number" step="0.01" value={form.price_site} onChange={(e) => set("price_site", e.target.value)} placeholder="0,00" />
           </div>
-          <div>
-            <Label htmlFor="price_marketplace">Preço Marketplace R$</Label>
-            <Input id="price_marketplace" type="number" step="0.01" value={form.price_marketplace} onChange={(e) => set("price_marketplace", e.target.value)} />
+          <div className="sm:col-span-2 space-y-2">
+            <Label className="text-sm font-semibold">Preços por Plataforma</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {MARKETPLACE_PLATFORMS.map((key) => (
+                <div key={key}>
+                  <Label htmlFor={`mp_${key}`} className="text-xs">{MARKETPLACE_LABELS[key]}</Label>
+                  <Input
+                    id={`mp_${key}`}
+                    type="number"
+                    step="0.01"
+                    placeholder="R$ 0,00"
+                    value={form.mp_prices[key] ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, mp_prices: { ...prev.mp_prices, [key]: e.target.value } }))}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           <div>
             <Label htmlFor="stock_quantity">Estoque</Label>
