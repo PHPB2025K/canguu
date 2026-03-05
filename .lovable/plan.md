@@ -1,80 +1,50 @@
 
 
-# Preços por Plataforma — Plano de Implementação
+# Links por Plataforma + System Prompt de Canal
 
 ## Resumo
 
-Substituir o campo único "Preço Marketplace R$" por 6 campos individuais (Mercado Livre, Shopee, Amazon, TikTok Shop, Site Próprio, WhatsApp Direto) salvos como jsonb em `price_marketplace`. Atualizar o system prompt da IA com regra de identificação de plataforma.
+Substituir campo único "Link Marketplace" por 6 campos individuais de link por plataforma no jsonb `marketplace_links`. Atualizar system prompt com regra de canal e conversão.
 
-## Arquivos a Modificar
+## Alterações
 
-### 1. `src/hooks/useProducts.ts` — Helper `extractMarketplacePrice`
+### 1. `src/hooks/useProducts.ts` — Adicionar 2 helpers (após `extractMarketplaceLink`, line 233)
 
-Atualizar para aceitar key opcional de plataforma:
+- `extractAllMarketplaceLinks(ml)` — extrai links por plataforma do jsonb para form state (Record<string, string>)
+- `buildMarketplaceLinkJson(links)` — converte form state para jsonb (descarta vazios)
 
-```ts
-export function extractMarketplacePrice(pm: unknown, platform?: string): number | null {
-  if (!pm) return null;
-  if (typeof pm === "number") return pm;
-  if (typeof pm === "object" && pm !== null) {
-    const obj = pm as Record<string, unknown>;
-    if (platform && platform in obj && typeof obj[platform] === "number") return obj[platform] as number;
-    if ("default" in obj && typeof obj.default === "number") return obj.default;
-    const vals = Object.values(obj).filter((v) => typeof v === "number");
-    if (vals.length > 0) return vals[0] as number;
-  }
-  return null;
-}
-```
-
-Adicionar novo helper para extrair todos os preços por plataforma para o formulário:
-
-```ts
-const MARKETPLACE_PLATFORMS = ["mercadolivre", "shopee", "amazon", "tiktok", "site", "whatsapp"] as const;
-
-export function extractAllMarketplacePrices(pm: unknown): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const key of MARKETPLACE_PLATFORMS) {
-    const val = pm && typeof pm === "object" ? (pm as Record<string, unknown>)[key] : undefined;
-    result[key] = typeof val === "number" ? String(val) : "";
-  }
-  return result;
-}
-
-export function buildMarketplacePriceJson(prices: Record<string, string>): Record<string, number> | null {
-  const result: Record<string, number> = {};
-  for (const [key, val] of Object.entries(prices)) {
-    const num = parseFloat(val);
-    if (!isNaN(num) && num > 0) result[key] = num;
-  }
-  return Object.keys(result).length > 0 ? result : null;
-}
-```
+Reutiliza `MARKETPLACE_PLATFORMS` existente. Não altera nenhum helper existente.
 
 ### 2. `src/components/products/ProductDialog.tsx`
 
-- No `getInitial`: substituir `price_marketplace: extractMarketplacePrice(...)` por `mp_prices: extractAllMarketplacePrices(product?.price_marketplace)`
-- Remover o campo `<Input id="price_marketplace">` (lines 143-145)
-- Adicionar seção "Preços por Plataforma" com `sm:col-span-2`, contendo grid 2x3 com os 6 campos (label + input number step 0.01, placeholder "R$ 0,00")
-- No `handleSave`: substituir `price_marketplace: form.price_marketplace ? { default: ... } : null` por `price_marketplace: buildMarketplacePriceJson(form.mp_prices)`
-- O `set` precisa suportar nested: adicionar `setMpPrice(key, value)` helper
+- **Import**: adicionar `extractAllMarketplaceLinks`, `buildMarketplaceLinkJson`; remover `extractMarketplaceLink`
+- **getInitial** (line 38): trocar `marketplace_links: extractMarketplaceLink(...)` por `mp_links: extractAllMarketplaceLinks(product?.marketplace_links)`
+- **JSX** (lines 189-192): remover campo único "Link Marketplace". Adicionar seção "Links dos Anúncios" com `sm:col-span-2`, grid 1 coluna, 6 inputs type="url" iterando `MARKETPLACE_PLATFORMS` com placeholders específicos
+- **handleSave** (lines 84-86): trocar `marketplace_links: { url: ... }` por `marketplace_links: buildMarketplaceLinkJson(form.mp_links)`
 
 ### 3. `src/pages/ProductDetail.tsx`
 
-- Mesma lógica: substituir `price_marketplace` único por `mp_prices` object no state
-- Remover campo "Preço Marketplace R$" (lines 118-121)
-- Adicionar seção "Preços por Plataforma" idêntica ao dialog
-- No `handleSave`: usar `buildMarketplacePriceJson(form.mp_prices)`
+- **Import**: adicionar `extractAllMarketplaceLinks`, `buildMarketplaceLinkJson`; remover `extractMarketplaceLink`
+- **useEffect state** (line 46): trocar `marketplace_links: extractMarketplaceLink(...)` por `mp_links: extractAllMarketplaceLinks(product.marketplace_links)`
+- **JSX** (lines 167-170): remover campo "Link Marketplace". Adicionar seção "Links dos Anúncios" idêntica ao dialog
+- **handleSave** (line 76): trocar `marketplace_links: { url: ... }` por `marketplace_links: buildMarketplaceLinkJson(form.mp_links)`
 
-### 4. System Prompt — Supabase UPDATE
+### 4. Supabase Migration — System Prompt Update
 
-Usar o insert tool para concatenar o bloco de regra de identificação de plataforma ao `config_value` existente na `agent_config` onde `config_key = 'system_prompt'`.
+SQL migration que faz UPDATE na `agent_config` substituindo o bloco `REGRA DE IDENTIFICAÇÃO DE PLATAFORMA:` pelo novo bloco `REGRA DE CANAL E CONVERSÃO DE PEDIDOS:` com toda a lógica de priorização de canal conforme especificado.
 
-## Sem alteração de schema
+### Placeholders por plataforma
 
-A coluna `price_marketplace` (jsonb) já existe. Apenas o formato do JSON muda de `{ "default": 99.90 }` para `{ "mercadolivre": 99.90, "shopee": 89.90, ... }`.
+| Key | Placeholder |
+|---|---|
+| mercadolivre | `https://mercadolivre.com.br/...` |
+| shopee | `https://shopee.com.br/...` |
+| amazon | `https://amazon.com.br/...` |
+| tiktok | `https://tiktok.com/shop/...` |
+| site | `https://budamix.com.br/...` |
+| whatsapp | `https://wa.me/...` |
 
 ## Arquivos NÃO alterados
 
-ProductTable, ProductCards, ProductToolbar, Products.tsx, todas as queries/mutations/hooks existentes (exceto o helper `extractMarketplacePrice`).
+ProductTable, ProductCards, ProductToolbar, Products.tsx, campo `site_link`, seção "Preços por Plataforma", todos os hooks/queries existentes.
 
