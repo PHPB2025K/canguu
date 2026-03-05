@@ -173,17 +173,50 @@ export function dimensionsToText(dim: unknown): string {
   return JSON.stringify(dim);
 }
 
-// Helper: extract marketplace price number from jsonb
-export function extractMarketplacePrice(pm: unknown): number | null {
+// Marketplace platform keys
+export const MARKETPLACE_PLATFORMS = ["mercadolivre", "shopee", "amazon", "tiktok", "site", "whatsapp"] as const;
+
+export const MARKETPLACE_LABELS: Record<string, string> = {
+  mercadolivre: "Mercado Livre",
+  shopee: "Shopee",
+  amazon: "Amazon",
+  tiktok: "TikTok Shop",
+  site: "Site Próprio",
+  whatsapp: "WhatsApp Direto",
+};
+
+// Helper: extract marketplace price number from jsonb (with optional platform key)
+export function extractMarketplacePrice(pm: unknown, platform?: string): number | null {
   if (!pm) return null;
   if (typeof pm === "number") return pm;
   if (typeof pm === "object" && pm !== null) {
     const obj = pm as Record<string, unknown>;
+    if (platform && platform in obj && typeof obj[platform] === "number") return obj[platform] as number;
     if ("default" in obj && typeof obj.default === "number") return obj.default;
     const vals = Object.values(obj).filter((v) => typeof v === "number");
     if (vals.length > 0) return vals[0] as number;
   }
   return null;
+}
+
+// Helper: extract all platform prices as strings for form state
+export function extractAllMarketplacePrices(pm: unknown): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of MARKETPLACE_PLATFORMS) {
+    const val = pm && typeof pm === "object" ? (pm as Record<string, unknown>)[key] : undefined;
+    result[key] = typeof val === "number" ? String(val) : "";
+  }
+  return result;
+}
+
+// Helper: build jsonb from form prices (only non-empty, positive values)
+export function buildMarketplacePriceJson(prices: Record<string, string>): Record<string, number> | null {
+  const result: Record<string, number> = {};
+  for (const [key, val] of Object.entries(prices)) {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) result[key] = num;
+  }
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 // Helper: extract marketplace link string from jsonb
