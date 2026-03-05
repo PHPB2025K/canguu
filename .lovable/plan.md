@@ -1,95 +1,80 @@
 
 
-# Aplicar Design System Budamix — Mudança Puramente Visual
+# Preços por Plataforma — Plano de Implementação
 
 ## Resumo
 
-Migrar de tema azul/default shadcn para paleta orgânica Budamix (areia, teal, terracotta). Sem alterações de lógica, hooks ou queries. Apenas CSS variables, classes de cor, fontes e gráficos.
+Substituir o campo único "Preço Marketplace R$" por 6 campos individuais (Mercado Livre, Shopee, Amazon, TikTok Shop, Site Próprio, WhatsApp Direto) salvos como jsonb em `price_marketplace`. Atualizar o system prompt da IA com regra de identificação de plataforma.
 
-## Estado Atual
+## Arquivos a Modificar
 
-- Nenhuma classe `bg-gray-900/800/950` encontrada — o projeto já usa tokens semânticos (`bg-card`, `bg-background`, etc.)
-- Hardcoded restante: `bg-blue-600`, `hover:bg-blue-700`, `text-blue-400`, `#3B82F6`, `hsl(217, 91%, 60%)`
-- CSS variables atuais são shadcn default (azul `217 91% 60%`)
-- Sidebar usa tokens semânticos mas precisa estilização teal escuro
+### 1. `src/hooks/useProducts.ts` — Helper `extractMarketplacePrice`
 
-## Alterações por Arquivo
+Atualizar para aceitar key opcional de plataforma:
 
-### 1. `src/index.css` — CSS Variables + Fontes
-- Substituir `:root` pela paleta Budamix completa
-- Remover bloco `.dark`
-- Adicionar `@import` de Google Fonts (DM Sans + Plus Jakarta Sans)
-- Adicionar `--success`, `--warning`, `--gold`, `--porcelain`
-- Font-family: DM Sans para body, Plus Jakarta Sans para headings
+```ts
+export function extractMarketplacePrice(pm: unknown, platform?: string): number | null {
+  if (!pm) return null;
+  if (typeof pm === "number") return pm;
+  if (typeof pm === "object" && pm !== null) {
+    const obj = pm as Record<string, unknown>;
+    if (platform && platform in obj && typeof obj[platform] === "number") return obj[platform] as number;
+    if ("default" in obj && typeof obj.default === "number") return obj.default;
+    const vals = Object.values(obj).filter((v) => typeof v === "number");
+    if (vals.length > 0) return vals[0] as number;
+  }
+  return null;
+}
+```
 
-### 2. `tailwind.config.ts` — Cores extras
-Adicionar ao `extend.colors`: `success`, `warning`, `gold`, `porcelain`
+Adicionar novo helper para extrair todos os preços por plataforma para o formulário:
 
-### 3. `src/components/layout/AppSidebar.tsx` — Sidebar teal
-- Logo: `bg-white/15` + ícone `text-white`
-- Texto/título: `text-white`
-- Nav items inativos: `text-white/70 hover:bg-white/10 hover:text-white`
-- Nav items ativos: `bg-white/15 text-white font-medium`
-- Badges: manter vermelho para escalonamentos, `bg-white/20 text-white` para conversas
-- Separador: `border-white/10`
-- Footer: `text-white/50`, sair `text-red-300 hover:text-red-200`
-- Borda footer: `border-white/10`
+```ts
+const MARKETPLACE_PLATFORMS = ["mercadolivre", "shopee", "amazon", "tiktok", "site", "whatsapp"] as const;
 
-### 4. `src/components/layout/AppLayout.tsx` — Sidebar background
-- Aside: `bg-[hsl(var(--sidebar-background))]` (teal) em vez de `bg-card`
-- Header: mantém `bg-card/50 backdrop-blur`
+export function extractAllMarketplacePrices(pm: unknown): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of MARKETPLACE_PLATFORMS) {
+    const val = pm && typeof pm === "object" ? (pm as Record<string, unknown>)[key] : undefined;
+    result[key] = typeof val === "number" ? String(val) : "";
+  }
+  return result;
+}
 
-### 5. `src/components/conversations/MessageBubble.tsx` — Cores das bolhas
-- Customer: `bg-muted border border-border` (areia)
-- Agent: `bg-porcelain border border-porcelain` (sage)
-- Human: `bg-primary/15 border border-primary/20`
-- Label/time classes: usar `text-muted-foreground` e `text-primary`
+export function buildMarketplacePriceJson(prices: Record<string, string>): Record<string, number> | null {
+  const result: Record<string, number> = {};
+  for (const [key, val] of Object.entries(prices)) {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) result[key] = num;
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+```
 
-### 6. `src/components/conversations/ConversationChat.tsx` (line 94)
-- `bg-blue-600 hover:bg-blue-700` → `bg-primary hover:bg-primary/90`
+### 2. `src/components/products/ProductDialog.tsx`
 
-### 7. `src/components/conversations/ChatInput.tsx` (line 69)
-- `bg-blue-600 hover:bg-blue-700` → `bg-primary hover:bg-primary/90`
+- No `getInitial`: substituir `price_marketplace: extractMarketplacePrice(...)` por `mp_prices: extractAllMarketplacePrices(product?.price_marketplace)`
+- Remover o campo `<Input id="price_marketplace">` (lines 143-145)
+- Adicionar seção "Preços por Plataforma" com `sm:col-span-2`, contendo grid 2x3 com os 6 campos (label + input number step 0.01, placeholder "R$ 0,00")
+- No `handleSave`: substituir `price_marketplace: form.price_marketplace ? { default: ... } : null` por `price_marketplace: buildMarketplacePriceJson(form.mp_prices)`
+- O `set` precisa suportar nested: adicionar `setMpPrice(key, value)` helper
 
-### 8. `src/components/dashboard/ConversationsChart.tsx` — Cores teal
-- `hsl(217, 91%, 60%)` → `hsl(180, 100%, 15%)` (3 ocorrências)
+### 3. `src/pages/ProductDetail.tsx`
 
-### 9. `src/components/analytics/AnalyticsCharts.tsx` — Cores teal
-- `#3B82F6` → `#004D4D` (6 ocorrências)
+- Mesma lógica: substituir `price_marketplace` único por `mp_prices` object no state
+- Remover campo "Preço Marketplace R$" (lines 118-121)
+- Adicionar seção "Preços por Plataforma" idêntica ao dialog
+- No `handleSave`: usar `buildMarketplacePriceJson(form.mp_prices)`
 
-### 10. `src/components/dashboard/SentimentChart.tsx`
-- Cores já OK (`#22C55E`, `#EF4444`, `#6B7280`). Manter.
+### 4. System Prompt — Supabase UPDATE
 
-### 11. `src/components/escalations/EscalationCard.tsx`
-- Border colors: `border-l-red-500` → `border-l-destructive`, `border-l-orange-500` → `border-l-accent`, `border-l-blue-500` → `border-l-primary`, `border-l-gray-500` → `border-l-border`
-- Botão Assumir: `bg-blue-600 hover:bg-blue-700` → `bg-primary hover:bg-primary/90`
-- `text-blue-400` (atribuído) → `text-primary`
-- Adicionar `shadow-sm` ao Card
+Usar o insert tool para concatenar o bloco de regra de identificação de plataforma ao `config_value` existente na `agent_config` onde `config_key = 'system_prompt'`.
 
-### 12. `src/components/common/KPICard.tsx`
-- Ícone: envolver em círculo `bg-primary/10 rounded-lg p-2`, ícone `text-primary`
-- Trend positivo: `text-green-400` → `text-[hsl(var(--success))]`
-- Adicionar `shadow-sm` ao Card
+## Sem alteração de schema
 
-### 13. `src/components/common/StatusBadge.tsx`
-- `text-yellow-400` → `text-[hsl(var(--warning))]`; `bg-yellow-500/10` → `bg-warning/15`
-- `text-blue-400` / `bg-blue-500/10` → `text-primary` / `bg-primary/10`
-- `text-green-400` / `bg-green-500/10` → `text-[hsl(var(--success))]` / `bg-success/15`
+A coluna `price_marketplace` (jsonb) já existe. Apenas o formato do JSON muda de `{ "default": 99.90 }` para `{ "mercadolivre": 99.90, "shopee": 89.90, ... }`.
 
-### 14. `src/components/common/SentimentBadge.tsx`
-- `text-green-400` / `bg-green-500/10` → `text-[hsl(var(--success))]` / `bg-success/15`
+## Arquivos NÃO alterados
 
-### 15. `src/components/common/UrgencyBadge.tsx`
-- `text-blue-400` / `bg-blue-500/10` → `text-primary` / `bg-primary/10`
-
-### 16. `src/components/common/PriorityBadge.tsx`
-- Same as UrgencyBadge: `text-blue-400` / `bg-blue-500/10` → `text-primary` / `bg-primary/10`
-
-### 17. `src/pages/Policies.tsx`
-- `bg-blue-600 hover:bg-blue-700` → `bg-primary hover:bg-primary/90` (2 buttons)
-
-### 18. `src/components/customers/CustomerTable.tsx` + `CustomerInfo.tsx`
-- `text-blue-400` / `bg-blue-500/10` → `text-primary` / `bg-primary/10` (source "site")
-
-## Total: ~18 files modified (only CSS class and color changes)
+ProductTable, ProductCards, ProductToolbar, Products.tsx, todas as queries/mutations/hooks existentes (exceto o helper `extractMarketplacePrice`).
 
