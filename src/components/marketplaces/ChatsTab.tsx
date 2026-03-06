@@ -1,14 +1,43 @@
-import { MessageCircle, Wrench } from 'lucide-react';
+import { useState } from 'react';
+import { useMarketplaceChats } from '@/hooks/useMarketplaces';
+import { MarketplaceChatList } from './MarketplaceChatList';
+import { MarketplaceChatView } from './MarketplaceChatView';
+import { useIsMobile } from '@/hooks/use-mobile';
+import type { MarketplaceChat } from '@/types/database';
 
 export function ChatsTab() {
+  const [platform, setPlatform] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [selectedChat, setSelectedChat] = useState<MarketplaceChat | null>(null);
+  const { data: chats = [], isLoading } = useMarketplaceChats(platform, status);
+  const isMobile = useIsMobile();
+
+  const showList = !isMobile || !selectedChat;
+  const showChat = !isMobile || !!selectedChat;
+
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
-      <h3 className="text-lg font-semibold text-foreground">Módulo de Chats</h3>
-      <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-        <Wrench className="h-3.5 w-3.5" />
-        Em construção — disponível no próximo sprint
-      </p>
+    <div className="flex h-[calc(100vh-320px)] min-h-[500px] rounded-lg border border-border overflow-hidden bg-background">
+      {showList && (
+        <div className={isMobile ? 'w-full' : 'w-96 shrink-0'}>
+          <MarketplaceChatList
+            chats={chats}
+            isLoading={isLoading}
+            selectedId={selectedChat?.id ?? null}
+            onSelect={(chat) => setSelectedChat(chat)}
+            platform={platform}
+            onPlatformChange={setPlatform}
+            status={status}
+            onStatusChange={setStatus}
+          />
+        </div>
+      )}
+      {showChat && (
+        <MarketplaceChatView
+          chat={selectedChat}
+          showBack={isMobile}
+          onBack={() => setSelectedChat(null)}
+        />
+      )}
     </div>
   );
 }
