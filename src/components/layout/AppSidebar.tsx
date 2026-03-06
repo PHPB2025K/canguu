@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, MessageSquare, Package, FileText,
+  LayoutDashboard, MessageSquare, Store, Package, FileText,
   Users, AlertTriangle, BarChart3, Settings, LogOut, Bot,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', badgeKey: null },
   { icon: MessageSquare, label: 'Conversas', path: '/conversations', badgeKey: 'activeConversations' as const },
+  { icon: Store, label: 'Marketplaces', path: '/marketplaces', badgeKey: 'marketplacePending' as const },
   { icon: Package, label: 'Produtos', path: '/products', badgeKey: null },
   { icon: FileText, label: 'Políticas/FAQ', path: '/policies', badgeKey: null },
   { icon: Users, label: 'Clientes', path: '/customers', badgeKey: null },
@@ -42,7 +43,7 @@ const AppSidebar = () => {
       <nav className="flex-1 px-3 space-y-1">
         {navItems.map((item) => {
           const count = item.badgeKey ? counts[item.badgeKey] : 0;
-          const badgeColor = item.badgeKey === 'pendingEscalations'
+          const badgeColor = item.badgeKey === 'pendingEscalations' || item.badgeKey === 'marketplacePending'
             ? 'bg-destructive text-destructive-foreground'
             : 'bg-white/20 text-white';
 

@@ -294,6 +294,140 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_chat_messages: {
+        Row: {
+          ai_suggested: boolean | null
+          chat_id: string
+          content: string
+          created_at: string | null
+          id: string
+          message_type: string | null
+          role: string
+        }
+        Insert: {
+          ai_suggested?: boolean | null
+          chat_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          message_type?: string | null
+          role: string
+        }
+        Update: {
+          ai_suggested?: boolean | null
+          chat_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          message_type?: string | null
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_chat_messages_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_chats: {
+        Row: {
+          buyer_avatar_url: string | null
+          buyer_nickname: string
+          created_at: string | null
+          id: string
+          last_message_preview: string
+          order_id: string | null
+          platform: string
+          platform_conversation_id: string
+          product_name: string | null
+          status: string
+          unread_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          buyer_avatar_url?: string | null
+          buyer_nickname: string
+          created_at?: string | null
+          id?: string
+          last_message_preview: string
+          order_id?: string | null
+          platform: string
+          platform_conversation_id: string
+          product_name?: string | null
+          status?: string
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          buyer_avatar_url?: string | null
+          buyer_nickname?: string
+          created_at?: string | null
+          id?: string
+          last_message_preview?: string
+          order_id?: string | null
+          platform?: string
+          platform_conversation_id?: string
+          product_name?: string | null
+          status?: string
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      marketplace_questions: {
+        Row: {
+          ai_suggested_answer: string | null
+          answer_text: string | null
+          answered_at: string | null
+          answered_by: string | null
+          buyer_nickname: string
+          created_at: string | null
+          id: string
+          platform: string
+          platform_item_id: string
+          platform_question_id: string
+          product_image_url: string | null
+          product_name: string
+          question_text: string
+          status: string
+        }
+        Insert: {
+          ai_suggested_answer?: string | null
+          answer_text?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
+          buyer_nickname: string
+          created_at?: string | null
+          id?: string
+          platform: string
+          platform_item_id: string
+          platform_question_id: string
+          product_image_url?: string | null
+          product_name: string
+          question_text: string
+          status?: string
+        }
+        Update: {
+          ai_suggested_answer?: string | null
+          answer_text?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
+          buyer_nickname?: string
+          created_at?: string | null
+          id?: string
+          platform?: string
+          platform_item_id?: string
+          platform_question_id?: string
+          product_image_url?: string | null
+          product_name?: string
+          question_text?: string
+          status?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string

@@ -17,6 +17,7 @@ import CustomerDetail from "./pages/CustomerDetail";
 import Escalations from "./pages/Escalations";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Marketplaces from "./pages/Marketplaces";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/conversations" element={<Conversations />} />
               <Route path="/conversations/:id" element={<ConversationDetail />} />
+              <Route path="/marketplaces" element={<Marketplaces />} />
               <Route path="/products" element={<Products />} />
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/policies" element={<Policies />} />
