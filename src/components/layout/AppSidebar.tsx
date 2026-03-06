@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', badgeKey: null },
   { icon: MessageSquare, label: 'Conversas', path: '/conversations', badgeKey: 'activeConversations' as const },
+  { icon: Store, label: 'Marketplaces', path: '/marketplaces', badgeKey: 'marketplacePending' as const },
   { icon: Package, label: 'Produtos', path: '/products', badgeKey: null },
   { icon: FileText, label: 'Políticas/FAQ', path: '/policies', badgeKey: null },
   { icon: Users, label: 'Clientes', path: '/customers', badgeKey: null },
