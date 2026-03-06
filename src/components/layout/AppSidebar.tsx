@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, MessageSquare, Package, FileText,
+  LayoutDashboard, MessageSquare, Store, Package, FileText,
   Users, AlertTriangle, BarChart3, Settings, LogOut, Bot,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
