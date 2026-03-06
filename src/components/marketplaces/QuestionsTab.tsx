@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { HelpCircle, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { PlatformBadge } from './PlatformBadge';
@@ -29,9 +28,9 @@ export function QuestionsTab() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="shrink-0 flex flex-wrap items-center gap-3 pb-4">
         {/* Platform toggles */}
         <div className="flex gap-1.5">
           {platforms.map((p) => (
@@ -75,48 +74,51 @@ export function QuestionsTab() {
         </div>
       </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="bg-card border border-border rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-5 w-12 rounded" />
-                <Skeleton className="h-4 w-20" />
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {/* Loading */}
+        {isLoading && (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-12 rounded" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-3 w-32" />
               </div>
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* Error */}
-      {isError && (
-        <div className="flex flex-col items-center py-12 text-center">
-          <p className="text-sm text-destructive mb-2">Erro ao carregar perguntas</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>Tentar novamente</Button>
-        </div>
-      )}
+        {/* Error */}
+        {isError && (
+          <div className="flex flex-col items-center py-12 text-center">
+            <p className="text-sm text-destructive mb-2">Erro ao carregar perguntas</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Tentar novamente</Button>
+          </div>
+        )}
 
-      {/* Empty */}
-      {!isLoading && !isError && questions?.length === 0 && (
-        <div className="flex flex-col items-center py-16 text-center">
-          <HelpCircle className="h-12 w-12 text-muted-foreground mb-3" />
-          <p className="text-base font-medium text-foreground">Nenhuma pergunta pendente 🎉</p>
-          <p className="text-sm text-muted-foreground mt-1">Suas perguntas estão em dia!</p>
-        </div>
-      )}
+        {/* Empty */}
+        {!isLoading && !isError && questions?.length === 0 && (
+          <div className="flex flex-col items-center py-16 text-center">
+            <HelpCircle className="h-12 w-12 text-muted-foreground mb-3" />
+            <p className="text-base font-medium text-foreground">Nenhuma pergunta pendente 🎉</p>
+            <p className="text-sm text-muted-foreground mt-1">Suas perguntas estão em dia!</p>
+          </div>
+        )}
 
-      {/* List */}
-      {!isLoading && !isError && questions && questions.length > 0 && (
-        <div className="space-y-3">
-          {questions.map((q) => (
-            <QuestionCard key={q.id} question={q} />
-          ))}
-        </div>
-      )}
+        {/* List */}
+        {!isLoading && !isError && questions && questions.length > 0 && (
+          <div className="space-y-3">
+            {questions.map((q) => (
+              <QuestionCard key={q.id} question={q} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
