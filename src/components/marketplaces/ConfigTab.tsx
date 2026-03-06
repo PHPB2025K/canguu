@@ -81,7 +81,7 @@ export function ConfigTab() {
   const [instructions, setInstructions] = useState('');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full overflow-y-auto">
       {/* Platform cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <PlatformCard

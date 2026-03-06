@@ -16,7 +16,7 @@ export function ChatsTab() {
   const showChat = !isMobile || !!selectedChat;
 
   return (
-    <div className="flex h-[calc(100vh-320px)] min-h-[500px] rounded-lg border border-border overflow-hidden bg-background">
+    <div className="flex h-full rounded-lg border border-border overflow-hidden bg-background">
       {showList && (
         <div className={isMobile ? 'w-full' : 'w-96 shrink-0'}>
           <MarketplaceChatList

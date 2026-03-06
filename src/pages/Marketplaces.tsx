@@ -11,16 +11,20 @@ const Marketplaces = () => {
   const { data: totalUnread = 0 } = useTotalUnreadCount();
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Integrações Marketplaces"
-        description="Gerencie perguntas e chats do Mercado Livre, Shopee e Amazon"
-      />
+    <div className="flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden gap-6">
+      <div className="shrink-0">
+        <PageHeader
+          title="Integrações Marketplaces"
+          description="Gerencie perguntas e chats do Mercado Livre, Shopee e Amazon"
+        />
+      </div>
 
-      <MarketplaceKPICards />
+      <div className="shrink-0">
+        <MarketplaceKPICards />
+      </div>
 
-      <Tabs defaultValue="questions">
-        <TabsList>
+      <Tabs defaultValue="questions" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <TabsList className="shrink-0">
           <TabsTrigger value="questions" className="gap-1.5">
             Perguntas
             {unanswered > 0 && (
@@ -40,13 +44,13 @@ const Marketplaces = () => {
           <TabsTrigger value="config">Configurações</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="questions">
+        <TabsContent value="questions" className="flex-1 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-4">
           <QuestionsTab />
         </TabsContent>
-        <TabsContent value="chats">
+        <TabsContent value="chats" className="flex-1 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-4">
           <ChatsTab />
         </TabsContent>
-        <TabsContent value="config">
+        <TabsContent value="config" className="flex-1 min-h-0 overflow-y-auto mt-4">
           <ConfigTab />
         </TabsContent>
       </Tabs>
