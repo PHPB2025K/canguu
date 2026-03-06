@@ -1,12 +1,18 @@
 
 
-# Alterar badge Amazon para fundo preto
+# Remover "Site Próprio" e renomear seção de links
 
-Modificar `src/components/marketplaces/PlatformBadge.tsx`: trocar o `bg` da Amazon de `#FF9900` para preto e o `text` para branco.
+## Alterações
 
-```
-amazon: { bg: 'bg-[#232F3E]', text: 'text-white', label: 'Amazon' }
-```
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-Também atualizar as referências em `ConfigTab.tsx` onde o badge Amazon é descrito nos comentários/inline styles, se houver.
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
