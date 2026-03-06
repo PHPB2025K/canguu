@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { MarketplaceQuestion } from '@/types/database';
+import type { MarketplaceQuestion, MarketplaceChat, MarketplaceChatMessage } from '@/types/database';
 
 export function useMarketplaceQuestions(platform?: string, status?: string, search?: string) {
   return useQuery({
