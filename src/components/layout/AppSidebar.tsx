@@ -43,7 +43,7 @@ const AppSidebar = () => {
       <nav className="flex-1 px-3 space-y-1">
         {navItems.map((item) => {
           const count = item.badgeKey ? counts[item.badgeKey] : 0;
-          const badgeColor = item.badgeKey === 'pendingEscalations'
+          const badgeColor = item.badgeKey === 'pendingEscalations' || item.badgeKey === 'marketplacePending'
             ? 'bg-destructive text-destructive-foreground'
             : 'bg-white/20 text-white';
 
