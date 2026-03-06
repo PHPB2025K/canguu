@@ -111,13 +111,11 @@ export function QuestionsTab() {
 
       {/* List */}
       {!isLoading && !isError && questions && questions.length > 0 && (
-        <ScrollArea className="max-h-[calc(100vh-380px)]">
-          <div className="space-y-3 pr-2">
-            {questions.map((q) => (
-              <QuestionCard key={q.id} question={q} />
-            ))}
-          </div>
-        </ScrollArea>
+        <div className="space-y-3">
+          {questions.map((q) => (
+            <QuestionCard key={q.id} question={q} />
+          ))}
+        </div>
       )}
     </div>
   );
