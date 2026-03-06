@@ -17,6 +17,7 @@ import CustomerDetail from "./pages/CustomerDetail";
 import Escalations from "./pages/Escalations";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Marketplaces from "./pages/Marketplaces";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
