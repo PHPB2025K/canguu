@@ -1,18 +1,14 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Corrigir scroll da lista de perguntas
 
-## Alterações
+## Problema
+O `ScrollArea` na lista de perguntas tem `max-h-[calc(100vh-380px)]` que pode estar cortando conteúdo, especialmente quando cards são expandidos. O valor fixo de 380px pode não acomodar todos os cenários.
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+## Solução
+Remover o `max-h` fixo do `ScrollArea` e deixar a lista renderizar naturalmente dentro do fluxo da página, permitindo que o scroll nativo da página funcione. Alternativamente, trocar para uma altura que garanta visibilidade total — mas o mais simples e funcional é remover o `ScrollArea` com `max-h` e deixar os cards fluírem normalmente.
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+### Alteração em `src/components/marketplaces/QuestionsTab.tsx` (linha 114)
+- Remover o wrapper `ScrollArea` com `max-h` restritivo
+- Manter apenas o `div` com `space-y-3` para que todos os cards sejam visíveis via scroll nativo da página
 
