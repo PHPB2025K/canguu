@@ -80,6 +80,125 @@ export function useActiveChatCount() {
   });
 }
 
+export function useMarketplaceChats(platform?: string, status?: string) {
+  return useQuery({
+    queryKey: ['marketplace-chats', platform, status],
+    queryFn: async () => {
+      let query = supabase
+        .from('marketplace_chats')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (platform && platform !== 'all') {
+        query = query.eq('platform', platform);
+      }
+      if (status && status !== 'all') {
+        query = query.eq('status', status);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Sort: unread first, then by updated_at desc
+      return (data as MarketplaceChat[]).sort((a, b) => {
+        const ua = (a.unread_count ?? 0) > 0 ? 0 : 1;
+        const ub = (b.unread_count ?? 0) > 0 ? 0 : 1;
+        if (ua !== ub) return ua - ub;
+        return new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime();
+      });
+    },
+  });
+}
+
+export function useMarketplaceChatMessages(chatId: string | null) {
+  return useQuery({
+    queryKey: ['marketplace-chat-messages', chatId],
+    enabled: !!chatId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('marketplace_chat_messages')
+        .select('*')
+        .eq('chat_id', chatId!)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data as MarketplaceChatMessage[];
+    },
+  });
+}
+
+export function useSendChatMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ chatId, content }: { chatId: string; content: string }) => {
+      const { error: msgError } = await supabase
+        .from('marketplace_chat_messages')
+        .insert({ chat_id: chatId, role: 'seller', content, message_type: 'text' });
+      if (msgError) throw msgError;
+
+      const { error: chatError } = await supabase
+        .from('marketplace_chats')
+        .update({ last_message_preview: content, updated_at: new Date().toISOString() })
+        .eq('id', chatId);
+      if (chatError) throw chatError;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketplace-chat-messages'] });
+      qc.invalidateQueries({ queryKey: ['marketplace-chats'] });
+      qc.invalidateQueries({ queryKey: ['marketplace-total-unread'] });
+    },
+  });
+}
+
+export function useResolveChatMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (chatId: string) => {
+      const { error } = await supabase
+        .from('marketplace_chats')
+        .update({ status: 'resolved', updated_at: new Date().toISOString() })
+        .eq('id', chatId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketplace-chats'] });
+      qc.invalidateQueries({ queryKey: ['marketplace-active-chats'] });
+      qc.invalidateQueries({ queryKey: ['sidebar-marketplace-count'] });
+    },
+  });
+}
+
+export function useApproveSuggestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await supabase
+        .from('marketplace_chat_messages')
+        .update({ ai_suggested: false })
+        .eq('id', messageId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketplace-chat-messages'] });
+    },
+  });
+}
+
+export function useDiscardSuggestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await supabase
+        .from('marketplace_chat_messages')
+        .delete()
+        .eq('id', messageId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketplace-chat-messages'] });
+    },
+  });
+}
+
 export function useTotalUnreadCount() {
   return useQuery({
     queryKey: ['marketplace-total-unread'],
