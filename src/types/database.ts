@@ -146,3 +146,45 @@ export interface AnalyticsDaily {
   total_tokens_used: number | null;
   created_at: string | null;
 }
+
+export interface MarketplaceQuestion {
+  id: string;
+  platform: string;
+  platform_question_id: string;
+  platform_item_id: string;
+  product_name: string;
+  product_image_url: string | null;
+  question_text: string;
+  answer_text: string | null;
+  buyer_nickname: string;
+  status: string;
+  ai_suggested_answer: string | null;
+  answered_by: string | null;
+  answered_at: string | null;
+  created_at: string | null;
+}
+
+export interface MarketplaceChat {
+  id: string;
+  platform: string;
+  platform_conversation_id: string;
+  buyer_nickname: string;
+  buyer_avatar_url: string | null;
+  order_id: string | null;
+  product_name: string | null;
+  status: string;
+  last_message_preview: string;
+  unread_count: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface MarketplaceChatMessage {
+  id: string;
+  chat_id: string;
+  role: string;
+  content: string;
+  message_type: string | null;
+  ai_suggested: boolean | null;
+  created_at: string | null;
+}
