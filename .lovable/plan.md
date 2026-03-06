@@ -1,20 +1,18 @@
 
 
-# Remover escalonamentos de demonstração
+# Remover "Site Próprio" e renomear seção de links
 
-## Identificação
+## Alterações
 
-Dos 4 escalonamentos no banco, 3 possuem IDs sequenciais claramente de demonstração (`a0000e01-...`):
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-| ID | Razão | Status |
-|---|---|---|
-| `a0000e01-...-01` | Atraso na entrega (pedido fictício #BM-2026-0142) | resolved |
-| `a0000e01-...-02` | Produto danificado, menção a processo judicial | pending |
-| `a0000e01-...-03` | "Teste de escalonamento em andamento — simulação" | in_progress |
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-O escalonamento `3ad87669-...` parece real (UUID gerado automaticamente, dados de classificação de IA).
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-## Ação
-
-Executar `DELETE` nos 3 registros de demonstração via insert tool, mantendo o escalonamento real.
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
