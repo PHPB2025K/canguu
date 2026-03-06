@@ -45,6 +45,44 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const typeContent = getTypeContent(message.message_type);
   const time = message.created_at ? format(new Date(message.created_at), "HH:mm") : "";
 
+  // Split agent messages by \\ marker into chunks
+  const isAgent = message.sender === "agent";
+  const chunks = isAgent && !typeContent && message.content.includes("\\\\")
+    ? message.content.split("\\\\").map((c) => c.trim()).filter(Boolean)
+    : null;
+
+  if (chunks && chunks.length > 1) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        {chunks.map((chunk, i) => {
+          const isFirst = i === 0;
+          const isLast = i === chunks.length - 1;
+          return (
+            <div key={i} className="flex justify-end w-full">
+              <div className={cn("max-w-[75%] p-3", config.bubbleClass)}>
+                {isFirst && (
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Icon className={cn("h-3.5 w-3.5", config.labelClass)} />
+                    <span className={cn("text-xs font-medium", config.labelClass)}>{config.label}</span>
+                  </div>
+                )}
+                <p className="text-sm text-foreground whitespace-pre-wrap break-words">{chunk}</p>
+                {isLast && (
+                  <div className={cn("text-xs mt-1 text-right", config.timeClass)}>
+                    {time}
+                    {message.tokens_used && (
+                      <span className="ml-2">{message.tokens_used} tokens</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className={cn("flex", isCustomer ? "justify-start" : "justify-end")}>
       <div className={cn("max-w-[75%] p-3", config.bubbleClass)}>

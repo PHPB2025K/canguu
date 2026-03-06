@@ -1,20 +1,18 @@
 
 
-# Quebrar mensagens do agente IA em chunks pelo marcador `\\`
-
-## O que fazer
-
-No componente `MessageBubble.tsx`, quando o `sender` for `"agent"`, dividir o `content` pelo marcador `\\` e renderizar cada parte como um bubble separado, empilhados verticalmente com um pequeno espaço entre eles — simulando como o cliente recebe no WhatsApp.
+# Remover "Site Próprio" e renomear seção de links
 
 ## Alterações
 
-### `src/components/conversations/MessageBubble.tsx`
-- Detectar se `message.sender === "agent"` e o conteúdo contém `\\`
-- Se sim, fazer `content.split('\\\\')` para obter os chunks
-- Renderizar cada chunk como um bubble individual (mesmo estilo do agente), empilhados com `gap` pequeno
-- O horário e tokens aparecem apenas no último chunk
-- O ícone/label "Agente IA" aparece apenas no primeiro chunk
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-### Sem alterações em outros arquivos
-A lógica fica isolada no componente de renderização.
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
