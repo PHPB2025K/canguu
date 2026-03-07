@@ -12,10 +12,10 @@ import {
   useProduct, useUpdateProduct,
   imagesToText, textToImages, dimensionsToText,
   extractAllMarketplacePrices, buildMarketplacePriceJson,
-  extractAllMarketplaceLinks, buildMarketplaceLinkJson,
-  MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS, MARKETPLACE_LINK_PLACEHOLDERS,
+  MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS,
 } from "@/hooks/useProducts";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { ProductListingsSection } from "@/components/products/ProductListingsSection";
 
 export default function ProductDetail() {
   usePageTitle("Editar Produto");
@@ -43,8 +43,6 @@ export default function ProductDetail() {
         images: imagesToText(product.images),
         usage_suggestions: product.usage_suggestions ?? "",
         differentials: product.differentials ?? "",
-        site_link: product.site_link ?? "",
-        mp_links: extractAllMarketplaceLinks(product.marketplace_links),
         is_active: product.is_active ?? true,
       });
     }
@@ -73,8 +71,6 @@ export default function ProductDetail() {
         images: textToImages(form.images).length > 0 ? textToImages(form.images) : null,
         usage_suggestions: form.usage_suggestions.trim() || null,
         differentials: form.differentials.trim() || null,
-        site_link: form.site_link.trim() || null,
-        marketplace_links: buildMarketplaceLinkJson(form.mp_links),
         is_active: form.is_active,
       } as any);
       toast({ title: "Produto atualizado com sucesso" });
@@ -145,10 +141,6 @@ export default function ProductDetail() {
           <Label>Descrição Curta</Label>
           <Textarea rows={2} value={form.short_description ?? ""} onChange={(e) => set("short_description", e.target.value)} />
         </div>
-        <div>
-          <Label>Link Site</Label>
-          <Input type="url" value={form.site_link ?? ""} onChange={(e) => set("site_link", e.target.value)} />
-        </div>
         <div className="sm:col-span-2">
           <Label>Descrição Completa</Label>
           <Textarea rows={4} value={form.full_description ?? ""} onChange={(e) => set("full_description", e.target.value)} />
@@ -165,22 +157,9 @@ export default function ProductDetail() {
           <Label>Diferenciais</Label>
           <Textarea rows={2} value={form.differentials ?? ""} onChange={(e) => set("differentials", e.target.value)} />
         </div>
-        <div className="sm:col-span-2 space-y-2">
-          <Label className="text-sm font-semibold">Links do Anúncio nos Marketplaces</Label>
-          <div className="grid grid-cols-1 gap-3">
-            {MARKETPLACE_PLATFORMS.map((key) => (
-              <div key={key}>
-                <Label className="text-xs">{MARKETPLACE_LABELS[key]}</Label>
-                <Input
-                  type="url"
-                  placeholder={MARKETPLACE_LINK_PLACEHOLDERS[key]}
-                  value={form.mp_links?.[key] ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, mp_links: { ...prev.mp_links, [key]: e.target.value } }))}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+
+        <ProductListingsSection productId={id!} />
+
         <div className="flex items-center gap-3 pt-6">
           <Switch checked={form.is_active ?? true} onCheckedChange={(v) => set("is_active", v)} />
           <Label>Produto ativo</Label>

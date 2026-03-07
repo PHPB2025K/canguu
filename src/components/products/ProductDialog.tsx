@@ -8,7 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateProduct, useUpdateProduct, imagesToText, textToImages, dimensionsToText, extractAllMarketplacePrices, buildMarketplacePriceJson, extractAllMarketplaceLinks, buildMarketplaceLinkJson, MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS, MARKETPLACE_LINK_PLACEHOLDERS } from "@/hooks/useProducts";
+import {
+  useCreateProduct, useUpdateProduct, imagesToText, textToImages, dimensionsToText,
+  extractAllMarketplacePrices, buildMarketplacePriceJson,
+  MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS,
+} from "@/hooks/useProducts";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
@@ -34,8 +38,6 @@ function getInitial(product?: Product | null) {
     images: imagesToText(product?.images),
     usage_suggestions: product?.usage_suggestions ?? "",
     differentials: product?.differentials ?? "",
-    site_link: product?.site_link ?? "",
-    mp_links: extractAllMarketplaceLinks(product?.marketplace_links),
     is_active: product?.is_active ?? true,
   };
 }
@@ -80,8 +82,6 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       images: textToImages(form.images).length > 0 ? textToImages(form.images) : null,
       usage_suggestions: form.usage_suggestions.trim() || null,
       differentials: form.differentials.trim() || null,
-      site_link: form.site_link.trim() || null,
-      marketplace_links: buildMarketplaceLinkJson(form.mp_links),
       is_active: form.is_active,
     };
 
@@ -164,10 +164,6 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
             <Label htmlFor="short_description">Descrição Curta</Label>
             <Textarea id="short_description" rows={2} value={form.short_description} onChange={(e) => set("short_description", e.target.value)} />
           </div>
-          <div>
-            <Label htmlFor="site_link">Link Site</Label>
-            <Input id="site_link" type="url" value={form.site_link} onChange={(e) => set("site_link", e.target.value)} />
-          </div>
           <div className="sm:col-span-2">
             <Label htmlFor="full_description">Descrição Completa</Label>
             <Textarea id="full_description" rows={4} value={form.full_description} onChange={(e) => set("full_description", e.target.value)} />
@@ -183,23 +179,6 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
           <div className="sm:col-span-2">
             <Label htmlFor="differentials">Diferenciais</Label>
             <Textarea id="differentials" rows={2} value={form.differentials} onChange={(e) => set("differentials", e.target.value)} />
-          </div>
-          <div className="sm:col-span-2 space-y-2">
-            <Label className="text-sm font-semibold">Links do Anúncio nos Marketplaces</Label>
-            <div className="grid grid-cols-1 gap-3">
-              {MARKETPLACE_PLATFORMS.map((key) => (
-                <div key={key}>
-                  <Label htmlFor={`ml_${key}`} className="text-xs">{MARKETPLACE_LABELS[key]}</Label>
-                  <Input
-                    id={`ml_${key}`}
-                    type="url"
-                    placeholder={MARKETPLACE_LINK_PLACEHOLDERS[key]}
-                    value={form.mp_links?.[key] ?? ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, mp_links: { ...(prev.mp_links ?? {}), [key]: e.target.value } }))}
-                  />
-                </div>
-              ))}
-            </div>
           </div>
           <div className="flex items-center gap-3 pt-6">
             <Switch id="is_active" checked={form.is_active} onCheckedChange={(v) => set("is_active", v)} />
