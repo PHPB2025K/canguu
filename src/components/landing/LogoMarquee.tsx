@@ -24,15 +24,19 @@ export default function LogoMarquee() {
           WebkitMaskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
         }}
       >
-        <div className="flex items-center gap-24 animate-[marquee_35s_linear_infinite]">
-          {[...logos, ...logos].map((logo, i) => (
-            <img
-              key={i}
-              src={logo.src}
-              alt={logo.name}
-              className="h-16 w-auto select-none"
-              style={{ filter: "grayscale(100%)", opacity: 0.45 }}
-            />
+        <div className="flex animate-[marquee_35s_linear_infinite]">
+          {[0, 1].map((copy) => (
+            <div key={copy} className="flex shrink-0 items-center gap-24 px-12">
+              {logos.map((logo) => (
+                <img
+                  key={logo.name}
+                  src={logo.src}
+                  alt={logo.name}
+                  className="h-16 w-auto shrink-0 select-none"
+                  style={{ filter: "grayscale(100%)", opacity: 0.45 }}
+                />
+              ))}
+            </div>
           ))}
         </div>
       </div>
