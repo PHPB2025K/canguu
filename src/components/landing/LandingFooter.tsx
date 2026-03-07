@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import logo from "@/assets/canggu-logo.png";
+import logoDark from "@/assets/canggu-logo-dark.png";
 
 export default function LandingFooter() {
   return (
