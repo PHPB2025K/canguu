@@ -33,9 +33,8 @@ const AppSidebar = () => {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="p-6 flex items-center gap-3">
-        <img src={cangguLogo} alt="Canggu.ai" className="h-8 w-8 object-contain" />
-        <span className="text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800 }}>
+      <div className="p-6">
+        <span className="text-xl" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800 }}>
           <span className="text-white">Canggu</span>
           <span style={{ color: '#C56A4A' }}>.ai</span>
         </span>
