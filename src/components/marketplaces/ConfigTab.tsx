@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Sparkles, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Sparkles, AlertTriangle, ExternalLink, Trash2 } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
