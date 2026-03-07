@@ -48,13 +48,7 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center space-y-2 pb-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            <Bot className="h-6 w-6 text-primary" />
-          </div>
-          <h1 className="text-2xl" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800 }}>
-            <span style={{ color: '#004D4D' }}>Canggu</span>
-            <span style={{ color: '#C56A4A' }}>.ai</span>
-          </h1>
+          <img src={cangguLogo} alt="Canggu.ai" className="h-14 mx-auto" />
           <p className="text-sm text-muted-foreground">Painel de Gestão</p>
         </CardHeader>
         <CardContent>
