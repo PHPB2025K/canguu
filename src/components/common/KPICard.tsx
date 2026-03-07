@@ -3,12 +3,14 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 
-interface KPICardProps {
+export interface KPICardProps {
   title: string;
   value: string | number;
   icon: LucideIcon;
   trend?: number;
   format?: "number" | "currency" | "percent" | "time";
+  iconClassName?: string;
+  valueClassName?: string;
 }
 
 function formatValue(value: string | number, format?: string): string {
