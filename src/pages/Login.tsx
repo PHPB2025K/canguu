@@ -48,7 +48,7 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center space-y-2 pb-2">
-          <img src={cangguLogo} alt="Canggu.ai" className="h-20 mx-auto" />
+          <img src={cangguLogo} alt="Canggu.ai" className="h-24 mx-auto" />
           <p className="text-sm text-muted-foreground">Painel de Gestão</p>
         </CardHeader>
         <CardContent>
