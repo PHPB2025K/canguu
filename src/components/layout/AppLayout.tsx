@@ -27,7 +27,7 @@ const AppLayout = () => {
   const user = useAuthStore((s) => s.user);
 
   const basePath = '/' + location.pathname.split('/').filter(Boolean).slice(0, 1).join('/');
-  const title = pageTitles[basePath] || 'Budamix AI Agent';
+  const title = pageTitles[basePath] || 'Canggu.ai';
   const initials = user?.email?.slice(0, 2).toUpperCase() || 'U';
 
   // Dynamic page title
