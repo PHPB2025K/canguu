@@ -5,6 +5,39 @@ import { QuestionsTab } from '@/components/marketplaces/QuestionsTab';
 import { ChatsTab } from '@/components/marketplaces/ChatsTab';
 import { ConfigTab } from '@/components/marketplaces/ConfigTab';
 import { useUnansweredCount, useTotalUnreadCount, useMarketplaceRealtime } from '@/hooks/useMarketplaces';
+import { useMarketplaceTokenStatus } from '@/hooks/useMarketplaceTokens';
+
+function ConnectionIndicators() {
+  const { data: tokens } = useMarketplaceTokenStatus();
+  const mlToken = tokens?.find(t => t.platform === 'mercado_livre');
+
+  const mlConnected = mlToken?.connection_status === 'connected';
+  const mlLabel = mlConnected
+    ? `Conectado (${mlToken?.seller_nickname ?? ''})`
+    : mlToken?.connection_status === 'expired'
+      ? 'Expirado'
+      : 'Não configurado';
+  const mlDot = mlConnected ? 'bg-success' : mlToken ? 'bg-destructive' : 'bg-muted-foreground';
+
+  return (
+    <div className="flex items-center gap-4 text-[13px] text-muted-foreground flex-wrap">
+      <span className="inline-flex items-center gap-1.5">
+        <span className={`h-2 w-2 rounded-full ${mlDot}`} />
+        Mercado Livre: {mlLabel}
+      </span>
+      <span className="text-border">•</span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-warning" />
+        Shopee: Aguardando
+      </span>
+      <span className="text-border">•</span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+        Amazon: Em breve
+      </span>
+    </div>
+  );
+}
 
 const Marketplaces = () => {
   useMarketplaceRealtime();
@@ -13,11 +46,12 @@ const Marketplaces = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden gap-6">
-      <div className="shrink-0">
+      <div className="shrink-0 space-y-2">
         <PageHeader
           title="Integrações Marketplaces"
           description="Gerencie perguntas e chats do Mercado Livre, Shopee e Amazon"
         />
+        <ConnectionIndicators />
       </div>
 
       <div className="shrink-0">
