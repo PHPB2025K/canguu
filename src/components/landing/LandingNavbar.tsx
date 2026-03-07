@@ -25,7 +25,7 @@ export default function LandingNavbar() {
       }`}
     >
       <a href="#" className="flex items-center">
-        <span className="font-['Plus_Jakarta_Sans'] font-extrabold text-xl">
+        <span className="font-['Plus_Jakarta_Sans'] font-extrabold text-3xl">
           <span className="text-primary">Canggu</span>
           <span className="text-accent">.ai</span>
         </span>
