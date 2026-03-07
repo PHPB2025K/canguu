@@ -181,6 +181,14 @@ export interface MarketplaceQuestion {
   answered_by: string | null;
   answered_at: string | null;
   created_at: string | null;
+  product_id: string | null;
+  seller_id: string | null;
+  ai_classification: Json | null;
+  ai_response_time_ms: number | null;
+  tokens_used: number | null;
+  error_message: string | null;
+  external_created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface MarketplaceChat {
