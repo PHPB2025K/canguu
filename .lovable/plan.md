@@ -1,18 +1,15 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Remover card "Perguntas ML Hoje" do Dashboard
 
 ## Alterações
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+### 1. `src/pages/Dashboard.tsx`
+- Remover import de `useMLQuestionsToday` e `Store`
+- Remover chamada `const mlQuestions = useMLQuestionsToday()`
+- Remover o `<KPICard>` "Perguntas ML Hoje" do grid (linhas ~91-98)
+- Manter todos os demais cards intactos
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+### 2. `src/hooks/useDashboardData.ts`
+- Remover a função `useMLQuestionsToday` (única referência é no Dashboard)
 
