@@ -300,27 +300,33 @@ export type Database = {
           chat_id: string
           content: string
           created_at: string | null
+          external_message_id: string | null
           id: string
           message_type: string | null
           role: string
+          tokens_used: number | null
         }
         Insert: {
           ai_suggested?: boolean | null
           chat_id: string
           content: string
           created_at?: string | null
+          external_message_id?: string | null
           id?: string
           message_type?: string | null
           role: string
+          tokens_used?: number | null
         }
         Update: {
           ai_suggested?: boolean | null
           chat_id?: string
           content?: string
           created_at?: string | null
+          external_message_id?: string | null
           id?: string
           message_type?: string | null
           role?: string
+          tokens_used?: number | null
         }
         Relationships: [
           {
@@ -335,96 +341,256 @@ export type Database = {
       marketplace_chats: {
         Row: {
           buyer_avatar_url: string | null
+          buyer_id: string | null
           buyer_nickname: string
+          conversation_id: string | null
           created_at: string | null
+          customer_id: string | null
           id: string
+          last_message_at: string | null
           last_message_preview: string
+          metadata: Json | null
           order_id: string | null
           platform: string
           platform_conversation_id: string
           product_name: string | null
+          seller_id: string | null
           status: string
           unread_count: number | null
           updated_at: string | null
         }
         Insert: {
           buyer_avatar_url?: string | null
+          buyer_id?: string | null
           buyer_nickname: string
+          conversation_id?: string | null
           created_at?: string | null
+          customer_id?: string | null
           id?: string
+          last_message_at?: string | null
           last_message_preview: string
+          metadata?: Json | null
           order_id?: string | null
           platform: string
           platform_conversation_id: string
           product_name?: string | null
+          seller_id?: string | null
           status?: string
           unread_count?: number | null
           updated_at?: string | null
         }
         Update: {
           buyer_avatar_url?: string | null
+          buyer_id?: string | null
           buyer_nickname?: string
+          conversation_id?: string | null
           created_at?: string | null
+          customer_id?: string | null
           id?: string
+          last_message_at?: string | null
           last_message_preview?: string
+          metadata?: Json | null
           order_id?: string | null
           platform?: string
           platform_conversation_id?: string
           product_name?: string | null
+          seller_id?: string | null
           status?: string
           unread_count?: number | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_chats_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_chats_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_product_mapping: {
+        Row: {
+          created_at: string | null
+          external_item_id: string
+          external_price: number | null
+          external_title: string | null
+          external_url: string | null
+          id: string
+          is_active: boolean | null
+          last_synced_at: string | null
+          platform: string
+          product_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_item_id: string
+          external_price?: number | null
+          external_title?: string | null
+          external_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_synced_at?: string | null
+          platform: string
+          product_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          external_item_id?: string
+          external_price?: number | null
+          external_title?: string | null
+          external_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_synced_at?: string | null
+          platform?: string
+          product_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_product_mapping_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       marketplace_questions: {
         Row: {
+          ai_classification: Json | null
+          ai_response_time_ms: number | null
           ai_suggested_answer: string | null
           answer_text: string | null
           answered_at: string | null
           answered_by: string | null
           buyer_nickname: string
           created_at: string | null
+          error_message: string | null
+          external_created_at: string | null
           id: string
           platform: string
           platform_item_id: string
           platform_question_id: string
+          product_id: string | null
           product_image_url: string | null
           product_name: string
           question_text: string
+          seller_id: string | null
           status: string
+          tokens_used: number | null
+          updated_at: string | null
         }
         Insert: {
+          ai_classification?: Json | null
+          ai_response_time_ms?: number | null
           ai_suggested_answer?: string | null
           answer_text?: string | null
           answered_at?: string | null
           answered_by?: string | null
           buyer_nickname: string
           created_at?: string | null
+          error_message?: string | null
+          external_created_at?: string | null
           id?: string
           platform: string
           platform_item_id: string
           platform_question_id: string
+          product_id?: string | null
           product_image_url?: string | null
           product_name: string
           question_text: string
+          seller_id?: string | null
           status?: string
+          tokens_used?: number | null
+          updated_at?: string | null
         }
         Update: {
+          ai_classification?: Json | null
+          ai_response_time_ms?: number | null
           ai_suggested_answer?: string | null
           answer_text?: string | null
           answered_at?: string | null
           answered_by?: string | null
           buyer_nickname?: string
           created_at?: string | null
+          error_message?: string | null
+          external_created_at?: string | null
           id?: string
           platform?: string
           platform_item_id?: string
           platform_question_id?: string
+          product_id?: string | null
           product_image_url?: string | null
           product_name?: string
           question_text?: string
+          seller_id?: string | null
           status?: string
+          tokens_used?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_questions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_tokens: {
+        Row: {
+          access_token: string | null
+          app_id: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          platform: string
+          refresh_token: string | null
+          seller_id: string | null
+          seller_nickname: string | null
+          status: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          app_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          platform: string
+          refresh_token?: string | null
+          seller_id?: string | null
+          seller_nickname?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          app_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          platform?: string
+          refresh_token?: string | null
+          seller_id?: string | null
+          seller_nickname?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
