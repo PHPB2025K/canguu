@@ -204,6 +204,12 @@ export interface MarketplaceChat {
   unread_count: number | null;
   created_at: string | null;
   updated_at: string | null;
+  seller_id: string | null;
+  buyer_id: string | null;
+  customer_id: string | null;
+  conversation_id: string | null;
+  last_message_at: string | null;
+  metadata: Json | null;
 }
 
 export interface MarketplaceChatMessage {
