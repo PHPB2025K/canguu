@@ -24,8 +24,8 @@ export default function LogoMarquee() {
           WebkitMaskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
         }}
       >
-        <div className="flex animate-[marquee_35s_linear_infinite]">
-          {[0, 1].map((copy) => (
+        <div className="flex min-w-max animate-[marquee_35s_linear_infinite]">
+          {[0, 1, 2, 3].map((copy) => (
             <div key={copy} className="flex shrink-0 items-center gap-24 px-12">
               {logos.map((logo) => (
                 <img
