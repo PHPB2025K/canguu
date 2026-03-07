@@ -1,17 +1,18 @@
 
 
-# Forçar tamanho grande nos logos da esteira
+# Remover "Site Próprio" e renomear seção de links
 
-## Problema
-Os logos já têm `h-32` no código, mas continuam aparecendo pequenos na tela. Provavelmente as imagens PNG originais são pequenas e o `w-auto` limita a renderização ao tamanho nativo da imagem, ignorando o `h-32`.
+## Alterações
 
-## Solução
-Trocar as classes Tailwind por **inline styles com `height` e `minHeight`** para forçar o redimensionamento, e garantir que as imagens escalem corretamente:
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-**`src/components/landing/LogoMarquee.tsx`**:
-- WhatsApp, Mercado Livre, Shopee: `style={{ height: "120px" }}` (em vez de classe `h-32`)
-- Amazon: `style={{ height: "48px" }}`
-- Adicionar `object-contain` para manter proporção ao escalar acima do tamanho nativo
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-Isso força o navegador a escalar as imagens independentemente da resolução original dos PNGs.
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 

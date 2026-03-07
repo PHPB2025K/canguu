@@ -5,10 +5,10 @@ import shopeeLogo from "@/assets/logos/shopee.png";
 import amazonLogo from "@/assets/logos/amazon.png";
 
 const logos = [
-  { name: "WhatsApp", src: whatsappLogo, height: "h-32" },
-  { name: "Mercado Livre", src: mercadolivreLogo, height: "h-32" },
-  { name: "Shopee", src: shopeeLogo, height: "h-32" },
-  { name: "Amazon", src: amazonLogo, height: "h-16" },
+  { name: "WhatsApp", src: whatsappLogo, heightPx: 120 },
+  { name: "Mercado Livre", src: mercadolivreLogo, heightPx: 120 },
+  { name: "Shopee", src: shopeeLogo, heightPx: 120 },
+  { name: "Amazon", src: amazonLogo, heightPx: 48 },
 ];
 
 export default function LogoMarquee() {
@@ -32,8 +32,8 @@ export default function LogoMarquee() {
                   key={logo.name}
                   src={logo.src}
                   alt={logo.name}
-                  className={`${logo.height} w-auto shrink-0 select-none`}
-                  style={{ filter: "grayscale(100%)", opacity: 0.45 }}
+                  className="w-auto shrink-0 select-none object-contain"
+                  style={{ height: `${logo.heightPx}px`, filter: "grayscale(100%)", opacity: 0.45 }}
                 />
               ))}
             </div>
