@@ -1,18 +1,10 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Aumentar tamanho dos logos na esteira
 
-## Alterações
+Alterar `src/components/landing/LogoMarquee.tsx`:
+- Classe dos `<img>`: de `h-8` para `h-16`
+- Aumentar gap entre logos: de `gap-20` para `gap-24`
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
-
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+Isso dobrará o tamanho visual dos logotipos na esteira.
 
