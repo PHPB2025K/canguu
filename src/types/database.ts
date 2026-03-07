@@ -188,3 +188,16 @@ export interface MarketplaceChatMessage {
   ai_suggested: boolean | null;
   created_at: string | null;
 }
+
+export interface MarketplaceTokenStatus {
+  id: string;
+  platform: string;
+  seller_id: string | null;
+  seller_nickname: string | null;
+  app_id: string | null;
+  status: string | null;
+  token_expires_at: string | null;
+  connection_status: 'connected' | 'expired' | 'disconnected';
+  created_at: string | null;
+  updated_at: string | null;
+}
