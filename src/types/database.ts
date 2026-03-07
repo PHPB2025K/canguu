@@ -220,6 +220,8 @@ export interface MarketplaceChatMessage {
   message_type: string | null;
   ai_suggested: boolean | null;
   created_at: string | null;
+  external_message_id: string | null;
+  tokens_used: number | null;
 }
 
 export interface MarketplaceTokenStatus {
