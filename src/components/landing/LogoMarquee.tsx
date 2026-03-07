@@ -32,7 +32,7 @@ export default function LogoMarquee() {
                   key={logo.name}
                   src={logo.src}
                   alt={logo.name}
-                  className="h-16 w-auto shrink-0 select-none"
+                  className={`${logo.height} w-auto shrink-0 select-none`}
                   style={{ filter: "grayscale(100%)", opacity: 0.45 }}
                 />
               ))}
