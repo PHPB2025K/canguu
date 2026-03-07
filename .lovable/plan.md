@@ -1,18 +1,16 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Fix: Logo na Sidebar
 
-## Alterações
+## Problema
+O `canggu-logo.png` contém o ícone do baiacu + wordmark, mas está sendo renderizado em `h-8 w-8` (32x32px), cortando o ícone. O usuário quer exibir apenas o texto "Canggu.ai" sem o ícone/imagem.
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+## Solução
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+**`src/components/layout/AppSidebar.tsx`** (linha 37):
+- Remover o `<img src={cangguLogo}>` completamente
+- Manter apenas os spans de texto: "Canggu" (branco) + ".ai" (#C56A4A), Plus Jakarta Sans 800
+- Pode remover o import do `cangguLogo` também
 
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+Resultado: header da sidebar mostra apenas o texto estilizado "Canggu.ai" sem ícone.
 
