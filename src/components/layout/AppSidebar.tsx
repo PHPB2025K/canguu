@@ -2,7 +2,7 @@ import {
   LayoutDashboard, MessageSquare, Store, Package, FileText,
   Users, AlertTriangle, BarChart3, Settings, LogOut,
 } from 'lucide-react';
-import cangguLogo from '@/assets/canggu-logo.png';
+import logoDark from '@/assets/canggu-logo-dark.png';
 import { useNavigate } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -34,7 +34,7 @@ const AppSidebar = () => {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="p-6">
-        <img src={cangguLogo} alt="Canggu.ai" className="h-14" />
+        <img src={logoDark} alt="Canggu.ai" className="h-8 w-auto" />
       </div>
 
       {/* Nav */}
