@@ -1,4 +1,4 @@
-import { MessageSquare, Clock, CheckCircle, AlertTriangle, DollarSign, Smile, Store } from "lucide-react";
+import { MessageSquare, Clock, CheckCircle, AlertTriangle, DollarSign, Smile } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { KPICard } from "@/components/common/KPICard";
 import { ErrorState } from "@/components/common/ErrorState";
