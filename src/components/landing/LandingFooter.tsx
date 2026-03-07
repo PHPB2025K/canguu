@@ -1,12 +1,12 @@
 import { Link } from "react-router-dom";
-import logo from "@/assets/canggu-logo.png";
+import logoDark from "@/assets/canggu-logo-dark.png";
 
 export default function LandingFooter() {
   return (
     <footer className="bg-[hsl(var(--foreground))] py-16 px-6">
       <div className="max-w-7xl mx-auto grid grid-cols-3 max-md:grid-cols-1 gap-8">
         <div>
-          <img src={logo} alt="Canggu.ai" className="h-14" />
+          <img src={logoDark} alt="Canggu.ai" className="h-8 w-auto" />
           <p className="font-['DM_Sans'] text-sm text-white/50 mt-2">
             Plataforma de atendimento inteligente para e-commerce
           </p>

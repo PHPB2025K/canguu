@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import logoLight from "@/assets/canggu-logo-light.png";
 
 const navLinks = [
   { label: "Funcionalidades", href: "#funcionalidades" },
@@ -25,10 +26,7 @@ export default function LandingNavbar() {
       }`}
     >
       <a href="#" className="flex items-center">
-        <span className="font-['Plus_Jakarta_Sans'] font-extrabold text-3xl">
-          <span className="text-primary">Canggu</span>
-          <span className="text-accent">.ai</span>
-        </span>
+        <img src={logoLight} alt="Canggu.ai" className="h-8 w-auto" />
       </a>
 
       <div className="hidden md:flex items-center gap-8">

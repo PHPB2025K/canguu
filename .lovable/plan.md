@@ -1,16 +1,18 @@
 
 
-# Aplicar logotipos na Landing Page e Login
+# Remover "Site Próprio" e renomear seção de links
 
 ## Alterações
 
-1. **Copiar assets**: Salvar os 2 arquivos enviados em `src/assets/canggu-logo-light.png` e `src/assets/canggu-logo-dark.png`
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-2. **`src/components/landing/LandingNavbar.tsx`**: Importar `canggu-logo-light.png`, substituir o `<span>` com texto "Canggu.ai" por `<img src={logoLight} alt="Canggu.ai" className="h-8 w-auto" />`
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-3. **`src/pages/Login.tsx`**: Importar `canggu-logo-light.png`, substituir o `<p>` com texto estilizado por `<img src={logoLight} alt="Canggu.ai" className="h-10 w-auto mx-auto" />`, manter subtítulo "Painel de Gestão"
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-4. **`src/components/landing/LandingFooter.tsx`**: Importar `canggu-logo-dark.png`, substituir o import e uso do logo atual (`canggu-logo.png`) pelo novo `canggu-logo-dark.png` com `className="h-8 w-auto"`, manter subtítulo
-
-Nenhuma alteração de layout, espaçamento ou outros componentes.
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
