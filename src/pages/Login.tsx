@@ -48,7 +48,7 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center space-y-2 pb-2">
-          <p className="font-['Plus_Jakarta_Sans'] font-extrabold text-4xl">
+          <p className="font-['Plus_Jakarta_Sans'] font-extrabold text-5xl">
             <span className="text-primary">Canggu</span>
             <span className="text-accent">.ai</span>
           </p>
