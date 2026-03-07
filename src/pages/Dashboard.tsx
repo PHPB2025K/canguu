@@ -31,7 +31,7 @@ const Dashboard = () => {
   const analytics = useTodayAnalytics();
   const chartData = useConversationsByHour();
   const recentConvs = useRecentConversations();
-  const mlQuestions = useMLQuestionsToday();
+  
 
   const analyticsData = analytics.data;
   const avgResponseTime = analyticsData?.avg_response_time_ms
