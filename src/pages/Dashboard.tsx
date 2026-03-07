@@ -13,7 +13,6 @@ import {
   useTodayAnalytics,
   useConversationsByHour,
   useRecentConversations,
-  useMLQuestionsToday,
 } from "@/hooks/useDashboardData";
 import { formatCurrency } from "@/lib/formatters";
 import { usePageTitle } from "@/hooks/usePageTitle";
