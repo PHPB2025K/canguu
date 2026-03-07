@@ -75,6 +75,25 @@ export interface Product {
   marketplace_links: Json | null;
   variations: Json | null;
   is_active: boolean | null;
+  search_text: string | null;
+  embedding: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  listings?: ProductListing[];
+}
+
+export interface ProductListing {
+  id: string;
+  product_id: string;
+  platform: string;
+  platform_item_id: string | null;
+  listing_title: string;
+  listing_url: string | null;
+  listing_type: string | null;
+  kit_quantity: number | null;
+  listing_price: number | null;
+  is_active: boolean | null;
+  metadata: Json | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -162,6 +181,14 @@ export interface MarketplaceQuestion {
   answered_by: string | null;
   answered_at: string | null;
   created_at: string | null;
+  product_id: string | null;
+  seller_id: string | null;
+  ai_classification: Json | null;
+  ai_response_time_ms: number | null;
+  tokens_used: number | null;
+  error_message: string | null;
+  external_created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface MarketplaceChat {
@@ -177,6 +204,12 @@ export interface MarketplaceChat {
   unread_count: number | null;
   created_at: string | null;
   updated_at: string | null;
+  seller_id: string | null;
+  buyer_id: string | null;
+  customer_id: string | null;
+  conversation_id: string | null;
+  last_message_at: string | null;
+  metadata: Json | null;
 }
 
 export interface MarketplaceChatMessage {
@@ -187,6 +220,8 @@ export interface MarketplaceChatMessage {
   message_type: string | null;
   ai_suggested: boolean | null;
   created_at: string | null;
+  external_message_id: string | null;
+  tokens_used: number | null;
 }
 
 export interface MarketplaceTokenStatus {
@@ -195,7 +230,7 @@ export interface MarketplaceTokenStatus {
   seller_id: string | null;
   seller_nickname: string | null;
   app_id: string | null;
-  status: string | null;
+  status: 'pending' | 'active' | 'expired' | 'revoked' | null;
   token_expires_at: string | null;
   connection_status: 'connected' | 'expired' | 'disconnected';
   created_at: string | null;
