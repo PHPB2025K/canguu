@@ -230,7 +230,7 @@ export interface MarketplaceTokenStatus {
   seller_id: string | null;
   seller_nickname: string | null;
   app_id: string | null;
-  status: string | null;
+  status: 'pending' | 'active' | 'expired' | 'revoked' | null;
   token_expires_at: string | null;
   connection_status: 'connected' | 'expired' | 'disconnected';
   created_at: string | null;

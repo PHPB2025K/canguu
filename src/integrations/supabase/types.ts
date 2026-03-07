@@ -425,7 +425,10 @@ export type Database = {
           external_url: string | null
           id: string
           is_active: boolean | null
+          is_kit: boolean | null
+          kit_quantity: number | null
           last_synced_at: string | null
+          needs_manual_review: boolean | null
           platform: string
           product_id: string | null
           updated_at: string | null
@@ -438,7 +441,10 @@ export type Database = {
           external_url?: string | null
           id?: string
           is_active?: boolean | null
+          is_kit?: boolean | null
+          kit_quantity?: number | null
           last_synced_at?: string | null
+          needs_manual_review?: boolean | null
           platform: string
           product_id?: string | null
           updated_at?: string | null
@@ -451,7 +457,10 @@ export type Database = {
           external_url?: string | null
           id?: string
           is_active?: boolean | null
+          is_kit?: boolean | null
+          kit_quantity?: number | null
           last_synced_at?: string | null
+          needs_manual_review?: boolean | null
           platform?: string
           product_id?: string | null
           updated_at?: string | null
@@ -682,6 +691,62 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      product_listings: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          kit_quantity: number | null
+          listing_price: number | null
+          listing_title: string
+          listing_type: string | null
+          listing_url: string | null
+          metadata: Json | null
+          platform: string
+          platform_item_id: string | null
+          product_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          kit_quantity?: number | null
+          listing_price?: number | null
+          listing_title: string
+          listing_type?: string | null
+          listing_url?: string | null
+          metadata?: Json | null
+          platform: string
+          platform_item_id?: string | null
+          product_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          kit_quantity?: number | null
+          listing_price?: number | null
+          listing_title?: string
+          listing_type?: string | null
+          listing_url?: string | null
+          metadata?: Json | null
+          platform?: string
+          platform_item_id?: string | null
+          product_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_listings_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
