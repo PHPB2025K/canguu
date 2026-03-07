@@ -49,7 +49,7 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center space-y-2 pb-2">
-          <img src={logoLight} alt="Canggu.ai" className="h-10 w-auto mx-auto" />
+          <img src={logoLight} alt="Canggu.ai" className="h-14 w-auto mx-auto" />
           <p className="text-sm text-muted-foreground">Painel de Gestão</p>
         </CardHeader>
         <CardContent>

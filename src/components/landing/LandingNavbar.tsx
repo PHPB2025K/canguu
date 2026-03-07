@@ -26,7 +26,7 @@ export default function LandingNavbar() {
       }`}
     >
       <a href="#" className="flex items-center">
-        <img src={logoLight} alt="Canggu.ai" className="h-8 w-auto" />
+        <img src={logoLight} alt="Canggu.ai" className="h-12 w-auto" />
       </a>
 
       <div className="hidden md:flex items-center gap-8">
