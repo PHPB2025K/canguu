@@ -1,3 +1,4 @@
+// Logo assets — updated 2026-03-07
 import whatsappLogo from "@/assets/logos/whatsapp.png";
 import mercadolivreLogo from "@/assets/logos/mercadolivre.png";
 import shopeeLogo from "@/assets/logos/shopee.png";
