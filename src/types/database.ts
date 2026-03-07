@@ -75,6 +75,25 @@ export interface Product {
   marketplace_links: Json | null;
   variations: Json | null;
   is_active: boolean | null;
+  search_text: string | null;
+  embedding: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  listings?: ProductListing[];
+}
+
+export interface ProductListing {
+  id: string;
+  product_id: string;
+  platform: string;
+  platform_item_id: string | null;
+  listing_title: string;
+  listing_url: string | null;
+  listing_type: string | null;
+  kit_quantity: number | null;
+  listing_price: number | null;
+  is_active: boolean | null;
+  metadata: Json | null;
   created_at: string | null;
   updated_at: string | null;
 }
