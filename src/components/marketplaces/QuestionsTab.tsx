@@ -31,7 +31,6 @@ export function QuestionsTab() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Filters */}
       <div className="shrink-0 flex flex-wrap items-center gap-3 pb-4">
-        {/* Platform toggles */}
         <div className="flex gap-1.5">
           {platforms.map((p) => (
             <Button
@@ -49,7 +48,6 @@ export function QuestionsTab() {
           ))}
         </div>
 
-        {/* Status filter */}
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-[180px] h-8">
             <SelectValue placeholder="Status" />
@@ -59,10 +57,11 @@ export function QuestionsTab() {
             <SelectItem value="unanswered">Não Respondidas</SelectItem>
             <SelectItem value="answered">Respondidas</SelectItem>
             <SelectItem value="ai_suggested">Sugestão IA</SelectItem>
+            <SelectItem value="failed">Erro</SelectItem>
+            <SelectItem value="skipped">Ignoradas</SelectItem>
           </SelectContent>
         </Select>
 
-        {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -74,9 +73,7 @@ export function QuestionsTab() {
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {/* Loading */}
         {isLoading && (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -93,7 +90,6 @@ export function QuestionsTab() {
           </div>
         )}
 
-        {/* Error */}
         {isError && (
           <div className="flex flex-col items-center py-12 text-center">
             <p className="text-sm text-destructive mb-2">Erro ao carregar perguntas</p>
@@ -101,7 +97,6 @@ export function QuestionsTab() {
           </div>
         )}
 
-        {/* Empty */}
         {!isLoading && !isError && questions?.length === 0 && (
           <div className="flex flex-col items-center py-16 text-center">
             <HelpCircle className="h-12 w-12 text-muted-foreground mb-3" />
@@ -110,7 +105,6 @@ export function QuestionsTab() {
           </div>
         )}
 
-        {/* List */}
         {!isLoading && !isError && questions && questions.length > 0 && (
           <div className="space-y-3">
             {questions.map((q) => (

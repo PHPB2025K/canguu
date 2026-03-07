@@ -33,11 +33,13 @@ export function useSidebarCounts() {
       const { count: unanswered } = await supabase
         .from('marketplace_questions')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'unanswered');
+        .eq('status', 'unanswered')
+        .not('seller_id', 'is', null);
 
       const { data: chats } = await supabase
         .from('marketplace_chats')
-        .select('unread_count');
+        .select('unread_count')
+        .not('seller_id', 'is', null);
 
       const totalUnread = (chats ?? []).reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
       return (unanswered ?? 0) + totalUnread;
