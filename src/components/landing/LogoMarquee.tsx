@@ -13,7 +13,7 @@ const logos = [
 
 export default function LogoMarquee() {
   return (
-    <section className="bg-white border-t border-b py-12 pt-[72px] overflow-hidden">
+    <section className="bg-white border-t border-b py-12 pt-[72px] md:overflow-hidden max-md:overflow-x-auto max-md:touch-pan-x">
       <p className="text-sm uppercase tracking-widest text-muted-foreground text-center mb-8 font-['DM_Sans']">
         Integrado com as plataformas que você já usa
       </p>
