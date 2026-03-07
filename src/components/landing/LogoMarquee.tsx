@@ -8,7 +8,7 @@ const logos = [
   { name: "WhatsApp", src: whatsappLogo, heightPx: 120 },
   { name: "Mercado Livre", src: mercadolivreLogo, heightPx: 120 },
   { name: "Shopee", src: shopeeLogo, heightPx: 120 },
-  { name: "Amazon", src: amazonLogo, heightPx: 48 },
+  { name: "Amazon", src: amazonLogo, heightPx: 72 },
 ];
 
 export default function LogoMarquee() {
