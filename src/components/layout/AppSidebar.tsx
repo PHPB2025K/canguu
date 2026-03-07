@@ -34,7 +34,7 @@ const AppSidebar = () => {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="p-6">
-        <img src={cangguLogo} alt="Canggu.ai" className="h-8" />
+        <img src={cangguLogo} alt="Canggu.ai" className="h-12" />
       </div>
 
       {/* Nav */}
