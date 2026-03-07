@@ -1,4 +1,5 @@
 import { Zap, Sparkles, Link as LinkIcon } from "lucide-react";
+import screenshotMarketplaces from "@/assets/screenshot-marketplaces.png";
 import { useInView } from "@/hooks/useInView";
 
 const highlights = [

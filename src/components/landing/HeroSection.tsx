@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import screenshotDashboard from "@/assets/screenshot-dashboard.png";
 import { Link } from "react-router-dom";
 import { Sparkles, CheckCircle } from "lucide-react";
 
