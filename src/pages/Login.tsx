@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import cangguLogo from '@/assets/canggu-logo.png';
+
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useToast } from '@/hooks/use-toast';
@@ -48,7 +48,10 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center space-y-2 pb-2">
-          <img src={cangguLogo} alt="Canggu.ai" className="h-24 mx-auto" />
+          <p className="font-['Plus_Jakarta_Sans'] font-extrabold text-4xl">
+            <span className="text-primary">Canggu</span>
+            <span className="text-accent">.ai</span>
+          </p>
           <p className="text-sm text-muted-foreground">Painel de Gestão</p>
         </CardHeader>
         <CardContent>
