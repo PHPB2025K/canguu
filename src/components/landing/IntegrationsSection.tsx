@@ -3,9 +3,8 @@ import { useInView } from "@/hooks/useInView";
 const integrations = [
   { name: "WhatsApp", borderHover: "hover:border-[#25D366]", desc: "Atendimento automatizado 24/7", badge: "Ativo ✓", badgeClass: "bg-success/10 text-success" },
   { name: "Mercado Livre", borderHover: "hover:border-[#FFE600]", desc: "Respostas automáticas a perguntas", badge: "Ativo ✓", badgeClass: "bg-success/10 text-success" },
-  { name: "Shopee", borderHover: "hover:border-[#EE4D2D]", desc: "Chat e perguntas com sugestão de IA", badge: "Ativo ✓", badgeClass: "bg-success/10 text-success" },
+  { name: "Shopee", borderHover: "hover:border-[#EE4D2D]", desc: "Chat e perguntas com sugestão de IA", badge: "Em breve", badgeClass: "bg-muted text-muted-foreground" },
   { name: "Amazon", borderHover: "hover:border-[#FF9900]", desc: "Perguntas com respostas inteligentes", badge: "Ativo ✓", badgeClass: "bg-success/10 text-success" },
-  { name: "Supabase", borderHover: "hover:border-[#3ECF8E]", desc: "Banco de dados realtime", badge: "Infraestrutura ✓", badgeClass: "bg-primary/10 text-primary" },
 ];
 
 export default function IntegrationsSection() {
