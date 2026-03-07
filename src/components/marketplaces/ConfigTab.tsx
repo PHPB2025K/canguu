@@ -264,6 +264,73 @@ export function ConfigTab() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Clean demo data */}
+      <CleanDemoDataSection />
     </div>
+  );
+}
+
+function CleanDemoDataSection() {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      // 1. Delete messages from mock chats
+      const { data: mockChats } = await supabase
+        .from('marketplace_chats')
+        .select('id')
+        .is('seller_id', null);
+      if (mockChats && mockChats.length > 0) {
+        const ids = mockChats.map(c => c.id);
+        await supabase.from('marketplace_chat_messages').delete().in('chat_id', ids);
+      }
+      // 2. Delete mock chats
+      await supabase.from('marketplace_chats').delete().is('seller_id', null);
+      // 3. Delete mock questions
+      await supabase.from('marketplace_questions').delete().is('seller_id', null);
+    },
+    onSuccess: () => {
+      toast({ title: 'Dados de demonstração removidos' });
+      qc.invalidateQueries({ queryKey: ['marketplace-questions'] });
+      qc.invalidateQueries({ queryKey: ['marketplace-chats'] });
+      qc.invalidateQueries({ queryKey: ['marketplace-question-counts'] });
+      qc.invalidateQueries({ queryKey: ['marketplace-unanswered-count'] });
+      qc.invalidateQueries({ queryKey: ['sidebar-marketplace-count'] });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao remover dados', variant: 'destructive' });
+    },
+  });
+
+  return (
+    <>
+      <div className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground gap-1.5"
+          onClick={() => setOpen(true)}
+          disabled={mutation.isPending}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Limpar dados de demonstração
+        </Button>
+      </div>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Limpar dados de demonstração"
+        description="Tem certeza? Isso removerá as perguntas mock, chats mock e mensagens mock do banco. Dados reais (com seller_id) não serão afetados."
+        confirmLabel="Limpar"
+        variant="destructive"
+        onConfirm={() => {
+          setOpen(false);
+          mutation.mutate();
+        }}
+      />
+    </>
   );
 }
