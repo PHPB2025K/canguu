@@ -1,14 +1,18 @@
 
 
-# Aumentar tamanho dos logos (Shopee, Mercado Livre, WhatsApp)
+# Remover "Site Próprio" e renomear seção de links
 
-Adicionar uma propriedade `height` a cada logo no array e usar tamanhos individuais no `className`:
+## Alterações
 
-- **WhatsApp, Mercado Livre, Shopee**: de `h-16` para `h-32` (128px)
-- **Amazon**: manter `h-16` (64px)
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-### Alteração em `src/components/landing/LogoMarquee.tsx`:
-- Adicionar campo `height` ao array `logos` (ex: `{ name: "WhatsApp", src: whatsappLogo, height: "h-32" }`)
-- Amazon fica com `height: "h-16"`
-- No `<img>`, trocar `className="h-16 ..."` por template usando `logo.height`
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
