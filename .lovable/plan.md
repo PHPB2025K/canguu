@@ -1,20 +1,18 @@
 
 
-# Corrigir esteira de logos — LogoMarquee.tsx
+# Substituir logos da esteira — LogoMarquee
 
-## Diagnostico
+## Diagnóstico
+O código do `LogoMarquee.tsx` já está correto — usa `<img>` com imports ES6. O problema são os arquivos de imagem que precisam ser substituídos pelos novos uploads otimizados.
 
-O componente `LogoMarquee.tsx` ja tem o codigo correto com imports de imagem, array de 4 logos, e rendering via `<img>`. O problema e que os arquivos de imagem em `src/assets/logos/` precisam ser substituidos pelos novos uploads anexados.
+## Alterações
 
-## Alteracoes
+### 1. Copiar os 4 logos otimizados para `src/assets/logos/`
+- `user-uploads://5.png` → `src/assets/logos/whatsapp.png`
+- `user-uploads://3.png` → `src/assets/logos/mercadolivre.png`
+- `user-uploads://4.png` → `src/assets/logos/shopee.png`
+- `user-uploads://2.png` → `src/assets/logos/amazon.png`
 
-### 1. Substituir os 4 arquivos de imagem
-Copiar os uploads para `src/assets/logos/`, sobrescrevendo os existentes:
-- `user-uploads://src_assets_logos_whatsapp.png` → `src/assets/logos/whatsapp.png`
-- `user-uploads://src_assets_logos_mercadolivre.png` → `src/assets/logos/mercadolivre.png`
-- `user-uploads://src_assets_logos_shopee.png` → `src/assets/logos/shopee.png`
-- `user-uploads://src_assets_logos_amazon.png` → `src/assets/logos/amazon.png`
-
-### 2. Nenhuma alteracao de codigo necessaria
-O `LogoMarquee.tsx` ja esta correto. O `index.css` ja tem o keyframe `marquee`.
+### 2. Nenhuma alteração de código
+O componente `LogoMarquee.tsx` já está implementado corretamente.
 
