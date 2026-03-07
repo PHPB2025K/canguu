@@ -32,8 +32,8 @@ export default function LogoMarquee() {
                   key={logo.name}
                   src={logo.src}
                   alt={logo.name}
-                  className="w-auto shrink-0 select-none object-contain"
-                  style={{ height: `${logo.heightPx}px`, filter: "grayscale(100%)", opacity: 0.45 }}
+                  className="w-auto shrink-0 select-none object-contain max-md:scale-125"
+                  style={{ height: `${logo.heightPx}px`, filter: "grayscale(100%)", opacity: 0.6 }}
                 />
               ))}
             </div>
