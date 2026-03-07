@@ -1,18 +1,24 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Remover nomes de soluções da seção "Construído com tecnologia de ponta"
 
-## Alterações
+## Objetivo
+Substituir os nomes específicos das ferramentas (Claude AI, Supabase, Evolution API, React, N8N) por tópicos genéricos, preservando a estratégia de negócio.
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+## Alterações em `src/components/landing/TechStackSection.tsx`
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+1. **Dados**: Substituir a lista `techs` por apenas os labels genéricos com ícones Lucide para uma interface moderna:
+   - `Brain` — Motor de IA
+   - `Database` — Banco de dados realtime
+   - `MessageCircle` — WhatsApp Business
+   - `Monitor` — Interface moderna
+   - `Workflow` — Workflows automatizados
 
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+2. **Layout**: Trocar os pills simples por cards com ícone + texto, dispostos em grid responsivo (`grid-cols-2 md:grid-cols-5`), com ícone colorido centralizado acima do label. Cada card terá fundo `bg-card`, borda, padding e cantos arredondados.
 
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+3. **Estrutura de cada card**:
+   - Ícone Lucide (24px) com cor `text-primary`
+   - Label genérico em `font-semibold text-sm text-foreground`
+
+Nenhuma outra seção será alterada.
 
