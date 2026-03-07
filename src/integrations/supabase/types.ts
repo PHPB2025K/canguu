@@ -763,7 +763,45 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      marketplace_token_status: {
+        Row: {
+          app_id: string | null
+          connection_status: string | null
+          created_at: string | null
+          id: string | null
+          platform: string | null
+          seller_id: string | null
+          seller_nickname: string | null
+          status: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          app_id?: string | null
+          connection_status?: never
+          created_at?: string | null
+          id?: string | null
+          platform?: string | null
+          seller_id?: string | null
+          seller_nickname?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          app_id?: string | null
+          connection_status?: never
+          created_at?: string | null
+          id?: string | null
+          platform?: string | null
+          seller_id?: string | null
+          seller_nickname?: string | null
+          status?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       match_products: {
