@@ -1,4 +1,14 @@
-const logos = ["WhatsApp", "Mercado Livre", "Shopee", "Amazon", "Supabase", "Claude AI", "Evolution API", "N8N"];
+import whatsappLogo from "@/assets/logos/whatsapp.png";
+import mercadolivreLogo from "@/assets/logos/mercadolivre.png";
+import shopeeLogo from "@/assets/logos/shopee.png";
+import amazonLogo from "@/assets/logos/amazon.png";
+
+const logos = [
+  { name: "WhatsApp", src: whatsappLogo },
+  { name: "Mercado Livre", src: mercadolivreLogo },
+  { name: "Shopee", src: shopeeLogo },
+  { name: "Amazon", src: amazonLogo },
+];
 
 export default function LogoMarquee() {
   return (
@@ -14,10 +24,14 @@ export default function LogoMarquee() {
         }}
       >
         <div className="flex items-center gap-20 animate-[marquee_35s_linear_infinite]">
-          {[...logos, ...logos].map((name, i) => (
-            <span key={i} className="font-bold text-lg uppercase text-[#AAA] whitespace-nowrap select-none opacity-45">
-              {name}
-            </span>
+          {[...logos, ...logos].map((logo, i) => (
+            <img
+              key={i}
+              src={logo.src}
+              alt={logo.name}
+              className="h-8 w-auto select-none"
+              style={{ filter: "grayscale(100%)", opacity: 0.45 }}
+            />
           ))}
         </div>
       </div>
