@@ -1,18 +1,22 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Permitir swipe manual na esteira de logos no mobile
 
-## Alterações
+## Problema
+A esteira de logos usa `overflow-hidden` e animação automática. No mobile, o usuário não consegue arrastar/deslizar para ver os logos mais rápido.
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+## Solução
+No mobile, adicionar `overflow-x-auto` ao container da esteira (substituindo `overflow-hidden`), permitindo scroll horizontal por toque. No desktop, manter `overflow-hidden` como está.
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+### Alterações em `src/components/landing/LogoMarquee.tsx`
 
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+1. Trocar a classe da `<section>` de `overflow-hidden` para `overflow-hidden md:overflow-hidden max-md:overflow-x-auto`
+2. Na div com mask, adicionar `max-md:overflow-x-auto` e permitir touch scroll
+3. A animação continua rodando normalmente — o usuário pode interromper arrastando no mobile
 
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+Concretamente, no container externo (div com mask):
+- Adicionar `max-md:overflow-x-auto max-md:touch-pan-x` para permitir scroll por toque no mobile
+- Mover `overflow-hidden` da section para apenas `md:overflow-hidden`, e no mobile usar `overflow-x-auto`
+
+A animação marquee continuará rodando, mas o scroll manual será possível no mobile graças ao overflow visível.
 
