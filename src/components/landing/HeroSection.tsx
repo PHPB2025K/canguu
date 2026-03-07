@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import screenshotDashboard from "@/assets/screenshot-dashboard.png";
 import { Link } from "react-router-dom";
 import { Sparkles, CheckCircle } from "lucide-react";
 
@@ -69,9 +70,7 @@ export default function HeroSection() {
               <span className="w-2 h-2 rounded-full bg-[#FFBD2E]" />
               <span className="w-2 h-2 rounded-full bg-[#27C93F]" />
             </div>
-            <div className="bg-muted min-h-[400px] flex items-center justify-center rounded-b-xl">
-              <span className="text-muted-foreground font-['DM_Sans']">Dashboard Canggu.ai</span>
-            </div>
+            <img src={screenshotDashboard} alt="Dashboard Canggu.ai" className="w-full" />
           </div>
         </div>
       </div>

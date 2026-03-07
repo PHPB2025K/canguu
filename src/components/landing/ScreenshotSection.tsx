@@ -1,4 +1,5 @@
 import { Zap, Sparkles, Link as LinkIcon } from "lucide-react";
+import screenshotMarketplaces from "@/assets/screenshot-marketplaces.png";
 import { useInView } from "@/hooks/useInView";
 
 const highlights = [
@@ -34,9 +35,7 @@ export default function ScreenshotSection() {
               <span className="w-2 h-2 rounded-full bg-[#FFBD2E]" />
               <span className="w-2 h-2 rounded-full bg-[#27C93F]" />
             </div>
-            <div className="bg-muted min-h-[400px] flex items-center justify-center rounded-b-xl">
-              <span className="text-muted-foreground font-['DM_Sans']">Dashboard Canggu.ai</span>
-            </div>
+            <img src={screenshotMarketplaces} alt="Marketplaces Canggu.ai" className="w-full" />
           </div>
         </div>
 

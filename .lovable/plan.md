@@ -1,22 +1,18 @@
 
 
-# Aplicar screenshots reais na Landing Page
+# Remover "Site Próprio" e renomear seção de links
 
 ## Alterações
 
-### 1. Copiar assets
-- `user-uploads://budamix-ai-buddy.lovable.app_dashboard.png` → `src/assets/screenshot-dashboard.png`
-- `user-uploads://budamix-ai-buddy.lovable.app_dashboard_1.png` → `src/assets/screenshot-marketplaces.png`
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-### 2. `src/components/landing/HeroSection.tsx`
-- Importar `screenshotDashboard from "@/assets/screenshot-dashboard.png"`
-- Substituir o `<div>` placeholder (bg-muted com texto "Dashboard Canggu.ai") por `<img src={screenshotDashboard} alt="Dashboard Canggu.ai" className="w-full" />`
-- Manter barra do browser, sombras e perspectiva 3D intactas
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-### 3. `src/components/landing/ScreenshotSection.tsx`
-- Importar `screenshotMarketplaces from "@/assets/screenshot-marketplaces.png"`
-- Substituir o `<div>` placeholder por `<img src={screenshotMarketplaces} alt="Marketplaces Canggu.ai" className="w-full" />`
-- Manter barra do browser e animações intactas
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-Nenhuma outra seção será alterada.
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
