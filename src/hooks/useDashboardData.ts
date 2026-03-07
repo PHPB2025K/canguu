@@ -121,6 +121,36 @@ export function useConversationsByHour() {
   });
 }
 
+export function useMLQuestionsToday() {
+  return useQuery({
+    queryKey: ["dashboard", "ml-questions-today"],
+    queryFn: async () => {
+      const { start, end } = todayRange();
+      const [totalRes, unansweredRes] = await Promise.all([
+        supabase
+          .from("marketplace_questions")
+          .select("id", { count: "exact", head: true })
+          .eq("platform", "mercado_livre")
+          .not("seller_id", "is", null)
+          .gte("created_at", start)
+          .lt("created_at", end),
+        supabase
+          .from("marketplace_questions")
+          .select("id", { count: "exact", head: true })
+          .eq("platform", "mercado_livre")
+          .eq("status", "unanswered")
+          .not("seller_id", "is", null)
+          .gte("created_at", start)
+          .lt("created_at", end),
+      ]);
+      if (totalRes.error) throw totalRes.error;
+      if (unansweredRes.error) throw unansweredRes.error;
+      return { total: totalRes.count ?? 0, unanswered: unansweredRes.count ?? 0 };
+    },
+    staleTime: STALE_TIME,
+  });
+}
+
 export function useRecentConversations() {
   return useQuery({
     queryKey: ["dashboard", "recent-conversations"],

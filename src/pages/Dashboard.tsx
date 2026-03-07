@@ -96,6 +96,13 @@ const Dashboard = () => {
         />
 
         <KPICard
+          title="Perguntas ML Hoje"
+          value={mlQuestions.data?.total ?? 0}
+          icon={Store}
+          className={(mlQuestions.data?.unanswered ?? 0) > 0 ? "[&_svg]:text-warning [&_.kpi-value]:text-warning" : "[&_svg]:text-success [&_.kpi-value]:text-success"}
+        />
+
+        <KPICard
           title="Sentimento Médio"
           value={getDominantSentiment(sentPos, sentNeg, sentNeu)}
           icon={Smile}
