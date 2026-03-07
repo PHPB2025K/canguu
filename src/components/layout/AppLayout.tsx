@@ -32,7 +32,7 @@ const AppLayout = () => {
 
   // Dynamic page title
   useEffect(() => {
-    document.title = `${title} — Budamix AI Agent`;
+    document.title = `${title} — Canggu.ai`;
   }, [title]);
 
   // Close mobile sidebar on navigate

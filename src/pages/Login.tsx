@@ -50,7 +50,10 @@ const Login = () => {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
             <Bot className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Budamix AI Agent</h1>
+          <h1 className="text-2xl" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800 }}>
+            <span style={{ color: '#004D4D' }}>Canggu</span>
+            <span style={{ color: '#C56A4A' }}>.ai</span>
+          </h1>
           <p className="text-sm text-muted-foreground">Painel de Gestão</p>
         </CardHeader>
         <CardContent>

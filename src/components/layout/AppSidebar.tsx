@@ -33,10 +33,11 @@ const AppSidebar = () => {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="p-6 flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
-          <Bot className="h-4 w-4 text-white" />
-        </div>
-        <span className="font-bold text-lg text-white">Budamix AI</span>
+        <img src="/src/assets/canggu-logo.png" alt="Canggu.ai" className="h-8 w-8 object-contain" />
+        <span className="text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800 }}>
+          <span className="text-white">Canggu</span>
+          <span style={{ color: '#C56A4A' }}>.ai</span>
+        </span>
       </div>
 
       {/* Nav */}
