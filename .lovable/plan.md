@@ -1,18 +1,20 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Corrigir esteira de logos — LogoMarquee.tsx
 
-## Alterações
+## Diagnostico
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+O componente `LogoMarquee.tsx` ja tem o codigo correto com imports de imagem, array de 4 logos, e rendering via `<img>`. O problema e que os arquivos de imagem em `src/assets/logos/` precisam ser substituidos pelos novos uploads anexados.
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+## Alteracoes
 
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+### 1. Substituir os 4 arquivos de imagem
+Copiar os uploads para `src/assets/logos/`, sobrescrevendo os existentes:
+- `user-uploads://src_assets_logos_whatsapp.png` → `src/assets/logos/whatsapp.png`
+- `user-uploads://src_assets_logos_mercadolivre.png` → `src/assets/logos/mercadolivre.png`
+- `user-uploads://src_assets_logos_shopee.png` → `src/assets/logos/shopee.png`
+- `user-uploads://src_assets_logos_amazon.png` → `src/assets/logos/amazon.png`
 
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+### 2. Nenhuma alteracao de codigo necessaria
+O `LogoMarquee.tsx` ja esta correto. O `index.css` ja tem o keyframe `marquee`.
 
