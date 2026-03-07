@@ -1,18 +1,17 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Usar logo enviado como logotipo padrão do sistema
 
-## Alterações
+## Problema
+O cabeçalho da sidebar usa apenas texto estilizado. O usuário quer usar a imagem do logo enviada (que mostra "canggu.ai" com ícone do baiacu em branco/terracota sobre fundo transparente).
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+## Solução
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+1. **Salvar o asset**: Copiar `user-uploads://ChatGPT_Image_6_03_2026_19_18_46-2.png` para `src/assets/canggu-logo.png` (substituir o existente)
 
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+2. **`src/components/layout/AppSidebar.tsx`**:
+   - Importar o logo: `import cangguLogo from '@/assets/canggu-logo.png'`
+   - Substituir os spans de texto por `<img src={cangguLogo} alt="Canggu.ai" className="h-8" />` — usar apenas `h-8` (sem `w-8`) para que a largura seja proporcional e o logo apareça inteiro
 
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+3. **`src/pages/Login.tsx`**: Também usar o logo importado acima do formulário, com tamanho maior (`h-12` ou `h-16`)
 
