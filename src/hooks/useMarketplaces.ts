@@ -52,8 +52,8 @@ export function useMarketplaceQuestions(platform?: string, status?: string, sear
       if (error) throw error;
 
       const priority: Record<string, number> = {
-        failed: 0,
-        unanswered: 1,
+        unanswered: 0,
+        failed: 1,
         ai_suggested: 2,
         skipped: 3,
         answered: 4,
