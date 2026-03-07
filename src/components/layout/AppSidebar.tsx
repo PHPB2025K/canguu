@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, MessageSquare, Store, Package, FileText,
-  Users, AlertTriangle, BarChart3, Settings, LogOut, Bot,
+  Users, AlertTriangle, BarChart3, Settings, LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
