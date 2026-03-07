@@ -1,18 +1,13 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Aplicar logotipo no topo da Sidebar do Dashboard
 
-## Alterações
+## Alteração
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+**`src/components/layout/AppSidebar.tsx`**:
+- Substituir `import cangguLogo from '@/assets/canggu-logo.png'` por `import logoDark from '@/assets/canggu-logo-dark.png'`
+- Atualizar o `<img>` no topo da sidebar: `src={logoDark}`, `className="h-8 w-auto"` (atualmente `h-14`)
+- Manter o `<div className="p-6">` existente para espaçamento
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+Nenhuma outra alteração no projeto.
 
