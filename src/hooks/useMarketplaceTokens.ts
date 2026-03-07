@@ -17,7 +17,6 @@ export function useMarketplaceTokenStatus() {
     },
   });
 
-  // Realtime subscription to invalidate on changes
   useEffect(() => {
     const channel = supabase
       .channel('marketplace-tokens-changes')
@@ -46,7 +45,8 @@ export function usePlatformAnsweredCount(platform: string) {
         .from('marketplace_questions')
         .select('id', { count: 'exact', head: true })
         .eq('platform', platform)
-        .eq('status', 'answered');
+        .eq('status', 'answered')
+        .not('seller_id', 'is', null);
       if (error) throw error;
       return count ?? 0;
     },
@@ -59,19 +59,17 @@ export function usePlatformAvgResponseTime(platform: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('marketplace_questions')
-        .select('created_at, answered_at')
+        .select('ai_response_time_ms')
         .eq('platform', platform)
         .eq('status', 'answered')
-        .not('answered_at', 'is', null);
+        .not('seller_id', 'is', null)
+        .not('ai_response_time_ms', 'is', null);
       if (error) throw error;
       if (!data || data.length === 0) return null;
 
-      const totalMs = data.reduce((sum, q) => {
-        const diff = new Date(q.answered_at!).getTime() - new Date(q.created_at!).getTime();
-        return sum + diff;
-      }, 0);
-      const avgMin = Math.round(totalMs / data.length / 60000);
-      return avgMin;
+      const totalMs = data.reduce((sum, q) => sum + (q.ai_response_time_ms ?? 0), 0);
+      const avgSeconds = Math.round(totalMs / data.length / 100) / 10; // e.g. 4.1
+      return avgSeconds;
     },
   });
 }

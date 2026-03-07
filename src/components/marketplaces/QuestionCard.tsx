@@ -1,21 +1,56 @@
 import { useState } from 'react';
-import { CheckCircle, Circle, Sparkles, User } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Bot, CheckCircle, Circle, Sparkles, User, AlertCircle, MinusCircle, Zap } from 'lucide-react';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { PlatformBadge } from './PlatformBadge';
 import { useAnswerQuestion, useRejectSuggestion } from '@/hooks/useMarketplaces';
 import { useToast } from '@/hooks/use-toast';
 import type { MarketplaceQuestion } from '@/types/database';
-import { format } from 'date-fns';
 
 const statusConfig: Record<string, { label: string; className: string; icon: typeof Circle }> = {
   unanswered: { label: 'Não respondida', className: 'bg-warning/15 text-warning', icon: Circle },
   answered: { label: 'Respondida', className: 'bg-success/15 text-success', icon: CheckCircle },
   ai_suggested: { label: 'Sugestão IA', className: 'bg-primary/10 text-primary', icon: Sparkles },
+  failed: { label: 'Erro', className: 'bg-destructive/10 text-destructive', icon: AlertCircle },
+  skipped: { label: 'Ignorada', className: 'bg-muted text-muted-foreground', icon: MinusCircle },
 };
+
+function AiResponseTimeBadge({ ms }: { ms: number }) {
+  const seconds = Math.round(ms / 100) / 10;
+  const colorClass = ms < 5000
+    ? 'bg-success/15 text-success'
+    : ms < 10000
+      ? 'bg-warning/15 text-warning'
+      : 'bg-destructive/15 text-destructive';
+
+  return (
+    <span className={cn('inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium', colorClass)}>
+      <Zap className="h-3 w-3" />
+      {seconds}s
+    </span>
+  );
+}
+
+function AnsweredByBadge({ answeredBy }: { answeredBy: string }) {
+  if (answeredBy === 'ai_agent') {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+        <Bot className="h-3 w-3" />
+        IA
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-success/10 text-success">
+      <User className="h-3 w-3" />
+      Manual
+    </span>
+  );
+}
 
 export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
   const [expanded, setExpanded] = useState(false);
@@ -26,9 +61,12 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
 
   const status = statusConfig[question.status] ?? statusConfig.unanswered;
   const StatusIcon = status.icon;
-  const relativeTime = question.created_at
-    ? formatDistanceToNow(new Date(question.created_at), { addSuffix: true, locale: ptBR })
+  const displayDate = question.external_created_at ?? question.created_at;
+  const relativeTime = displayDate
+    ? formatDistanceToNow(new Date(displayDate), { addSuffix: true, locale: ptBR })
     : '';
+
+  const isFailed = question.status === 'failed';
 
   const handleApprove = () => {
     if (!question.ai_suggested_answer) return;
@@ -56,11 +94,19 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
     );
   };
 
+  const statusBadge = (
+    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', status.className)}>
+      <StatusIcon className="h-3 w-3" />
+      {status.label}
+    </span>
+  );
+
   return (
     <div
       className={cn(
         'bg-card border border-border rounded-xl p-4 transition-shadow cursor-pointer',
-        expanded ? 'shadow-md' : 'hover:shadow-sm'
+        expanded ? 'shadow-md' : 'hover:shadow-sm',
+        isFailed && 'border-l-[3px] border-l-destructive'
       )}
       onClick={() => setExpanded(!expanded)}
     >
@@ -69,11 +115,21 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
         <div className="flex items-center gap-2">
           <PlatformBadge platform={question.platform} />
           <span className="text-xs text-muted-foreground">{relativeTime}</span>
+          {question.ai_response_time_ms != null && (
+            <AiResponseTimeBadge ms={question.ai_response_time_ms} />
+          )}
         </div>
-        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', status.className)}>
-          <StatusIcon className="h-3 w-3" />
-          {status.label}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {question.answered_by && <AnsweredByBadge answeredBy={question.answered_by} />}
+          {isFailed && question.error_message ? (
+            <Tooltip>
+              <TooltipTrigger asChild>{statusBadge}</TooltipTrigger>
+              <TooltipContent className="max-w-xs text-xs">{question.error_message}</TooltipContent>
+            </Tooltip>
+          ) : (
+            statusBadge
+          )}
+        </div>
       </div>
 
       {/* Body */}
@@ -119,6 +175,14 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
                 Respondida por {question.answered_by === 'ai_agent' ? 'IA' : 'humano'}
                 {question.answered_at && ` em ${format(new Date(question.answered_at), 'dd/MM/yyyy HH:mm')}`}
               </p>
+            </div>
+          )}
+
+          {/* Failed display */}
+          {isFailed && question.error_message && (
+            <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
+              <p className="text-sm text-destructive font-medium mb-1">Erro ao processar</p>
+              <p className="text-xs text-muted-foreground">{question.error_message}</p>
             </div>
           )}
 

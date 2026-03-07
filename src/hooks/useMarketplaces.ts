@@ -1,6 +1,32 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { MarketplaceQuestion, MarketplaceChat, MarketplaceChatMessage } from '@/types/database';
+
+/** Realtime hook — call once at module level (e.g. in Marketplaces page) */
+export function useMarketplaceRealtime() {
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('marketplace-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_questions' }, () => {
+        qc.invalidateQueries({ queryKey: ['marketplace-questions'] });
+        qc.invalidateQueries({ queryKey: ['marketplace-question-counts'] });
+        qc.invalidateQueries({ queryKey: ['marketplace-unanswered-count'] });
+        qc.invalidateQueries({ queryKey: ['sidebar-marketplace-count'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_chats' }, () => {
+        qc.invalidateQueries({ queryKey: ['marketplace-chats'] });
+        qc.invalidateQueries({ queryKey: ['marketplace-active-chats'] });
+        qc.invalidateQueries({ queryKey: ['marketplace-total-unread'] });
+        qc.invalidateQueries({ queryKey: ['sidebar-marketplace-count'] });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [qc]);
+}
 
 export function useMarketplaceQuestions(platform?: string, status?: string, search?: string) {
   return useQuery({
@@ -9,7 +35,7 @@ export function useMarketplaceQuestions(platform?: string, status?: string, sear
       let query = supabase
         .from('marketplace_questions')
         .select('*')
-        .order('status', { ascending: true }) // unanswered first alphabetically
+        .not('seller_id', 'is', null)
         .order('created_at', { ascending: false });
 
       if (platform && platform !== 'all') {
@@ -25,13 +51,20 @@ export function useMarketplaceQuestions(platform?: string, status?: string, sear
       const { data, error } = await query;
       if (error) throw error;
 
-      // Sort: unanswered first, then ai_suggested, then answered
-      const priority: Record<string, number> = { unanswered: 0, ai_suggested: 1, answered: 2 };
+      const priority: Record<string, number> = {
+        failed: 0,
+        unanswered: 1,
+        ai_suggested: 2,
+        skipped: 3,
+        answered: 4,
+      };
       return (data as MarketplaceQuestion[]).sort((a, b) => {
-        const pa = priority[a.status] ?? 3;
-        const pb = priority[b.status] ?? 3;
+        const pa = priority[a.status] ?? 5;
+        const pb = priority[b.status] ?? 5;
         if (pa !== pb) return pa - pb;
-        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+        const dateA = a.external_created_at ?? a.created_at ?? '';
+        const dateB = b.external_created_at ?? b.created_at ?? '';
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
       });
     },
   });
@@ -44,11 +77,13 @@ export function useMarketplaceQuestionCounts() {
       const { count: unanswered } = await supabase
         .from('marketplace_questions')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'unanswered');
+        .eq('status', 'unanswered')
+        .not('seller_id', 'is', null);
       const { count: aiSuggested } = await supabase
         .from('marketplace_questions')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'ai_suggested');
+        .eq('status', 'ai_suggested')
+        .not('seller_id', 'is', null);
       return { unanswered: unanswered ?? 0, aiSuggested: aiSuggested ?? 0 };
     },
   });
@@ -61,7 +96,8 @@ export function useUnansweredCount() {
       const { count } = await supabase
         .from('marketplace_questions')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'unanswered');
+        .eq('status', 'unanswered')
+        .not('seller_id', 'is', null);
       return count ?? 0;
     },
   });
@@ -99,7 +135,6 @@ export function useMarketplaceChats(platform?: string, status?: string) {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Sort: unread first, then by updated_at desc
       return (data as MarketplaceChat[]).sort((a, b) => {
         const ua = (a.unread_count ?? 0) > 0 ? 0 : 1;
         const ub = (b.unread_count ?? 0) > 0 ? 0 : 1;

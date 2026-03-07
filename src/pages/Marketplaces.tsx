@@ -4,9 +4,10 @@ import { MarketplaceKPICards } from '@/components/marketplaces/MarketplaceKPICar
 import { QuestionsTab } from '@/components/marketplaces/QuestionsTab';
 import { ChatsTab } from '@/components/marketplaces/ChatsTab';
 import { ConfigTab } from '@/components/marketplaces/ConfigTab';
-import { useUnansweredCount, useTotalUnreadCount } from '@/hooks/useMarketplaces';
+import { useUnansweredCount, useTotalUnreadCount, useMarketplaceRealtime } from '@/hooks/useMarketplaces';
 
 const Marketplaces = () => {
+  useMarketplaceRealtime();
   const { data: unanswered = 0 } = useUnansweredCount();
   const { data: totalUnread = 0 } = useTotalUnreadCount();
 
