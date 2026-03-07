@@ -1,18 +1,16 @@
 
 
-# Remover "Site Próprio" e renomear seção de links
+# Fix: Logo no cabeçalho da Sidebar
 
-## Alterações
+## Problema
+O logo está referenciado como `src="/src/assets/canggu-logo.png"` — caminho absoluto do filesystem que não funciona no Vite (funciona apenas em dev em alguns casos, falha em build/preview).
 
-### 1. `src/hooks/useProducts.ts`
-- Remover `"site"` de `MARKETPLACE_PLATFORMS`
-- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+## Solução
 
-### 2. `src/components/products/ProductDialog.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+**`src/components/layout/AppSidebar.tsx`**:
+- Adicionar `import cangguLogo from '@/assets/canggu-logo.png'` no topo
+- Trocar `src="/src/assets/canggu-logo.png"` por `src={cangguLogo}`
+- Isso permite ao Vite processar o asset corretamente com hash no build
 
-### 3. `src/pages/ProductDetail.tsx`
-- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
-
-O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
+Mesma correção se existir referência similar em `Login.tsx`.
 
