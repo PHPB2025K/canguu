@@ -25,7 +25,10 @@ export default function LandingNavbar() {
       }`}
     >
       <a href="#" className="flex items-center">
-        <img src={logo} alt="Canggu.ai" className="h-10" />
+        <span className="font-['Plus_Jakarta_Sans'] font-extrabold text-xl">
+          <span className="text-primary">Canggu</span>
+          <span className="text-accent">.ai</span>
+        </span>
       </a>
 
       <div className="hidden md:flex items-center gap-8">
