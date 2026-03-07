@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import logoLight from "@/assets/canggu-logo-light.png";
 
 const navLinks = [
   { label: "Funcionalidades", href: "#funcionalidades" },
