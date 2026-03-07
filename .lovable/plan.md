@@ -1,14 +1,18 @@
 
 
-# Atualizar logo do sistema
+# Remover "Site Próprio" e renomear seção de links
 
-## O que será feito
-1. **Substituir o asset** `src/assets/canggu-logo.png` pela nova imagem enviada
-2. **Aumentar o tamanho** do logo na sidebar de `h-8` para `h-12`
-3. **Aumentar o tamanho** do logo na tela de login de `h-14` para `h-20`
+## Alterações
 
-## Arquivos alterados
-- `src/assets/canggu-logo.png` — substituído pelo novo arquivo
-- `src/components/layout/AppSidebar.tsx` — linha 37: `className="h-8"` → `className="h-12"`
-- `src/pages/Login.tsx` — linha com o logo: `className="h-14"` → `className="h-20 mx-auto"`
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
+
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
+
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
