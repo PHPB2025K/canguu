@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import cangguLogo from '@/assets/canggu-logo.png';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useToast } from '@/hooks/use-toast';
