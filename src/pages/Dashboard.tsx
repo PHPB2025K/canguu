@@ -1,4 +1,4 @@
-import { MessageSquare, Clock, CheckCircle, AlertTriangle, DollarSign, Smile, Store } from "lucide-react";
+import { MessageSquare, Clock, CheckCircle, AlertTriangle, DollarSign, Smile } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { KPICard } from "@/components/common/KPICard";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -13,7 +13,6 @@ import {
   useTodayAnalytics,
   useConversationsByHour,
   useRecentConversations,
-  useMLQuestionsToday,
 } from "@/hooks/useDashboardData";
 import { formatCurrency } from "@/lib/formatters";
 import { usePageTitle } from "@/hooks/usePageTitle";
@@ -32,7 +31,7 @@ const Dashboard = () => {
   const analytics = useTodayAnalytics();
   const chartData = useConversationsByHour();
   const recentConvs = useRecentConversations();
-  const mlQuestions = useMLQuestionsToday();
+  
 
   const analyticsData = analytics.data;
   const avgResponseTime = analyticsData?.avg_response_time_ms
@@ -93,14 +92,6 @@ const Dashboard = () => {
           title="Custo Estimado"
           value={estimatedCostBRL}
           icon={DollarSign}
-        />
-
-        <KPICard
-          title="Perguntas ML Hoje"
-          value={mlQuestions.data?.total ?? 0}
-          icon={Store}
-          iconClassName={(mlQuestions.data?.unanswered ?? 0) > 0 ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}
-          valueClassName={(mlQuestions.data?.unanswered ?? 0) > 0 ? "text-warning" : "text-success"}
         />
 
         <KPICard
