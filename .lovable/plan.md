@@ -1,19 +1,18 @@
 
 
-# Mostrar MLB do anúncio junto ao nome do produto
+# Remover "Site Próprio" e renomear seção de links
 
-## Alteração
+## Alterações
 
-### `src/components/marketplaces/QuestionCard.tsx` (linha 137)
+### 1. `src/hooks/useProducts.ts`
+- Remover `"site"` de `MARKETPLACE_PLATFORMS`
+- Remover entrada `site` de `MARKETPLACE_LABELS` e `MARKETPLACE_LINK_PLACEHOLDERS`
 
-Atualizar a exibição do nome do produto para incluir o `platform_item_id` (ex: MLB3343832496) ao lado do título:
+### 2. `src/components/products/ProductDialog.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-```
-Produto Nome Aqui  MLB3343832496
-```
+### 3. `src/pages/ProductDetail.tsx`
+- Alterar título "Links dos Anúncios" para "Links do Anúncio nos Marketplaces"
 
-- Nome do produto em `font-medium`
-- ID do anúncio (`platform_item_id`) em `text-muted-foreground` com tamanho menor, ao lado do nome
-
-Nenhuma outra alteração necessária — o campo `platform_item_id` já existe no tipo `MarketplaceQuestion`.
+O campo "Link Site" já existe em ambos os formulários e continuará funcionando normalmente para o link do site próprio.
 
