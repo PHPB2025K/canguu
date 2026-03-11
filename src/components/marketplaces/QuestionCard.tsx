@@ -134,7 +134,12 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
 
       {/* Body */}
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">{question.product_name}</p>
+        <p className="text-sm font-medium text-foreground">
+          {question.product_name}
+          {question.platform_item_id && (
+            <span className="ml-1.5 text-xs font-normal text-muted-foreground">{question.platform_item_id}</span>
+          )}
+        </p>
         <p className="text-sm text-foreground">{question.question_text}</p>
         <p className="text-xs text-muted-foreground">
           <User className="inline h-3 w-3 mr-1" />
