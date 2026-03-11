@@ -36,7 +36,7 @@ function AiResponseTimeBadge({ ms }: { ms: number }) {
 }
 
 function AnsweredByBadge({ answeredBy }: { answeredBy: string }) {
-  if (answeredBy === 'ai_agent') {
+  if (answeredBy === 'ai_agent' || answeredBy === 'ai') {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
         <Bot className="h-3 w-3" />
