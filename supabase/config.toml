@@ -1,1 +1,7 @@
 project_id = "jpacmloqsfiebvagfomt"
+
+[functions.ml-webhook]
+verify_jwt = false
+
+[functions.sync-product-embedding]
+verify_jwt = false
