@@ -17,6 +17,7 @@ const statusConfig: Record<string, { label: string; className: string; icon: typ
   ai_suggested: { label: 'Sugestão IA', className: 'bg-primary/10 text-primary', icon: Sparkles },
   failed: { label: 'Erro', className: 'bg-destructive/10 text-destructive', icon: AlertCircle },
   skipped: { label: 'Ignorada', className: 'bg-muted text-muted-foreground', icon: MinusCircle },
+  already_answered: { label: 'Respondida externamente', className: 'bg-warning/15 text-warning', icon: CheckCircle },
 };
 
 function AiResponseTimeBadge({ ms }: { ms: number }) {
@@ -67,6 +68,10 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
     : '';
 
   const isFailed = question.status === 'failed';
+  const isAlreadyAnswered = question.status === 'already_answered';
+  const isSkipped = question.status === 'skipped';
+  const hasErrorMessage = !!question.error_message;
+  const hasAiSuggestion = !!question.ai_suggested_answer;
 
   const handleApprove = () => {
     if (!question.ai_suggested_answer) return;
@@ -121,7 +126,7 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
         </div>
         <div className="flex items-center gap-1.5">
           {question.answered_by && <AnsweredByBadge answeredBy={question.answered_by} />}
-          {isFailed && question.error_message ? (
+          {(isFailed || isAlreadyAnswered || isSkipped) && hasErrorMessage ? (
             <Tooltip>
               <TooltipTrigger asChild>{statusBadge}</TooltipTrigger>
               <TooltipContent className="max-w-xs text-xs">{question.error_message}</TooltipContent>
@@ -150,12 +155,12 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
       {/* Expanded */}
       {expanded && (
         <div className="mt-4 space-y-3" onClick={(e) => e.stopPropagation()}>
-          {/* AI suggestion */}
-          {question.status === 'ai_suggested' && question.ai_suggested_answer && (
+          {/* AI suggestion (pending approval) */}
+          {question.status === 'ai_suggested' && hasAiSuggestion && (
             <div className="bg-porcelain border border-dashed border-primary rounded-lg p-4">
               <div className="flex items-center gap-1.5 mb-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium text-primary">Sugestão da Giovana</span>
+                <span className="text-sm font-medium text-primary">Sugestão da Ana</span>
               </div>
               <p className="text-sm text-foreground mb-3">{question.ai_suggested_answer}</p>
               <div className="flex gap-2">
@@ -177,17 +182,72 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
             <div className="bg-muted rounded-lg p-4">
               <p className="text-sm text-foreground">{question.answer_text}</p>
               <p className="text-xs text-muted-foreground mt-2">
-                Respondida por {question.answered_by === 'ai_agent' ? 'IA' : 'humano'}
+                Respondida por {question.answered_by === 'ai_agent' || question.answered_by === 'ai' ? 'IA' : 'humano'}
                 {question.answered_at && ` em ${format(new Date(question.answered_at), 'dd/MM/yyyy HH:mm')}`}
               </p>
             </div>
           )}
 
-          {/* Failed display */}
-          {isFailed && question.error_message && (
-            <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
-              <p className="text-sm text-destructive font-medium mb-1">Erro ao processar</p>
-              <p className="text-xs text-muted-foreground">{question.error_message}</p>
+          {/* Already answered externally — show explanation + AI suggestion */}
+          {isAlreadyAnswered && (
+            <div className="space-y-3">
+              {hasErrorMessage && (
+                <div className="bg-warning/5 border border-warning/20 rounded-lg p-4">
+                  <p className="text-sm text-warning font-medium mb-1">Respondida por outro canal</p>
+                  <p className="text-xs text-muted-foreground">{question.error_message}</p>
+                </div>
+              )}
+              {hasAiSuggestion && (
+                <div className="bg-muted border border-dashed border-primary/30 rounded-lg p-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">Resposta que a IA tinha preparado</span>
+                  </div>
+                  <p className="text-sm text-foreground">{question.ai_suggested_answer}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Skipped (item inactive) — show explanation + AI suggestion if available */}
+          {isSkipped && (
+            <div className="space-y-3">
+              {hasErrorMessage && (
+                <div className="bg-muted border border-border rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground font-medium mb-1">Motivo</p>
+                  <p className="text-xs text-muted-foreground">{question.error_message}</p>
+                </div>
+              )}
+              {hasAiSuggestion && (
+                <div className="bg-muted border border-dashed border-primary/30 rounded-lg p-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">Resposta que a IA tinha preparado</span>
+                  </div>
+                  <p className="text-sm text-foreground">{question.ai_suggested_answer}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Failed display — show error + AI suggestion if available */}
+          {isFailed && (
+            <div className="space-y-3">
+              {hasErrorMessage && (
+                <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
+                  <p className="text-sm text-destructive font-medium mb-1">Erro ao processar</p>
+                  <p className="text-xs text-muted-foreground">{question.error_message}</p>
+                </div>
+              )}
+              {hasAiSuggestion && (
+                <div className="bg-muted border border-dashed border-primary/30 rounded-lg p-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">Resposta que a IA tinha preparado</span>
+                  </div>
+                  <p className="text-sm text-foreground">{question.ai_suggested_answer}</p>
+                </div>
+              )}
             </div>
           )}
 

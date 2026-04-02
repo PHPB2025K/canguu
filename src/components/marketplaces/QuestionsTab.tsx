@@ -57,6 +57,7 @@ export function QuestionsTab() {
             <SelectItem value="unanswered">Não Respondidas</SelectItem>
             <SelectItem value="answered">Respondidas</SelectItem>
             <SelectItem value="ai_suggested">Sugestão IA</SelectItem>
+            <SelectItem value="already_answered">Respondida externamente</SelectItem>
             <SelectItem value="failed">Erro</SelectItem>
             <SelectItem value="skipped">Ignoradas</SelectItem>
           </SelectContent>
