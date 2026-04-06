@@ -291,7 +291,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
           >
             <div className="flex items-center gap-2 mb-1">
               <span style={{ color: '#004D4D' }}>✨</span>
-              <span className="text-sm font-semibold" style={{ color: '#004D4D' }}>Conteúdo para Busca Inteligente</span>
+              <span className="text-sm font-semibold" style={{ color: '#004D4D' }}>Conteúdo para Busca Otimizada</span>
             </div>
             <p className="text-xs text-muted-foreground mb-4">
               Estes campos alimentam a busca da Ana. Quanto mais detalhado, melhor a IA encontra o produto.
