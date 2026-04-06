@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,8 @@ import {
   useProduct, useUpdateProduct,
   imagesToText, textToImages, dimensionsToText,
   extractAllMarketplacePrices, buildMarketplacePriceJson,
-  MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS,
+  extractAllMarketplaceLinks, buildMarketplaceLinkJson,
+  MARKETPLACE_PLATFORMS, MARKETPLACE_LABELS, MARKETPLACE_LINK_PLACEHOLDERS,
 } from "@/hooks/useProducts";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { ProductListingsSection } from "@/components/products/ProductListingsSection";
@@ -36,6 +37,8 @@ export default function ProductDetail() {
         material: product.material ?? "",
         price_site: product.price_site != null ? String(product.price_site) : "",
         mp_prices: extractAllMarketplacePrices(product.price_marketplace),
+        mp_links: extractAllMarketplaceLinks(product.marketplace_links),
+        site_link: product.site_link ?? "",
         stock_quantity: product.stock_quantity != null ? String(product.stock_quantity) : "0",
         dimensions: dimensionsToText(product.dimensions),
         short_description: product.short_description ?? "",
@@ -64,6 +67,8 @@ export default function ProductDetail() {
         material: form.material.trim() || null,
         price_site: form.price_site ? parseFloat(form.price_site) : null,
         price_marketplace: buildMarketplacePriceJson(form.mp_prices),
+        marketplace_links: buildMarketplaceLinkJson(form.mp_links),
+        site_link: form.site_link?.trim() || null,
         stock_quantity: form.stock_quantity ? parseInt(form.stock_quantity, 10) : 0,
         dimensions: form.dimensions.trim() ? { raw: form.dimensions.trim() } : null,
         short_description: form.short_description.trim() || null,
@@ -125,6 +130,45 @@ export default function ProductDetail() {
                   value={form.mp_prices?.[key] ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, mp_prices: { ...prev.mp_prices, [key]: e.target.value } }))}
                 />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="sm:col-span-2 space-y-2">
+          <Label className="text-sm font-semibold">Links de Anúncios</Label>
+          <div className="space-y-2">
+            <div>
+              <Label className="text-xs">Site Próprio</Label>
+              <div className="flex gap-1.5">
+                <Input
+                  type="url"
+                  placeholder="https://importadoragb.com.br/produto/..."
+                  value={form.site_link ?? ""}
+                  onChange={(e) => set("site_link", e.target.value)}
+                />
+                {form.site_link && (
+                  <Button type="button" variant="ghost" size="icon" className="shrink-0" asChild>
+                    <a href={form.site_link} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /></a>
+                  </Button>
+                )}
+              </div>
+            </div>
+            {MARKETPLACE_PLATFORMS.filter(k => k !== 'tiktok').map((key) => (
+              <div key={key}>
+                <Label className="text-xs">{MARKETPLACE_LABELS[key]}</Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    type="url"
+                    placeholder={MARKETPLACE_LINK_PLACEHOLDERS[key] ?? "https://..."}
+                    value={form.mp_links?.[key] ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, mp_links: { ...prev.mp_links, [key]: e.target.value } }))}
+                  />
+                  {form.mp_links?.[key] && (
+                    <Button type="button" variant="ghost" size="icon" className="shrink-0" asChild>
+                      <a href={form.mp_links[key]} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /></a>
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
