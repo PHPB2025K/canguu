@@ -275,40 +275,57 @@ export default function ProductDetail() {
         </div>
 
         {/* === Content-Rich Fields (feeds AI embeddings) === */}
-        <div className="sm:col-span-2 pt-4 border-t">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="sm:col-span-2 mt-2 -mx-4 px-4 py-5 rounded-xl bg-primary/[0.04] border border-primary/10">
+          <div className="flex items-center gap-2 mb-1">
             <Sparkles className="h-4 w-4 text-primary" />
-            <Label className="text-sm font-semibold">Conteúdo para IA</Label>
+            <Label className="text-sm font-semibold">Campos de Busca Inteligente</Label>
           </div>
-          <p className="text-xs text-muted-foreground mb-4">
-            Estes campos alimentam a busca inteligente da Ana. Quanto mais detalhado, melhor a IA encontra e descreve o produto para o cliente.
+          <p className="text-xs text-muted-foreground mb-5">
+            Estes campos alimentam a busca da Ana. Quanto mais detalhado, melhor a IA encontra e descreve o produto para o cliente.
           </p>
-        </div>
 
-        <div className="sm:col-span-2">
-          <Label>Descrição Curta</Label>
-          <p className="text-xs text-muted-foreground mb-1">Resumo em 1-2 frases do que é o produto</p>
-          <Textarea rows={2} value={form.short_description ?? ""} onChange={(e) => set("short_description", e.target.value)} />
-        </div>
-        <div className="sm:col-span-2">
-          <Label>Descrição Completa</Label>
-          <p className="text-xs text-muted-foreground mb-1">Detalhes técnicos, dimensões, composição do kit, compatibilidades</p>
-          <Textarea rows={5} value={form.full_description ?? ""} onChange={(e) => set("full_description", e.target.value)} />
-        </div>
-        <div className="sm:col-span-2">
-          <Label>Sugestões de Uso</Label>
-          <p className="text-xs text-muted-foreground mb-1">Cenários de uso: marmita, meal prep, decoração, presente... Mais cenários = mais fácil a IA encontrar</p>
-          <Textarea rows={3} value={form.usage_suggestions ?? ""} onChange={(e) => set("usage_suggestions", e.target.value)} />
-        </div>
-        <div className="sm:col-span-2">
-          <Label>Diferenciais</Label>
-          <p className="text-xs text-muted-foreground mb-1">O que diferencia: material, tecnologia, vedação, design</p>
-          <Textarea rows={3} value={form.differentials ?? ""} onChange={(e) => set("differentials", e.target.value)} />
-        </div>
-        <div className="sm:col-span-2">
-          <Label>Tags</Label>
-          <p className="text-xs text-muted-foreground mb-1">Palavras-chave separadas por vírgula: pote, vidro, hermético, marmita, fitness</p>
-          <Input value={form.tags ?? ""} onChange={(e) => set("tags", e.target.value)} placeholder="pote, vidro, hermético, marmita, fitness, geladeira" />
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Label>Descrição Curta</Label>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[10px] font-medium bg-primary/10 text-primary"><Sparkles className="h-2.5 w-2.5" />IA</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">Resumo em 1-2 frases do que é o produto</p>
+              <Textarea rows={2} className="bg-background" value={form.short_description ?? ""} onChange={(e) => set("short_description", e.target.value)} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Label>Descrição Completa</Label>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[10px] font-medium bg-primary/10 text-primary"><Sparkles className="h-2.5 w-2.5" />IA</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">Detalhes técnicos, dimensões, composição do kit, compatibilidades</p>
+              <Textarea rows={5} className="bg-background" value={form.full_description ?? ""} onChange={(e) => set("full_description", e.target.value)} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Label>Sugestões de Uso</Label>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[10px] font-medium bg-primary/10 text-primary"><Sparkles className="h-2.5 w-2.5" />IA</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">Cenários de uso: marmita, meal prep, decoração, presente... Mais cenários = mais fácil a IA encontrar</p>
+              <Textarea rows={3} className="bg-background" value={form.usage_suggestions ?? ""} onChange={(e) => set("usage_suggestions", e.target.value)} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Label>Diferenciais</Label>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[10px] font-medium bg-primary/10 text-primary"><Sparkles className="h-2.5 w-2.5" />IA</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">O que diferencia: material, tecnologia, vedação, design</p>
+              <Textarea rows={3} className="bg-background" value={form.differentials ?? ""} onChange={(e) => set("differentials", e.target.value)} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Label>Tags</Label>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[10px] font-medium bg-primary/10 text-primary"><Sparkles className="h-2.5 w-2.5" />IA</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">Palavras-chave separadas por vírgula: pote, vidro, hermético, marmita, fitness</p>
+              <Input className="bg-background" value={form.tags ?? ""} onChange={(e) => set("tags", e.target.value)} placeholder="pote, vidro, hermético, marmita, fitness, geladeira" />
+            </div>
+          </div>
         </div>
 
         {/* === Images === */}
