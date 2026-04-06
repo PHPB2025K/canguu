@@ -65,7 +65,8 @@ export function useConversationList(filters: ConversationFilters = {}) {
 
       return conversations.map((c) => ({ ...c, lastMessage: null }));
     },
-    staleTime: 30_000,
+    staleTime: 15_000,
+    refetchInterval: 15_000, // Polling fallback: refetch every 15s if Realtime fails
   });
 
   // Realtime subscription for conversation changes
@@ -73,6 +74,10 @@ export function useConversationList(filters: ConversationFilters = {}) {
     const channel = supabase
       .channel("conversations-list-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+        // New message in ANY conversation — refresh list to update last message preview
         queryClient.invalidateQueries({ queryKey: ["conversations"] });
       })
       .subscribe();
@@ -101,7 +106,8 @@ export function useConversationMessages(conversationId: string | null) {
       return data as Message[];
     },
     enabled: !!conversationId,
-    staleTime: 10_000,
+    staleTime: 5_000,
+    refetchInterval: 10_000, // Polling fallback: refetch every 10s if Realtime fails
   });
 
   // Realtime for new messages
@@ -157,21 +163,38 @@ export function useSendMessage() {
 
   return useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: string; content: string }) => {
-      const { data, error } = await supabase
-        .from("messages")
-        .insert({
-          conversation_id: conversationId,
-          sender: "human_agent",
-          content,
-          message_type: "text",
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      // 1. Call send-human-message Edge Function (saves to DB + sends via WhatsApp)
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Não autenticado");
+
+      const res = await fetch(
+        "https://jpacmloqsfiebvagfomt.supabase.co/functions/v1/send-human-message",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ conversationId, content }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Erro desconhecido" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const result = await res.json();
+
+      // Invalidate queries to refresh UI
+      queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+
+      return result;
     },
-    onError: () => {
-      toast({ title: "Erro ao enviar mensagem", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Erro ao enviar mensagem", description: err.message, variant: "destructive" });
     },
   });
 }
