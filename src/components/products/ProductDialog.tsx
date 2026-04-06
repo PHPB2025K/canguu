@@ -301,7 +301,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <Label htmlFor="short_description">Descrição Curta</Label>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>🎯 Alimenta a IA</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-1">Resumo em 1-2 frases do produto</p>
                 <Textarea id="short_description" rows={2} className="bg-white" value={form.short_description ?? ""} onChange={(e) => set("short_description", e.target.value)} />
@@ -309,7 +309,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <Label htmlFor="full_description">Descrição Completa</Label>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>🎯 Alimenta a IA</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-1">Detalhes técnicos, dimensões, composição do kit</p>
                 <Textarea id="full_description" rows={5} className="bg-white" value={form.full_description ?? ""} onChange={(e) => set("full_description", e.target.value)} />
@@ -317,7 +317,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <Label htmlFor="usage_suggestions">Sugestões de Uso</Label>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>🎯 Alimenta a IA</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-1">Cenários de uso: marmita, decoração, presente...</p>
                 <Textarea id="usage_suggestions" rows={3} className="bg-white" value={form.usage_suggestions ?? ""} onChange={(e) => set("usage_suggestions", e.target.value)} />
@@ -325,7 +325,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <Label htmlFor="differentials">Diferenciais</Label>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>🎯 Alimenta a IA</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-1">Material, tecnologia, vedação, design</p>
                 <Textarea id="differentials" rows={3} className="bg-white" value={form.differentials ?? ""} onChange={(e) => set("differentials", e.target.value)} />
@@ -333,7 +333,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <Label htmlFor="tags">Tags</Label>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>🎯 Alimenta a IA</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-1">Palavras-chave separadas por vírgula</p>
                 <Input id="tags" className="bg-white" value={form.tags ?? ""} onChange={(e) => set("tags", e.target.value)} placeholder="pote, vidro, hermético, marmita, fitness" />
