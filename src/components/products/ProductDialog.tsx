@@ -207,25 +207,59 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
             <Label htmlFor="dimensions">Dimensões</Label>
             <Input id="dimensions" value={form.dimensions} onChange={(e) => set("dimensions", e.target.value)} placeholder="Ex: 25x10x8cm" />
           </div>
-          <div>
-            <Label htmlFor="short_description">Descrição Curta</Label>
-            <Textarea id="short_description" rows={2} value={form.short_description} onChange={(e) => set("short_description", e.target.value)} />
+          {/* === Content-Rich Fields (feeds AI embeddings) === */}
+          <div
+            className="sm:col-span-2 mt-2 py-5 px-5 rounded-xl"
+            style={{ borderLeft: '4px solid #004D4D', backgroundColor: 'rgba(126, 173, 173, 0.06)' }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span style={{ color: '#004D4D' }}>✨</span>
+              <span className="text-sm font-semibold" style={{ color: '#004D4D' }}>Conteúdo para Busca Inteligente</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Estes campos alimentam a busca da Ana. Quanto mais detalhado, melhor a IA encontra o produto.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <Label htmlFor="short_description">Descrição Curta</Label>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-1">Resumo em 1-2 frases do produto</p>
+                <Textarea id="short_description" rows={2} className="bg-white" value={form.short_description} onChange={(e) => set("short_description", e.target.value)} />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <Label htmlFor="full_description">Descrição Completa</Label>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-1">Detalhes técnicos, dimensões, composição do kit</p>
+                <Textarea id="full_description" rows={4} className="bg-white" value={form.full_description} onChange={(e) => set("full_description", e.target.value)} />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <Label htmlFor="usage_suggestions">Sugestões de Uso</Label>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-1">Cenários de uso: marmita, decoração, presente...</p>
+                <Textarea id="usage_suggestions" rows={2} className="bg-white" value={form.usage_suggestions} onChange={(e) => set("usage_suggestions", e.target.value)} />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <Label htmlFor="differentials">Diferenciais</Label>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: 'rgba(126,173,173,0.12)', color: '#004D4D', border: '1px solid rgba(126,173,173,0.25)' }}>✨ Alimenta a IA</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-1">Material, tecnologia, vedação, design</p>
+                <Textarea id="differentials" rows={2} className="bg-white" value={form.differentials} onChange={(e) => set("differentials", e.target.value)} />
+              </div>
+            </div>
           </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="full_description">Descrição Completa</Label>
-            <Textarea id="full_description" rows={4} value={form.full_description} onChange={(e) => set("full_description", e.target.value)} />
-          </div>
+
+          {/* === Images (NOT an AI field) === */}
           <div className="sm:col-span-2">
             <Label htmlFor="images">Imagens (URLs, uma por linha)</Label>
             <Textarea id="images" rows={3} value={form.images} onChange={(e) => set("images", e.target.value)} placeholder="Cole URLs de imagens, uma por linha" />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="usage_suggestions">Sugestões de Uso</Label>
-            <Textarea id="usage_suggestions" rows={2} value={form.usage_suggestions} onChange={(e) => set("usage_suggestions", e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="differentials">Diferenciais</Label>
-            <Textarea id="differentials" rows={2} value={form.differentials} onChange={(e) => set("differentials", e.target.value)} />
           </div>
           <div className="flex items-center gap-3 pt-6">
             <Switch id="is_active" checked={form.is_active} onCheckedChange={(v) => set("is_active", v)} />
