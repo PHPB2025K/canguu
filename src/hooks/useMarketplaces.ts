@@ -291,3 +291,65 @@ export function useRejectSuggestion() {
     },
   });
 }
+
+// ─── Feedback & Corrections ─────────────────────────────────────
+
+export function useFeedbackQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ questionId, feedback }: { questionId: string; feedback: 'good' | 'bad' }) => {
+      const { error } = await supabase
+        .from('marketplace_questions' as any)
+        .update({ feedback, feedback_at: new Date().toISOString() } as any)
+        .eq('id', questionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketplace-questions'] });
+    },
+  });
+}
+
+export function useSubmitCorrection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (correction: {
+      questionId: string;
+      productSku: string | null;
+      originalQuestion: string;
+      aiResponse: string | null;
+      recommendedResponse: string;
+    }) => {
+      const { error: corrError } = await supabase
+        .from('response_corrections' as any)
+        .insert({
+          question_id: correction.questionId,
+          product_sku: correction.productSku,
+          original_question: correction.originalQuestion,
+          ai_response: correction.aiResponse,
+          recommended_response: correction.recommendedResponse,
+          corrected_by: 'admin',
+          status: 'pending',
+        } as any);
+      if (corrError) throw corrError;
+
+      await supabase
+        .from('marketplace_questions' as any)
+        .update({ feedback: 'bad', feedback_at: new Date().toISOString() } as any)
+        .eq('id', correction.questionId);
+
+      // Fire-and-forget: trigger embedding generation
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        fetch('https://jpacmloqsfiebvagfomt.supabase.co/functions/v1/process-correction-embedding', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).catch(() => {});
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketplace-questions'] });
+    },
+  });
+}

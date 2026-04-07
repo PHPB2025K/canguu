@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { PlatformBadge } from './PlatformBadge';
-import { useAnswerQuestion, useRejectSuggestion } from '@/hooks/useMarketplaces';
+import { useAnswerQuestion, useRejectSuggestion, useFeedbackQuestion, useSubmitCorrection } from '@/hooks/useMarketplaces';
 import { useToast } from '@/hooks/use-toast';
 import type { MarketplaceQuestion } from '@/types/database';
 
@@ -56,9 +56,13 @@ function AnsweredByBadge({ answeredBy }: { answeredBy: string }) {
 export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
   const [expanded, setExpanded] = useState(false);
   const [manualAnswer, setManualAnswer] = useState('');
+  const [showCorrectionForm, setShowCorrectionForm] = useState(false);
+  const [correctionText, setCorrectionText] = useState('');
   const { toast } = useToast();
   const answerMutation = useAnswerQuestion();
   const rejectMutation = useRejectSuggestion();
+  const feedbackMutation = useFeedbackQuestion();
+  const correctionMutation = useSubmitCorrection();
 
   const status = statusConfig[question.status] ?? statusConfig.unanswered;
   const StatusIcon = status.icon;
@@ -246,6 +250,83 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
                     <span className="text-sm font-medium text-primary">Resposta que a IA tinha preparado</span>
                   </div>
                   <p className="text-sm text-foreground">{question.ai_suggested_answer}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── Feedback buttons (for answered questions) ─── */}
+          {(question.status === 'answered' || isAlreadyAnswered) && (question.answer_text || hasAiSuggestion) && (
+            <div className="space-y-3">
+              {/* Show "Corrigido" badge if already has feedback=bad */}
+              {(question as any).feedback === 'bad' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                  📝 Corrigido
+                </span>
+              )}
+
+              {/* Feedback buttons — only if no feedback yet */}
+              {!(question as any).feedback && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">A resposta foi boa?</span>
+                  <Button
+                    size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      feedbackMutation.mutate({ questionId: question.id, feedback: 'good' });
+                      toast({ title: '👍 Resposta aprovada' });
+                    }}
+                    disabled={feedbackMutation.isPending}
+                  >
+                    👍
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                    onClick={() => setShowCorrectionForm(true)}
+                    disabled={feedbackMutation.isPending}
+                  >
+                    👎
+                  </Button>
+                </div>
+              )}
+
+              {/* Correction form */}
+              {showCorrectionForm && (
+                <div className="border border-amber-200 bg-amber-50/50 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-medium text-amber-800">Como a Ana deveria ter respondido?</p>
+                  <Textarea
+                    rows={3}
+                    placeholder="Escreva a resposta correta que a Ana deveria ter dado..."
+                    value={correctionText}
+                    onChange={(e) => setCorrectionText(e.target.value)}
+                    className="bg-white text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!correctionText.trim() || correctionMutation.isPending}
+                      onClick={() => {
+                        correctionMutation.mutate({
+                          questionId: question.id,
+                          productSku: question.platform_item_id ?? null,
+                          originalQuestion: question.question_text,
+                          aiResponse: question.answer_text ?? question.ai_suggested_answer ?? null,
+                          recommendedResponse: correctionText.trim(),
+                        }, {
+                          onSuccess: () => {
+                            toast({ title: '✅ Correção salva', description: 'A Ana vai aprender com isso na próxima pergunta similar.' });
+                            setShowCorrectionForm(false);
+                            setCorrectionText('');
+                          },
+                        });
+                      }}
+                      style={{ backgroundColor: '#004D4D', color: 'white' }}
+                    >
+                      {correctionMutation.isPending ? 'Salvando...' : 'Ensinar a Ana'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setShowCorrectionForm(false); setCorrectionText(''); }}>
+                      Cancelar
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
