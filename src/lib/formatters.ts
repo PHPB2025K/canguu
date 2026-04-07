@@ -3,8 +3,15 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("55") && digits.length >= 12) {
+  let digits = phone.replace(/\D/g, "");
+
+  // Normalize: some phones stored without country code — add 55 if looks like BR number
+  if (!digits.startsWith("55") && digits.length >= 10 && digits.length <= 11) {
+    digits = "55" + digits;
+  }
+
+  // Brazilian format: 55 + DDD(2) + number(8-9)
+  if (digits.startsWith("55") && digits.length >= 12 && digits.length <= 13) {
     const ddd = digits.slice(2, 4);
     const number = digits.slice(4);
     if (number.length === 9) {
@@ -14,6 +21,12 @@ export function formatPhone(phone: string): string {
       return `(${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
     }
   }
+
+  // International or unknown format — add + prefix and group digits
+  if (digits.length > 8) {
+    return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+  }
+
   return phone;
 }
 
