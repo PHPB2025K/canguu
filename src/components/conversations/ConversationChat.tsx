@@ -80,7 +80,7 @@ export function ConversationChat({ conversationId, onBack, showBackButton }: Con
             </Button>
           )}
           <div className="min-w-0">
-            <p className="font-medium text-foreground text-sm truncate">{customer?.name || "Sem nome"}</p>
+            <p className="font-medium text-foreground text-sm truncate">{customer?.name || (customer?.phone ? formatPhone(customer.phone) : "Sem identificação")}</p>
             <p className="text-xs text-muted-foreground">{customer?.phone ? formatPhone(customer.phone) : ""}</p>
           </div>
         </div>
