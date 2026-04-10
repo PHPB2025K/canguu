@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { SentimentBadge } from "@/components/common/SentimentBadge";
 import { LoadingState } from "@/components/common/LoadingState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { formatPhone } from "@/lib/formatters";
+import { formatPhone, displayName } from "@/lib/formatters";
 import { useConversationMessages, useConversationDetail, useSendMessage, useUpdateAssignment } from "@/hooks/useConversations";
 import { MessageBubble } from "./MessageBubble";
 import { DateSeparator } from "./DateSeparator";
@@ -80,7 +80,7 @@ export function ConversationChat({ conversationId, onBack, showBackButton }: Con
             </Button>
           )}
           <div className="min-w-0">
-            <p className="font-medium text-foreground text-sm truncate">{customer?.name || (customer?.phone ? formatPhone(customer.phone) : "Sem identificação")}</p>
+            <p className="font-medium text-foreground text-sm truncate">{displayName(customer?.name, customer?.phone)}</p>
             <p className="text-xs text-muted-foreground">{customer?.phone ? formatPhone(customer.phone) : ""}</p>
           </div>
         </div>

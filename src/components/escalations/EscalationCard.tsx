@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UrgencyBadge } from "@/components/common/UrgencyBadge";
 import { RelativeTime } from "@/components/common/RelativeTime";
-import { formatPhone, truncateText } from "@/lib/formatters";
+import { formatPhone, truncateText, displayName } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { EscalationWithMessages } from "@/hooks/useEscalations";
 
@@ -51,7 +51,7 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
       <div className="mt-3">
         {customer && (
           <p className="text-sm text-muted-foreground">
-            {customer.name ?? "Sem nome"} · {formatPhone(customer.phone)}
+            {displayName(customer.name, customer.phone)}
           </p>
         )}
         <p className="text-foreground mt-2">{escalation.reason}</p>

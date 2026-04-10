@@ -2,6 +2,27 @@ export function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+/** Display name for a contact: name > formatted phone > fallback */
+export function displayName(name: string | null | undefined, phone: string | null | undefined): string {
+  if (name && name.trim()) return name.trim();
+  if (phone && phone.trim()) return formatPhone(phone);
+  return "Contato";
+}
+
+/** Short initials for avatar: first 2 chars of name or phone */
+export function displayInitials(name: string | null | undefined, phone: string | null | undefined): string {
+  if (name && name.trim()) {
+    return name.trim().split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  }
+  if (phone) {
+    const formatted = formatPhone(phone);
+    // Use last 2 digits for numeric avatar
+    const digits = phone.replace(/\D/g, "");
+    return digits.slice(-2);
+  }
+  return "??";
+}
+
 export function formatPhone(phone: string): string {
   let digits = phone.replace(/\D/g, "");
 

@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, ArrowUpDown } from "lucide-react";
-import { formatPhone } from "@/lib/formatters";
+import { formatPhone, displayName } from "@/lib/formatters";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -54,7 +54,7 @@ export function CustomerTable({ customers, sortColumn, sortDirection, onSort }: 
           const extra = tags.length - 2;
           return (
             <TableRow key={c.id} className="cursor-pointer hover:bg-porcelain transition-colors" onClick={() => navigate(`/customers/${c.id}`)}>
-              <TableCell className="font-medium text-foreground">{c.name || "Sem nome"}</TableCell>
+              <TableCell className="font-medium text-foreground">{displayName(c.name, c.phone)}</TableCell>
               <TableCell className="text-muted-foreground">{formatPhone(c.phone)}</TableCell>
               <TableCell>
                 {c.source ? (

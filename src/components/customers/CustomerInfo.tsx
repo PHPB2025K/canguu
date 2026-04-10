@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatPhone } from "@/lib/formatters";
+import { formatPhone, displayName, displayInitials } from "@/lib/formatters";
 import type { Tables } from "@/integrations/supabase/types";
 
 const sourceColors: Record<string, string> = {
@@ -24,9 +24,9 @@ export function CustomerInfo({ customer }: CustomerInfoProps) {
       <CardContent className="p-6 space-y-4">
         <div className="flex flex-col items-center gap-3">
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-xl font-bold text-foreground">
-            {getInitials(customer.name)}
+            {displayInitials(customer.name, customer.phone)}
           </div>
-          <h2 className="text-xl font-bold text-foreground">{customer.name || "Sem nome"}</h2>
+          <h2 className="text-xl font-bold text-foreground">{displayName(customer.name, customer.phone)}</h2>
         </div>
         <div className="space-y-2 text-sm">
           <p className="text-muted-foreground">{formatPhone(customer.phone)}</p>

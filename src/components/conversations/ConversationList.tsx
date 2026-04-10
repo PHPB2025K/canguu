@@ -10,7 +10,7 @@ import { RelativeTime } from "@/components/common/RelativeTime";
 import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { useConversationList } from "@/hooks/useConversations";
-import { truncateText, formatPhone } from "@/lib/formatters";
+import { truncateText, displayName, displayInitials } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 interface ConversationListProps {
@@ -127,14 +127,14 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
                 >
                   {/* Avatar */}
                   <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground shrink-0">
-                    {getInitials(conv.customers?.name || (conv.customers?.phone ? formatPhone(conv.customers.phone).slice(0, 2) : "??"))}
+                    {displayInitials(conv.customers?.name, conv.customers?.phone)}
                   </div>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-foreground text-sm truncate">
-                        {conv.customers?.name || (conv.customers?.phone ? formatPhone(conv.customers.phone) : "Sem identificação")}
+                        {displayName(conv.customers?.name, conv.customers?.phone)}
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {isUnread && <div className="w-2 h-2 bg-primary rounded-full" />}

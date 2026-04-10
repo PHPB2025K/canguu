@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { MessageSquare } from "lucide-react";
+import { displayName, displayInitials } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -54,13 +55,13 @@ export function RecentConversations({ conversations, isLoading }: RecentConversa
               >
                 <Avatar className="h-9 w-9 shrink-0">
                   <AvatarFallback className="text-xs bg-muted text-muted-foreground">
-                    {getInitials(c.customers?.name)}
+                    {displayInitials(c.customers?.name, c.customers?.phone)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm text-foreground truncate">
-                      {c.customers?.name || c.customers?.phone || "Desconhecido"}
+                      {displayName(c.customers?.name, c.customers?.phone)}
                     </span>
                     {c.updated_at && (
                       <RelativeTime date={c.updated_at} className="text-xs text-muted-foreground shrink-0" />
