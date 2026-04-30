@@ -22,7 +22,7 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 import { handleCors, jsonResponse } from '../_shared/cors.ts'
 import { supabase } from '../_shared/supabase-client.ts'
-import { parseWebhookPayload, getMediaBase64, sendList } from '../_shared/evolution-api.ts'
+import { parseWebhookPayload, getMediaBase64, sendText } from '../_shared/evolution-api.ts'
 import { getConfig } from '../_shared/config.ts'
 import { transcribeAudio } from '../_shared/groq-transcription.ts'
 import { analyzeVideo } from '../_shared/gemini-video.ts'
@@ -33,9 +33,9 @@ import type { ParsedWhatsAppMessage } from '../_shared/types.ts'
 // 24-hour session window (WhatsApp business rule)
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
 
-// Maps rowIds from the origin-poll list reply to the customers.source enum.
-// 'outro' falls back to the channel itself (whatsapp). Keep these row IDs in
-// sync with the rows passed to sendList() in STEP 4a.
+// Maps rowIds from the origin-poll list reply (legacy interactive button
+// path — kept around in case Evolution v2 + the customer's WhatsApp client
+// happens to render listMessage correctly) to customers.source.
 const ORIGIN_ROW_TO_SOURCE: Record<string, string> = {
   mercado_livre: 'mercado_livre',
   shopee: 'shopee',
@@ -43,6 +43,40 @@ const ORIGIN_ROW_TO_SOURCE: Record<string, string> = {
   site: 'site',
   outro: 'whatsapp',
 }
+
+// Free-text detector for the numbered origin poll. We accept both the
+// number (1, 2…) and the channel name typed loosely. Returns the
+// customers.source value or null if the text doesn't look like a reply.
+const ORIGIN_TEXT_PATTERNS: Array<{ source: string; patterns: RegExp[] }> = [
+  { source: 'mercado_livre', patterns: [/^\s*1[º°.)]?\s*$/i, /\bmercado\s*livre\b/i, /\bmeli\b/i, /\bml\b/i] },
+  { source: 'shopee',         patterns: [/^\s*2[º°.)]?\s*$/i, /\bshopee\b/i] },
+  { source: 'amazon',         patterns: [/^\s*3[º°.)]?\s*$/i, /\bamazon\b/i] },
+  { source: 'site',           patterns: [/^\s*4[º°.)]?\s*$/i, /\bsite\b/i, /\bbudamix\.com\b/i] },
+  { source: 'whatsapp',       patterns: [/^\s*5[º°.)]?\s*$/i, /\boutro\b/i, /\bnenhum\b/i] },
+]
+
+function matchOriginFromText(text: string): string | null {
+  if (!text) return null
+  // Strip emojis like 1️⃣ → 1 to make the regex friendlier
+  const cleaned = text.replace(/[\uFE0F\u20E3]/g, '').trim()
+  for (const { source, patterns } of ORIGIN_TEXT_PATTERNS) {
+    if (patterns.some(p => p.test(cleaned))) return source
+  }
+  return null
+}
+
+// Numbered text shown to the customer. Universal — works in every WhatsApp
+// client, no Business / Cloud API dependency.
+const ORIGIN_POLL_TEXT = `Bem-vindo à Budamix! 👋
+
+Antes de te ajudar, me conta de qual canal você está vindo?
+Responda apenas com o número:
+
+1️⃣ Mercado Livre
+2️⃣ Shopee
+3️⃣ Amazon
+4️⃣ Site Budamix (budamix.com.br)
+5️⃣ Outro`
 
 function log(step: string, data: Record<string, unknown>) {
   console.log(JSON.stringify({ fn: 'webhook-whatsapp', step, ts: new Date().toISOString(), ...data }))
@@ -128,15 +162,18 @@ serve(async (req: Request) => {
     })
 
     // ─── STEP 4a: ORIGIN POLL ────────────────────────────────────
-    // First contact ever for this customer? Send an interactive list asking
-    // which channel they came from instead of letting Ana reply. The picker
-    // becomes Ana's first turn; the customer's text ('olá', etc.) plus their
-    // chosen origin will be processed together on the next webhook.
+    // First contact for this customer? Send a numbered text picker (works in
+    // every WhatsApp client — listMessage failed silently in our tests).
     //
-    // If the inbound IS the customer's reply to the poll (button_reply with
-    // a known rowId), persist customers.source BEFORE Ana's pipeline runs so
-    // her context is correct.
+    // Reply detection (in priority order):
+    //   1. button_reply with selectedRowId — only if some client did render
+    //      the legacy listMessage and the customer actually clicked.
+    //   2. Free text (1-5, "Mercado Livre", "Shopee", …) when there's a
+    //      pending poll (last agent message has metadata.origin_poll=true)
+    //      and the customer's source is still null. We only treat the text
+    //      as a reply when the match is unambiguous.
     let skipAiPipeline = false
+
     if (parsed.messageType === 'button_reply' && parsed.selectedRowId) {
       const sourceFromRow = ORIGIN_ROW_TO_SOURCE[parsed.selectedRowId]
       if (sourceFromRow) {
@@ -144,33 +181,44 @@ serve(async (req: Request) => {
           .from('customers')
           .update({ source: sourceFromRow })
           .eq('id', customer.id)
-        log('origin_poll', { action: 'source_updated', source: sourceFromRow, rowId: parsed.selectedRowId })
+        log('origin_poll', { action: 'source_updated_from_button', source: sourceFromRow, rowId: parsed.selectedRowId })
+      }
+    } else if (!customer._isNew && customer.source == null && parsed.messageType === 'text' && parsed.content) {
+      // Look up the last agent message — if it was the origin poll, try to
+      // parse this customer reply as the answer.
+      const { data: lastAgent } = await supabase
+        .from('messages')
+        .select('metadata')
+        .eq('conversation_id', conversation.id)
+        .in('sender', ['agent', 'human_agent'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const lastWasPoll = (lastAgent?.metadata as { origin_poll?: boolean } | null | undefined)?.origin_poll === true
+      if (lastWasPoll) {
+        const matched = matchOriginFromText(parsed.content)
+        if (matched) {
+          await supabase
+            .from('customers')
+            .update({ source: matched })
+            .eq('id', customer.id)
+          log('origin_poll', { action: 'source_updated_from_text', source: matched, content: parsed.content.slice(0, 40) })
+        } else {
+          log('origin_poll', { action: 'text_did_not_match', content: parsed.content.slice(0, 40) })
+        }
       }
     } else if (customer._isNew && isNewConversation && conversation.assigned_to === 'agent') {
       try {
-        await sendList({
-          to: parsed.phone,
-          title: 'Bem-vindo à Budamix! 👋',
-          text: 'Antes de te ajudar, me conta de qual canal você está vindo? Selecione abaixo:',
-          buttonText: 'Selecionar canal',
-          rows: [
-            { rowId: 'mercado_livre', title: 'Mercado Livre' },
-            { rowId: 'shopee', title: 'Shopee' },
-            { rowId: 'amazon', title: 'Amazon' },
-            { rowId: 'site', title: 'Site Budamix (budamix.com.br)' },
-            { rowId: 'outro', title: 'Outro' },
-          ],
-          sectionTitle: 'Onde você nos encontrou?',
-        })
+        await sendText(parsed.phone, ORIGIN_POLL_TEXT)
         await supabase.from('messages').insert({
           conversation_id: conversation.id,
           sender: 'agent',
-          content: 'Bem-vindo à Budamix! 👋 Antes de te ajudar, me conta de qual canal você está vindo?',
+          content: ORIGIN_POLL_TEXT,
           message_type: 'text',
           metadata: { origin_poll: true },
         })
         skipAiPipeline = true
-        log('origin_poll', { action: 'sent', conversationId: conversation.id })
+        log('origin_poll', { action: 'sent_text', conversationId: conversation.id })
       } catch (err) {
         // If the poll fails to send, fall through to Ana's normal pipeline so
         // the customer still gets a response.
@@ -673,11 +721,11 @@ async function handleImageAnalysis(
 async function upsertCustomer(
   phone: string,
   pushName: string | null,
-): Promise<{ id: string; name: string | null; _isNew: boolean }> {
+): Promise<{ id: string; name: string | null; source: string | null; _isNew: boolean }> {
   // Try to find existing customer
   const { data: existing } = await supabase
     .from('customers')
-    .select('id, name')
+    .select('id, name, source')
     .eq('phone', phone)
     .limit(1)
     .maybeSingle()
@@ -690,16 +738,25 @@ async function upsertCustomer(
         .update({ name: pushName })
         .eq('id', existing.id)
     }
-    return { id: existing.id, name: existing.name ?? pushName, _isNew: false }
+    return {
+      id: existing.id,
+      name: existing.name ?? pushName,
+      source: (existing as { source?: string | null }).source ?? null,
+      _isNew: false,
+    }
   }
 
-  // Create new customer
+  // Create new customer.
+  // source stays NULL until the origin poll is answered — that way the
+  // admin only shows a platform badge (Mercado Livre / Shopee / …) for
+  // customers we actually identified, not for everyone who happens to
+  // come in via WhatsApp by default.
   const { data: newCustomer, error } = await supabase
     .from('customers')
     .insert({
       phone,
       name: pushName,
-      source: 'whatsapp',
+      source: null,
       first_contact_at: new Date().toISOString(),
       last_contact_at: new Date().toISOString(),
     })
@@ -711,19 +768,24 @@ async function upsertCustomer(
     // Try to fetch again
     const { data: retry } = await supabase
       .from('customers')
-      .select('id, name')
+      .select('id, name, source')
       .eq('phone', phone)
       .limit(1)
       .single()
 
     if (retry) {
-      return { id: retry.id, name: retry.name, _isNew: false }
+      return {
+        id: retry.id,
+        name: retry.name,
+        source: (retry as { source?: string | null }).source ?? null,
+        _isNew: false,
+      }
     }
 
     throw new Error(`Failed to create customer: ${error.message}`)
   }
 
-  return { id: newCustomer.id, name: newCustomer.name, _isNew: true }
+  return { id: newCustomer.id, name: newCustomer.name, source: null, _isNew: true }
 }
 
 

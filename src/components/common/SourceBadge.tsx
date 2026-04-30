@@ -22,16 +22,15 @@ const sourceConfig: Record<string, { label: string; className: string }> = {
     label: "Site Budamix",
     className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
   },
-  whatsapp: {
-    label: "WhatsApp",
-    className: "bg-muted text-muted-foreground",
-  },
+  // 'whatsapp' is the catch-all bucket (poll answered with "Outro" or never
+  // answered) — we intentionally don't render a badge for it so the admin
+  // only highlights customers whose channel of origin is actually known.
 };
 
 /**
  * Compact pill that shows the channel a customer originally came from.
- * Renders nothing for unknown / empty sources so the layout doesn't
- * sprout meaningless tags.
+ * Renders nothing for unknown / empty / generic sources so the layout
+ * only highlights customers we positively identified.
  */
 export function SourceBadge({ source, className }: SourceBadgeProps) {
   if (!source) return null;

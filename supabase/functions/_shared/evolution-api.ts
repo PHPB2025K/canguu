@@ -121,20 +121,23 @@ export async function sendList(args: {
   rows: Array<{ rowId: string; title: string; description?: string }>
   sectionTitle?: string
 }): Promise<unknown> {
-  const body = {
+  // Evolution v2 schema quirks observed in production:
+  //   - row `description` cannot be an empty string — omit it entirely
+  //   - top-level `footerText` is REQUIRED (validation rejects without it)
+  const body: Record<string, unknown> = {
     number: args.to,
     title: args.title,
     description: args.text,
     buttonText: args.buttonText,
-    footerText: args.footerText ?? '',
+    footerText: args.footerText && args.footerText.length > 0 ? args.footerText : 'Budamix',
     sections: [
       {
         title: args.sectionTitle ?? args.title,
-        rows: args.rows.map(r => ({
-          title: r.title,
-          rowId: r.rowId,
-          description: r.description ?? '',
-        })),
+        rows: args.rows.map(r => {
+          const row: Record<string, unknown> = { title: r.title, rowId: r.rowId }
+          if (r.description) row.description = r.description
+          return row
+        }),
       },
     ],
     delay: 800,
