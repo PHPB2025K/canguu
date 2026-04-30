@@ -1,7 +1,9 @@
-import { User, Bot, UserCheck, Mic, Image, FileText, Video } from "lucide-react";
+import { useState } from "react";
+import { User, Bot, UserCheck, Mic, Image, FileText, Video, Play } from "lucide-react";
 import { format } from "date-fns";
 import type { Message } from "@/types/database";
 import { cn } from "@/lib/utils";
+import { MediaLightbox } from "./MediaLightbox";
 
 interface MessageBubbleProps {
   message: Message;
@@ -67,6 +69,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isVideo = message.message_type === "video";
   const caption = isImage || isVideo ? extractCaption(message.content) : "";
 
+  // Lightbox open state — single bubble can host either an image or a video.
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const openMedia = () => setLightboxOpen(true);
+
   // Audio / document keep the legacy text label (no inline player yet)
   const fallbackLabel = !isImage && !isVideo ? getNonRenderableTypeLabel(message.message_type) : null;
 
@@ -108,8 +114,20 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     );
   }
 
+  const lightbox = (isImage && imageUrl) || (isVideo && videoUrl) ? (
+    <MediaLightbox
+      open={lightboxOpen}
+      onOpenChange={setLightboxOpen}
+      kind={isImage ? "image" : "video"}
+      url={isImage ? imageUrl : videoUrl}
+      caption={caption || null}
+      senderLabel={config.label}
+    />
+  ) : null;
+
   return (
     <div className={cn("flex", isCustomer ? "justify-start" : "justify-end")}>
+      {lightbox}
       <div className={cn("max-w-[75%] p-3", config.bubbleClass)}>
         <div className="flex items-center gap-1.5 mb-1">
           <Icon className={cn("h-3.5 w-3.5", config.labelClass)} />
@@ -118,14 +136,19 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
         {isImage && imageUrl ? (
           <div className="space-y-2">
-            <a href={imageUrl} target="_blank" rel="noopener noreferrer" className="block">
+            <button
+              type="button"
+              onClick={openMedia}
+              className="block w-full overflow-hidden rounded-lg ring-offset-background transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              aria-label="Abrir imagem em tamanho grande"
+            >
               <img
                 src={imageUrl}
                 alt={caption || "Imagem enviada pelo cliente"}
                 loading="lazy"
-                className="max-h-72 w-full rounded-lg object-cover"
+                className="max-h-72 w-full cursor-zoom-in object-cover transition hover:opacity-90"
               />
-            </a>
+            </button>
             {caption && (
               <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caption}</p>
             )}
@@ -137,12 +160,25 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         ) : isVideo && videoUrl ? (
           <div className="space-y-2">
-            <video
-              src={videoUrl}
-              controls
-              preload="metadata"
-              className="max-h-80 w-full rounded-lg bg-black"
-            />
+            <button
+              type="button"
+              onClick={openMedia}
+              className="group relative block w-full overflow-hidden rounded-lg bg-black ring-offset-background transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              aria-label="Abrir vídeo em tamanho grande"
+            >
+              <video
+                src={videoUrl}
+                preload="metadata"
+                muted
+                playsInline
+                className="max-h-80 w-full"
+              />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 transition group-hover:bg-black/30">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-lg transition group-hover:scale-105">
+                  <Play className="h-6 w-6 fill-foreground text-foreground" />
+                </div>
+              </div>
+            </button>
             {caption && (
               <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caption}</p>
             )}
