@@ -157,7 +157,7 @@ serve(async (req: Request) => {
             { rowId: 'mercado_livre', title: 'Mercado Livre' },
             { rowId: 'shopee', title: 'Shopee' },
             { rowId: 'amazon', title: 'Amazon' },
-            { rowId: 'site', title: 'Site Próprio (budamix.com.br)' },
+            { rowId: 'site', title: 'Site Budamix (budamix.com.br)' },
             { rowId: 'outro', title: 'Outro' },
           ],
           sectionTitle: 'Onde você nos encontrou?',

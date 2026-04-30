@@ -100,7 +100,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
               <SelectItem value="mercado_livre">Mercado Livre</SelectItem>
               <SelectItem value="shopee">Shopee</SelectItem>
               <SelectItem value="amazon">Amazon</SelectItem>
-              <SelectItem value="site">Site Próprio</SelectItem>
+              <SelectItem value="site">Site Budamix</SelectItem>
               <SelectItem value="whatsapp">Outro / WhatsApp</SelectItem>
             </SelectContent>
           </Select>

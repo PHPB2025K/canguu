@@ -19,7 +19,7 @@ const sourceConfig: Record<string, { label: string; className: string }> = {
     className: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200",
   },
   site: {
-    label: "Site",
+    label: "Site Budamix",
     className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
   },
   whatsapp: {
