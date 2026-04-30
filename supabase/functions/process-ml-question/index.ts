@@ -186,20 +186,27 @@ serve(async (req: Request) => {
     const faqs = faqsResult.data ?? []
 
     // ─── STEP 5a: SEARCH CORRECTIONS (learned from feedback) ──────
+    // Threshold lowered to 0.65 — questions on Mercado Livre vary a lot in
+    // surface form ("podem ir ao forno?" vs "uso em forno e microondas?")
+    // even when semantically identical. 0.85 was rejecting real matches and
+    // letting the LLM fall back to evasive boilerplate ("entre em contato
+    // conosco"), which violates ML rules and frustrates buyers.
     let correctionContext = ''
     try {
       const questionEmbedding = await generateEmbedding(body.question_text)
       const { data: corrections } = await supabase.rpc('search_corrections', {
         query_embedding: JSON.stringify(questionEmbedding),
-        match_threshold: 0.85,
+        match_threshold: 0.65,
         match_count: 3,
       })
       if (corrections && corrections.length > 0) {
-        const lines = corrections.map((c: { original_question: string; recommended_response: string; similarity: number }) =>
-          `Para perguntas como "${c.original_question}", a resposta correta e: "${c.recommended_response}"`
+        const lines = corrections.map((c: { original_question: string; recommended_response: string; similarity: number }, i: number) =>
+          `${i + 1}. Pergunta similar: "${c.original_question}"\n   RESPOSTA APROVADA: "${c.recommended_response}"\n   (similaridade ${(c.similarity * 100).toFixed(0)}%)`
         )
-        correctionContext = `\n\n## CORRECOES APRENDIDAS (use como referencia prioritaria)\n${lines.join('\n')}`
+        correctionContext = `\n\n## RESPOSTAS APROVADAS PARA PERGUNTAS SIMILARES (USE OBRIGATORIAMENTE)\n\nUm operador humano JÁ corrigiu como esta pergunta deve ser respondida. Você DEVE usar a resposta aprovada abaixo como base para a sua resposta — adapte só se necessário, mas mantenha o mesmo conteúdo informacional. NUNCA responda com "entre em contato conosco" se há uma resposta aprovada disponível.\n\n${lines.join('\n\n')}`
         log('corrections_found', { count: corrections.length, scores: corrections.map((c: { similarity: number }) => c.similarity) })
+      } else {
+        log('corrections_none_above_threshold', { threshold: 0.65 })
       }
     } catch (err) {
       log('corrections_search_failed', { error: String(err) })
