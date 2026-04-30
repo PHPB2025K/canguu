@@ -12,10 +12,45 @@ const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 const PLATFORM_MENTIONS = /\b(shopee|amazon|site\s+pr[oó]prio|whatsapp|wpp|instagram|facebook|telegram|tiktok\s*shop)\b/gi
 const CHUNK_SEPARATOR = /\\\\/g
 
+// HARD BLOCKERS — phrases that ask the buyer to reach out off-platform.
+// Mercado Livre forbids redirecting buyers to external channels and
+// answering "entre em contato conosco" leaks a poor brand perception
+// even on WhatsApp. When any of these matches, the response is REJECTED
+// (not just stripped) so the caller can substitute it with a verified
+// answer or a technical fallback.
+const FORBIDDEN_CONTACT_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /\bentre[m]?\s+em\s+contato\b/i,                       reason: 'entre em contato' },
+  { pattern: /\bentrar\s+em\s+contato\b/i,                          reason: 'entrar em contato' },
+  { pattern: /\bfale[m]?\s+conosco\b/i,                             reason: 'fale conosco' },
+  { pattern: /\bnos\s+(?:contate|chame|procure|envie|mande)\b/i,    reason: 'nos contate/envie' },
+  { pattern: /\bme\s+(?:chame|envie|mande|contate)\b/i,             reason: 'me chame/envie' },
+  { pattern: /\bcontate(?:[- ]nos|\s+nosso)\b/i,                    reason: 'contate-nos / contate nosso' },
+  { pattern: /\bcontact(?:[- ]nos|\s+nosso)\b/i,                    reason: 'contact-nos' },
+  { pattern: /\b(?:envie|mande|manda)\s+(?:uma\s+)?(?:mensagem|email)\b/i, reason: 'envie mensagem' },
+  { pattern: /\bestamos\s+(?:a|à)\s+disposi[çc][aã]o\b/i,           reason: 'estamos a disposição' },
+  { pattern: /\bpara\s+(?:mais|maiores)\s+(?:detalhes|informa[çc][õo]es)\b[^.]*\b(?:contat|fal[ae]|chame)\b/i, reason: 'para mais detalhes contate' },
+]
+
 export interface MLValidationResult {
   text: string
   warnings: string[]
   charCount: number
+  /** True when the response asked the buyer to reach out off-platform.
+   *  In that case `text` is empty — the caller must substitute it. */
+  forbiddenContactDetected?: boolean
+  forbiddenContactReasons?: string[]
+}
+
+/**
+ * Pure detector — does NOT mutate. Returns the human-readable reasons
+ * (`entre em contato`, etc.) so the caller can log and decide what to do.
+ */
+export function detectForbiddenContactRequest(text: string): string[] {
+  const matches: string[] = []
+  for (const { pattern, reason } of FORBIDDEN_CONTACT_PATTERNS) {
+    if (pattern.test(text)) matches.push(reason)
+  }
+  return matches
 }
 
 /**
@@ -44,6 +79,21 @@ function validateMLResponse(
 
   if (!text || text.trim().length === 0) {
     return { text: fallback, warnings: ['empty_response'], charCount: fallback.length }
+  }
+
+  // HARD BLOCK: caller is responsible for substituting the response when
+  // this fires — typically with a verified correction from search_corrections
+  // or a technical fallback. We do NOT try to "fix" the LLM output here
+  // because contextually-correct rewrites need product info we don't have.
+  const forbiddenReasons = detectForbiddenContactRequest(text)
+  if (forbiddenReasons.length > 0) {
+    return {
+      text: '', // empty signals the caller to substitute
+      warnings: [...forbiddenReasons.map(r => `forbidden_contact:${r}`)],
+      charCount: 0,
+      forbiddenContactDetected: true,
+      forbiddenContactReasons: forbiddenReasons,
+    }
   }
 
   let cleaned = text.trim()

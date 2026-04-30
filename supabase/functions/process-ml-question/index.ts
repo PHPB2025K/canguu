@@ -230,10 +230,59 @@ serve(async (req: Request) => {
     const tokensUsed = getTokensUsed(response)
 
     // ─── STEP 7: VALIDATE ─────────────────────────────────────────
-    const validated = validateMLQuestionResponse(rawAnswer)
+    let validated = validateMLQuestionResponse(rawAnswer)
 
     if (validated.warnings.length > 0) {
       log('validation_warnings', { warnings: validated.warnings })
+    }
+
+    // HARD GUARD — if the LLM still asked the buyer to reach out
+    // off-platform ("entre em contato conosco" etc.), substitute the
+    // response. Priority order:
+    //   1. Use the top-similarity correction if available.
+    //   2. Fall back to a neutral technical phrase that NEVER asks for
+    //      external contact.
+    // Either way, the original LLM output is logged for audit.
+    if (validated.forbiddenContactDetected) {
+      log('forbidden_contact_blocked', {
+        reasons: validated.forbiddenContactReasons,
+        original: rawAnswer.slice(0, 300),
+        question_id: body.question_id,
+      })
+
+      let substitute = ''
+      try {
+        const questionEmbedding = await generateEmbedding(body.question_text)
+        const { data: corrections } = await supabase.rpc('search_corrections', {
+          query_embedding: JSON.stringify(questionEmbedding),
+          match_threshold: 0.55, // even more permissive on this fallback
+          match_count: 1,
+        })
+        if (corrections && corrections.length > 0) {
+          substitute = corrections[0].recommended_response as string
+          log('forbidden_contact_substituted_by_correction', { similarity: corrections[0].similarity })
+        }
+      } catch (err) {
+        log('forbidden_contact_correction_lookup_failed', { error: String(err) })
+      }
+
+      if (!substitute || substitute.trim().length === 0) {
+        substitute = 'Para essa especificação técnica do produto, recomendo verificar a descrição completa do anúncio. Caso a informação não esteja lá, podemos atualizá-la.'
+        log('forbidden_contact_substituted_by_fallback', {})
+      }
+
+      // Re-run the validator on the substitute so it still gets cleaned
+      // (length cap, emoji strip, etc.) — and so we don't accidentally
+      // ship a substitute that itself contains a forbidden phrase.
+      validated = validateMLQuestionResponse(substitute)
+      if (validated.forbiddenContactDetected) {
+        // Last-resort safety: hardcoded answer that cannot violate.
+        validated = {
+          text: 'Obrigado pela pergunta. Vou verificar essa informação técnica e retorno em breve.',
+          warnings: ['hardcoded_safe_fallback'],
+          charCount: 90,
+        }
+      }
     }
 
     const responseTimeMs = Date.now() - startTime
