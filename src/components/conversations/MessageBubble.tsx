@@ -41,18 +41,18 @@ function extractCaption(content: string): string {
   return content.replace(MEDIA_PLACEHOLDER_RE, "").trim();
 }
 
-function getMediaUrls(metadata: Message["metadata"]): { imageUrl: string | null; videoUrl: string | null } {
+function getMediaUrls(metadata: Message["metadata"]): { imageUrl: string | null; videoUrl: string | null; audioUrl: string | null } {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return { imageUrl: null, videoUrl: null };
+    return { imageUrl: null, videoUrl: null, audioUrl: null };
   }
   const meta = metadata as Record<string, unknown>;
   const imageUrl = typeof meta.image_url === "string" ? meta.image_url : null;
   const videoUrl = typeof meta.video_url === "string" ? meta.video_url : null;
-  return { imageUrl, videoUrl };
+  const audioUrl = typeof meta.audio_url === "string" ? meta.audio_url : null;
+  return { imageUrl, videoUrl, audioUrl };
 }
 
 function getNonRenderableTypeLabel(type: string | null) {
-  if (type === "audio") return { icon: Mic, text: "Mensagem de áudio" };
   if (type === "document") return { icon: FileText, text: "Documento enviado" };
   return null;
 }
@@ -61,24 +61,25 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const config = senderConfig[message.sender] ?? senderConfig.customer;
   const isCustomer = message.sender === "customer";
   const Icon = config.icon;
-  const { imageUrl, videoUrl } = getMediaUrls(message.metadata);
+  const { imageUrl, videoUrl, audioUrl } = getMediaUrls(message.metadata);
   const time = message.created_at ? format(new Date(message.created_at), "HH:mm") : "";
 
-  // Inline media renderable in the admin (image and video)
+  // Inline media renderable in the admin
   const isImage = message.message_type === "image";
   const isVideo = message.message_type === "video";
+  const isAudio = message.message_type === "audio";
   const caption = isImage || isVideo ? extractCaption(message.content) : "";
 
   // Lightbox open state — single bubble can host either an image or a video.
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const openMedia = () => setLightboxOpen(true);
 
-  // Audio / document keep the legacy text label (no inline player yet)
-  const fallbackLabel = !isImage && !isVideo ? getNonRenderableTypeLabel(message.message_type) : null;
+  // Document still uses the legacy text label (no inline player)
+  const fallbackLabel = !isImage && !isVideo && !isAudio ? getNonRenderableTypeLabel(message.message_type) : null;
 
   // Split agent messages by \\ marker into chunks
   const isAgent = message.sender === "agent";
-  const chunks = isAgent && !fallbackLabel && !isImage && !isVideo && message.content.includes("\\\\")
+  const chunks = isAgent && !fallbackLabel && !isImage && !isVideo && !isAudio && message.content.includes("\\\\")
     ? message.content.split("\\\\").map((c) => c.trim()).filter(Boolean)
     : null;
 
@@ -187,6 +188,34 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <div className="flex items-center gap-2 text-sm text-foreground italic">
             <Video className="h-4 w-4" />
             Vídeo enviado (indisponível)
+          </div>
+        ) : isAudio && audioUrl ? (
+          <div className="space-y-1.5">
+            <audio
+              src={audioUrl}
+              controls
+              preload="metadata"
+              className="block w-full max-w-[280px]"
+            />
+            {/* Transcrição abaixo do player — Yasmin tanto ouve quanto lê */}
+            {message.content && (
+              <p className="text-xs text-muted-foreground italic">
+                <Mic className="mr-1 inline-block h-3 w-3" />
+                {message.content}
+              </p>
+            )}
+          </div>
+        ) : isAudio ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-sm text-foreground italic">
+              <Mic className="h-4 w-4" />
+              Mensagem de áudio
+            </div>
+            {message.content && (
+              <p className="text-xs text-muted-foreground italic whitespace-pre-wrap break-words">
+                {message.content}
+              </p>
+            )}
           </div>
         ) : fallbackLabel ? (
           <div className="flex items-center gap-2 text-sm text-foreground italic">

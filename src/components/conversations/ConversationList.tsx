@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SearchBar } from "@/components/common/SearchBar";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { SentimentBadge } from "@/components/common/SentimentBadge";
+import { SourceBadge } from "@/components/common/SourceBadge";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -28,20 +29,23 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
   const [status, setStatus] = useState<string>("");
   const [category, setCategory] = useState<string>("");
   const [sentiment, setSentiment] = useState<string>("");
+  const [source, setSource] = useState<string>("");
 
-  const hasFilters = !!status || !!category || !!sentiment || !!search;
+  const hasFilters = !!status || !!category || !!sentiment || !!search || !!source;
 
   const { data: conversations, isLoading } = useConversationList({
     status: status || undefined,
     category: category || undefined,
     sentiment: sentiment || undefined,
     search: search || undefined,
+    source: source || undefined,
   });
 
   const clearFilters = () => {
     setStatus("");
     setCategory("");
     setSentiment("");
+    setSource("");
     setSearch("");
   };
 
@@ -86,6 +90,18 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
               <SelectItem value="positivo">Positivo</SelectItem>
               <SelectItem value="negativo">Negativo</SelectItem>
               <SelectItem value="neutro">Neutro</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger className="h-8 text-xs w-[120px]">
+              <SelectValue placeholder="Plataforma" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mercado_livre">Mercado Livre</SelectItem>
+              <SelectItem value="shopee">Shopee</SelectItem>
+              <SelectItem value="amazon">Amazon</SelectItem>
+              <SelectItem value="site">Site Próprio</SelectItem>
+              <SelectItem value="whatsapp">Outro / WhatsApp</SelectItem>
             </SelectContent>
           </Select>
           {hasFilters && (
@@ -146,9 +162,10 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
                       {conv.lastMessage ? truncateText(conv.lastMessage.content, 60) : "Sem mensagens"}
                     </p>
-                    <div className="flex gap-1 mt-1">
+                    <div className="flex flex-wrap gap-1 mt-1">
                       {conv.status && <StatusBadge status={conv.status} className="text-[10px] px-1.5 py-0" />}
                       {conv.sentiment && <SentimentBadge sentiment={conv.sentiment} className="text-[10px] px-1.5 py-0" />}
+                      <SourceBadge source={conv.customers?.source} />
                     </div>
                   </div>
                 </button>

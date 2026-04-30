@@ -9,6 +9,8 @@ interface ConversationFilters {
   category?: string;
   sentiment?: string;
   search?: string;
+  /** customers.source — 'mercado_livre' | 'shopee' | 'amazon' | 'site' | 'whatsapp' */
+  source?: string;
 }
 
 export function useConversationList(filters: ConversationFilters = {}) {
@@ -39,6 +41,12 @@ export function useConversationList(filters: ConversationFilters = {}) {
             c.customers?.name?.toLowerCase().includes(s) ||
             c.customers?.phone?.toLowerCase().includes(s)
         );
+      }
+
+      // Source filter on the joined customer (Supabase doesn't filter joined
+      // fields cleanly without a view, so we slice in memory).
+      if (filters.source) {
+        conversations = conversations.filter((c) => c.customers?.source === filters.source);
       }
 
       // Fetch last message for each conversation

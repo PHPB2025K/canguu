@@ -1,0 +1,24 @@
+{
+  "event": "messages.upsert",
+  "instance": "BUDAMIX AI AGENT",
+  "data": {
+    "key": {
+      "remoteJid": "5519992979490@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0A0B0C1D2E3F4G5H6"
+    },
+    "pushName": "Pedro Teste",
+    "message": {
+      "conversation": "Oi, quero saber sobre a coqueteleira de 750ml"
+    },
+    "messageType": "conversation",
+    "messageTimestamp": 1709042400,
+    "status": "DELIVERY_ACK",
+    "instanceId": "budamix-ai-agent-instance",
+    "source": "web"
+  },
+  "sender": "5519992979490@s.whatsapp.net",
+  "date_time": "2026-02-27T14:00:00.000Z",
+  "server_url": "https://trottingtuna-evolution.cloudfy.live",
+  "apikey": "778242C1099E-4F88-BE0D-541FF3A71345"
+}
