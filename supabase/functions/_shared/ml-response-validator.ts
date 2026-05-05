@@ -1,8 +1,8 @@
 // ML Response Validator — Post-processes AI responses for Mercado Livre
 // Strips emojis, links, platform mentions, enforces char limits
 
-const ML_QUESTION_FALLBACK = 'Ola! Obrigado pela pergunta. Vou verificar essa informacao e retorno em breve. Qualquer outra duvida, estamos a disposicao!'
-const ML_MESSAGE_FALLBACK = 'Obrigado pela mensagem. Vamos verificar e retornamos em breve.'
+const ML_QUESTION_FALLBACK = 'Ola! Vou conferir essa informacao e te retorno em breve.'
+const ML_MESSAGE_FALLBACK = 'Obrigado pela mensagem. Vou conferir e te retorno em breve.'
 
 // Patterns to remove
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu
