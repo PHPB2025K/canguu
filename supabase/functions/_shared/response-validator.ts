@@ -10,6 +10,39 @@ const CONFIRMATION_WORDS = [
   'certo', 'beleza', 'maravilha', 'excelente', 'legal',
 ]
 
+// Ana atende 24/7. Defesa em profundidade contra LLM hallucination da
+// frase de horário comercial — regra 11 do system_prompt já proíbe, mas
+// a Ana ignorou 11x em fev-mar/2026. Quando o detector aciona, a resposta
+// inteira é substituída por uma versão segura — não tentamos "limpar"
+// porque o resto da mensagem provavelmente também está errado.
+const BUSINESS_HOURS_FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /\bsegunda\s+(?:a|à|e)\s+sexta\b/i,                                        reason: 'segunda a sexta' },
+  { pattern: /\b\d{1,2}\s*h(?:oras)?\s*(?:às|as|a|-|às\s+as)\s*\d{1,2}\s*h(?:oras)?\b/i, reason: 'janela Xh às Yh' },
+  { pattern: /\bhor[áa]rio\s+(?:de\s+atendimento|comercial|de\s+expediente|do\s+expediente)\b/i, reason: 'horário de atendimento/comercial/expediente' },
+  { pattern: /\bexpediente\b/i,                                                         reason: 'expediente' },
+  { pattern: /\bresponderemos\s+assim\s+que\s+poss[íi]vel\b/i,                          reason: 'responderemos assim que possível' },
+  { pattern: /\bretornaremos\s+(?:em\s+breve|assim\s+que)\b/i,                          reason: 'retornaremos em breve' },
+  { pattern: /\bfora\s+(?:de|do)\s+(?:hor[áa]rio|expediente)\b/i,                       reason: 'fora do horário' },
+  { pattern: /\batendimento\s+(?:est[áa]\s+)?fechad[oa]\b/i,                            reason: 'atendimento fechado' },
+  { pattern: /\bestamos\s+fechad[oa]s\b/i,                                              reason: 'estamos fechados' },
+  { pattern: /\bdeixe\s+sua\s+mensagem\b/i,                                             reason: 'deixe sua mensagem' },
+  { pattern: /\bretornar?\s+(?:depois|amanh[ãa]|na\s+segunda)\b/i,                      reason: 'retornar depois/amanhã/segunda' },
+]
+
+const BUSINESS_HOURS_SAFE_REPLY = 'Estou disponível 24 horas por dia, 7 dias por semana. Como posso te ajudar? 😊'
+
+/**
+ * Detector puro — não muta. Retorna razões legíveis pra log/análise.
+ * Exposto pra reutilização em testes e em outros pontos do pipeline.
+ */
+export function detectBusinessHoursLimit(text: string): string[] {
+  const matches: string[] = []
+  for (const { pattern, reason } of BUSINESS_HOURS_FORBIDDEN_PATTERNS) {
+    if (pattern.test(text)) matches.push(reason)
+  }
+  return matches
+}
+
 export interface ValidationResult {
   text: string
   warnings: string[]
@@ -31,6 +64,22 @@ export function validateResponse(text: string): ValidationResult {
       warnings: ['empty_response'],
       chunkCount: 1,
       totalChars: 74,
+    }
+  }
+
+  // HARD BLOCK: Ana atende 24/7. Substituir a resposta inteira (não tentar
+  // remendar) — uma resposta com "segunda a sexta" provavelmente também
+  // contém outras suposições erradas sobre horário/disponibilidade.
+  const businessHoursReasons = detectBusinessHoursLimit(text)
+  if (businessHoursReasons.length > 0) {
+    return {
+      text: BUSINESS_HOURS_SAFE_REPLY,
+      warnings: [
+        'business_hours_blocked_substituted',
+        ...businessHoursReasons.map(r => `forbidden_business_hours:${r}`),
+      ],
+      chunkCount: 1,
+      totalChars: BUSINESS_HOURS_SAFE_REPLY.length,
     }
   }
 

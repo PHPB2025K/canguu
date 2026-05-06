@@ -207,7 +207,15 @@ serve(async (req: Request) => {
           log('origin_poll', { action: 'text_did_not_match', content: parsed.content.slice(0, 40) })
         }
       }
-    } else if (customer._isNew && isNewConversation && conversation.assigned_to === 'agent') {
+    } else if ((customer._isNew || customer.source == null) && isNewConversation && conversation.assigned_to === 'agent') {
+      // Envia o origin poll quando:
+      //   (a) cliente é novo (primeiro contato absoluto) — caso óbvio, OU
+      //   (b) cliente já existia mas source ainda é NULL — caso de import
+      //       histórico ou criação por outro fluxo (ex: webhook ML/Shopee)
+      //       que não passou pelo poll. Cobre defensivamente o gap em que
+      //       customers existentes sem source nunca recebiam a pergunta.
+      // Loop está protegido: assim que source for preenchido (qualquer valor,
+      // incluindo 'whatsapp' = "outro"), a condição falha e o poll não repete.
       try {
         await sendText(parsed.phone, ORIGIN_POLL_TEXT)
         await supabase.from('messages').insert({
@@ -218,7 +226,11 @@ serve(async (req: Request) => {
           metadata: { origin_poll: true },
         })
         skipAiPipeline = true
-        log('origin_poll', { action: 'sent_text', conversationId: conversation.id })
+        log('origin_poll', {
+          action: 'sent_text',
+          conversationId: conversation.id,
+          reason: customer._isNew ? 'new_customer' : 'existing_customer_null_source',
+        })
       } catch (err) {
         // If the poll fails to send, fall through to Ana's normal pipeline so
         // the customer still gets a response.
