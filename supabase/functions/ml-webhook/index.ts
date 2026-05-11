@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateMLQuestionResponse } from "../_shared/ml-response-validator.ts";
 
 /* ───────────────────── helpers ───────────────────── */
 
@@ -154,9 +155,10 @@ REGRAS PARA PERGUNTAS DO MERCADO LIVRE:
 5. SEM links — o comprador já está no anúncio
 6. SEM saudação longa — vá direto ao ponto
 7. Responda EXATAMENTE o que foi perguntado
-8. Se não souber a resposta, diga "Por favor entre em contato conosco para mais detalhes sobre isso."
+8. Se não souber a resposta, diga que a informação não está confirmada no cadastro/anúncio e que será verificada internamente. NUNCA peça para o cliente entrar em contato, falar conosco, chamar no WhatsApp, mandar mensagem ou procurar atendimento.
 9. NUNCA invente informações que não estão no contexto do produto
 10. Use "Olá!" ou "Oi!" como saudação curta se necessário
+11. PROIBIÇÃO ABSOLUTA: não use nenhuma variação de "entre em contato conosco", "fale conosco", "nossa equipe técnica", "para mais detalhes", "chame a gente", "mande mensagem" ou redirecionamento para outro canal.
 
 CONTEXTO DO PRODUTO:
 ${productContext}`;
@@ -423,10 +425,23 @@ async function handleQuestion(resource: string, userId: number) {
       agentConfig,
       fullContext
     );
+    const validation = validateMLQuestionResponse(aiResult.answer);
+    if (validation.forbiddenContactDetected) {
+      log("forbidden_contact_blocked_before_ml_post", {
+        reasons: validation.forbiddenContactReasons,
+        original: aiResult.answer.slice(0, 300),
+        questionId,
+      });
+      aiResult.answer = "Olá! No momento essa informação técnica não está confirmada no cadastro do produto. Vamos verificar internamente e atualizar o anúncio quando necessário.";
+    } else {
+      aiResult.answer = validation.text;
+    }
+
     log("ai_answer_generated", {
       timeMs: aiResult.timeMs,
       tokens: aiResult.tokens,
       answerLength: aiResult.answer.length,
+      validationWarnings: validation.warnings,
     });
   } catch (e) {
     log("ai_generation_failed", { error: String(e) });
