@@ -443,16 +443,23 @@ serve(async (req: Request) => {
       dispatch: true,
     }
 
-    fetch(`${supabaseUrl}/functions/v1/process-message`, {
+    // EdgeRuntime.waitUntil keeps this function alive until the fetch
+    // completes — without it, the runtime suspends as soon as the response
+    // below is returned and the invoke to process-message is cancelled.
+    // Bug history: from 2026-05-08 to 2026-05-17, Ana stopped responding
+    // entirely because of this exact race (see decisoes/2026-05).
+    const invokeProcessMessage = fetch(`${supabaseUrl}/functions/v1/process-message`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${serviceRoleKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(processRequest),
-    }).catch(err => {
-      log('error', { step: 'invoke_process_message', error: String(err) })
     })
+      .then(r => log('invoke_process_message_ok', { status: r.status }))
+      .catch(err => log('error', { step: 'invoke_process_message', error: String(err) }))
+    // @ts-ignore — EdgeRuntime is provided by Supabase's Deno Deploy runtime
+    EdgeRuntime.waitUntil(invokeProcessMessage)
 
     log('dispatched', {
       conversationId: conversation.id,
