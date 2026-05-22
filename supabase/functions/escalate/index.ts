@@ -25,8 +25,13 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { supabase } from '../_shared/supabase-client.ts'
 import { sendText } from '../_shared/evolution-api.ts'
 
-// Fallback if notification_phone config is not set
-const DEFAULT_NOTIFICATION_PHONE = '5519992979490'
+// Fallback if notification_phone config is not set.
+// IMPORTANTE: este é o WhatsApp PESSOAL do Pedro Broglio (owner).
+// NÃO confundir com 5519992979490 que é o número da própria instância
+// da Ana (Evolution Cloudfly) — escalations enviadas pra lá ficavam num
+// loop silencioso até 22/05/2026 quando o bug foi descoberto durante
+// validação E2E pós-fix do escalate. Ver DIAGNOSTICO_ANA.md.
+const DEFAULT_NOTIFICATION_PHONE = '5519993040768'
 
 // Legal keywords that trigger urgent priority
 const LEGAL_KEYWORDS = ['procon', 'advogado', 'processo', 'justiça', 'reclameaqui', 'consumidor']

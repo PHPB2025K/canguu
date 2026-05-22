@@ -183,4 +183,46 @@ O teste do Kobe **não exercitou o caminho de escalation**. Era o único caminho
 
 ---
 
-*Documento finalizado em 22/05/2026, antes da aplicação do fix.*
+## Anexo — Bug bônus descoberto na validação E2E (22/05 11:20 BRT)
+
+Durante o Teste 6 do roteiro de validação, o Kobe confirmou que a escalation
+foi criada corretamente no banco, mas observou que **não validou visualmente
+a notificação no WhatsApp pessoal do Pedro**. Pedro confirmou em seguida que
+o número configurado em `agent_config.notification_phone = '5519992979490'`
+**não é o WhatsApp pessoal dele** — é o número da própria instância da Ana
+(Evolution Cloudfly).
+
+Significa que, desde que o escalation flow foi escrito (provavelmente cutover
+de 30/04 ou antes), TODAS as notificações de escalation que deveriam alertar
+o owner estavam sendo enviadas pra própria Ana em um loop silencioso. Pedro
+nunca recebeu uma única notificação de escalation desde que o pipeline ficou
+de pé.
+
+Por que ninguém notou antes:
+- Bug do escalate (401 JWT) mascarava: 0 escalations registradas até hoje,
+  então a notificação nunca chegava a ser tentada
+- Pedro nunca viu mensagem chegando, mas como não havia tabela de log de
+  envio outbound (Evolution.sendText não persiste), não havia evidência
+- Quando o caso da Carolina chegou, a discussão foi pro caminho da Ana muda,
+  não pro caminho da notificação
+
+Fix aplicado em 22/05 11:20 BRT:
+
+1. `UPDATE agent_config SET config_value='5519993040768'` em prod (efeito
+   imediato — próxima escalation notifica corretamente)
+2. `escalate/index.ts:29` `DEFAULT_NOTIFICATION_PHONE` trocado pra
+   `5519993040768` com comentário de aviso (proteção caso config seja
+   deletada/zerada)
+3. Re-deploy via GHA (`escalate v18`)
+4. Re-validação E2E pendente: Kobe vai re-rodar Teste 6 pra Pedro
+   confirmar visualmente recebimento da notif
+
+Lição: testes E2E precisam validar **fim-a-fim**, incluindo envio outbound
+real, não só estado de banco. Bugs em destino de mensagem podem ficar
+invisíveis se ninguém confere o canal de destino.
+
+---
+
+*Documento finalizado em 22/05/2026, antes da aplicação do fix do escalate
+(versões 1-2). Atualizado com anexo do bug do notification_phone em 22/05
+11:20 BRT (versão 3).*
