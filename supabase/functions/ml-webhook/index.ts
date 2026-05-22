@@ -22,6 +22,10 @@ function log(step: string, extra: Record<string, unknown> = {}) {
   );
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /* ───────────────────── ML API helpers ───────────────────── */
 
 const ML_API = "https://api.mercadolibre.com";
@@ -54,10 +58,23 @@ function getSupabase() {
   );
 }
 
-/* ───────────────────── Get ML access token ───────────────────── */
+/* ───────────────────── Get ML access token (robust) ─────────────────────
+ *
+ * Mudanças vs versão anterior (21/05/2026):
+ * - Buffer de 5min: refresh PROATIVO antes da expiração (evita race com webhooks
+ *   chegando em rajada exatamente no momento da expiração).
+ * - Retry em 5xx/429 no /oauth/token (1 retry com 1.5s de delay).
+ * - Marca status='expired' no DB quando refresh falha definitivamente
+ *   (visibilidade — não fica silencioso como antes).
+ * - Logs detalhados (status code, response body parcial) para diagnóstico futuro.
+ */
 
-async function getMLToken(supabase: ReturnType<typeof createClient>): Promise<string | null> {
-  const { data } = await supabase
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // refresh 5min antes de expirar
+
+async function getMLToken(
+  supabase: ReturnType<typeof createClient>
+): Promise<string | null> {
+  const { data, error } = await supabase
     .from("marketplace_tokens")
     .select("access_token, token_expires_at, refresh_token, id")
     .eq("platform", "mercado_livre")
@@ -65,16 +82,27 @@ async function getMLToken(supabase: ReturnType<typeof createClient>): Promise<st
     .limit(1)
     .single();
 
-  if (!data?.access_token) return null;
-
-  // Check if token is expired and refresh if needed
-  if (data.token_expires_at && new Date(data.token_expires_at) < new Date()) {
-    log("token_expired_refreshing");
-    const refreshed = await refreshMLToken(supabase, data.id, data.refresh_token!);
-    return refreshed;
+  if (error || !data?.access_token) {
+    log("token_lookup_failed", { error: error?.message });
+    return null;
   }
 
-  return data.access_token;
+  // Refresh proativo: se expira em menos de 5min, refresh agora
+  const expiresAtMs = data.token_expires_at
+    ? new Date(data.token_expires_at).getTime()
+    : 0;
+  const nowMs = Date.now();
+
+  if (expiresAtMs > nowMs + TOKEN_REFRESH_BUFFER_MS) {
+    return data.access_token;
+  }
+
+  log("token_needs_refresh", {
+    expiresIn: Math.round((expiresAtMs - nowMs) / 1000),
+    tokenId: data.id,
+  });
+
+  return await refreshMLToken(supabase, data.id, data.refresh_token!);
 }
 
 async function refreshMLToken(
@@ -82,35 +110,126 @@ async function refreshMLToken(
   tokenId: string,
   refreshToken: string
 ): Promise<string | null> {
-  try {
-    const res = await fetch(`${ML_API}/oauth/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grant_type: "refresh_token",
-        client_id: Deno.env.get("ML_APP_ID"),
-        client_secret: Deno.env.get("ML_CLIENT_SECRET"),
-        refresh_token: refreshToken,
-      }),
-    });
-    const data = await res.json();
-    if (!data.access_token) {
-      log("token_refresh_failed", { error: data });
-      return null;
-    }
-
-    await supabase.from("marketplace_tokens").update({
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      token_expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq("id", tokenId);
-
-    log("token_refreshed");
-    return data.access_token;
-  } catch (e) {
-    log("token_refresh_error", { error: String(e) });
+  if (!refreshToken) {
+    log("no_refresh_token");
+    await markTokenExpired(supabase, tokenId, "no_refresh_token");
     return null;
+  }
+
+  const clientId = Deno.env.get("ML_APP_ID");
+  const clientSecret = Deno.env.get("ML_CLIENT_SECRET");
+
+  if (!clientId || !clientSecret) {
+    log("missing_oauth_env", {
+      has_app_id: !!clientId,
+      has_secret: !!clientSecret,
+    });
+    return null;
+  }
+
+  // 2 tentativas em caso de 5xx/429
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch(`${ML_API}/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          grant_type: "refresh_token",
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: refreshToken,
+        }),
+      });
+
+      const text = await res.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        log("token_refresh_non_json", {
+          status: res.status,
+          body: text.slice(0, 300),
+          attempt,
+        });
+      }
+
+      if (res.status >= 200 && res.status < 300 && data.access_token) {
+        const expiresIn = Number(data.expires_in) || 21600;
+        const { error: updError } = await supabase
+          .from("marketplace_tokens")
+          .update({
+            access_token: data.access_token as string,
+            refresh_token: (data.refresh_token as string) || refreshToken,
+            token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+            status: "active",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", tokenId);
+
+        if (updError) {
+          log("token_refresh_db_update_failed", { error: updError.message });
+          // Token novo está válido mas DB falhou — retorna mesmo assim,
+          // próxima chamada tentará refresh de novo (com o refresh_token
+          // que pode ter sido consumido — aí cai num invalid_grant).
+          // Vale alertar mas não bloqueia processamento desta question.
+        } else {
+          log("token_refreshed", {
+            new_expires_in_s: expiresIn,
+            attempt,
+          });
+        }
+
+        return data.access_token as string;
+      }
+
+      // Erro 4xx (credenciais inválidas, refresh_token expirado) — NÃO retry,
+      // marca como expired pra parar de tentar
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+        log("token_refresh_invalid_grant", {
+          status: res.status,
+          error: data.error,
+          message: text.slice(0, 300),
+          attempt,
+        });
+        await markTokenExpired(
+          supabase,
+          tokenId,
+          `${res.status}_${String(data.error || "unknown")}`
+        );
+        return null;
+      }
+
+      // 5xx/429 — retry
+      log("token_refresh_transient_error", {
+        status: res.status,
+        attempt,
+        body: text.slice(0, 200),
+      });
+      if (attempt < 2) await sleep(1500);
+    } catch (e) {
+      log("token_refresh_exception", { error: String(e), attempt });
+      if (attempt < 2) await sleep(1500);
+    }
+  }
+
+  // Todas as tentativas falharam (transient)
+  log("token_refresh_exhausted");
+  return null;
+}
+
+async function markTokenExpired(
+  supabase: ReturnType<typeof createClient>,
+  tokenId: string,
+  reason: string
+) {
+  try {
+    await supabase
+      .from("marketplace_tokens")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("id", tokenId);
+    log("token_marked_expired", { tokenId, reason });
+  } catch (e) {
+    log("mark_expired_failed", { error: String(e) });
   }
 }
 
@@ -170,7 +289,6 @@ ${productContext}`;
   let tokens = 0;
 
   if (model.startsWith("claude")) {
-    // Anthropic
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
@@ -198,7 +316,6 @@ ${productContext}`;
     answer = data.content?.[0]?.text || "";
     tokens = (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0);
   } else if (model.startsWith("gpt") || model.startsWith("o")) {
-    // OpenAI
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) throw new Error("OPENAI_API_KEY not set");
 
@@ -225,7 +342,6 @@ ${productContext}`;
     answer = data.choices?.[0]?.message?.content || "";
     tokens = data.usage?.total_tokens || 0;
   } else {
-    // Groq (llama, mixtral, etc)
     const apiKey = Deno.env.get("GROQ_API_KEY");
     if (!apiKey) throw new Error("GROQ_API_KEY not set");
 
@@ -263,7 +379,6 @@ async function getProductContext(
   itemId: string,
   productName: string
 ): Promise<string> {
-  // Try to find product by platform_item_id in product_listings
   const { data: listings } = await supabase
     .from("product_listings")
     .select("product_id")
@@ -282,7 +397,6 @@ async function getProductContext(
     product = data;
   }
 
-  // Also check marketplace_product_mapping
   if (!product) {
     const { data: mapping } = await supabase
       .from("marketplace_product_mapping")
@@ -363,33 +477,28 @@ async function handleQuestion(resource: string, userId: number) {
 
   log("question_received", { questionId });
 
-  // Get ML token
   const token = await getMLToken(supabase);
   if (!token) {
     log("no_ml_token");
     return;
   }
 
-  // Fetch question details from ML API
   const question = await mlGet(`/questions/${questionId}`, token);
   if (!question || question.error) {
     log("fetch_question_failed", { error: question?.error || "unknown" });
     return;
   }
 
-  // Only process questions for our seller
   if (String(question.seller_id) !== String(userId)) {
     log("question_not_for_seller", { seller: question.seller_id, expected: userId });
     return;
   }
 
-  // Skip if already answered on ML
   if (question.status === "ANSWERED") {
     log("question_already_answered_on_ml", { questionId });
     return;
   }
 
-  // Check if already in our DB
   const { data: existing } = await supabase
     .from("marketplace_questions")
     .select("id")
@@ -403,20 +512,16 @@ async function handleQuestion(resource: string, userId: number) {
 
   const itemId = String(question.item_id);
 
-  // Fetch item title from ML API (FIX: was saving item ID as product_name)
   const productName = await fetchItemTitle(itemId, token);
   log("item_title_fetched", { itemId, productName });
 
-  // Get product context from our catalog
   const productContext = await getProductContext(supabase, itemId, productName);
   const faqContext = await getFAQContext(supabase);
   const policiesContext = await getPoliciesContext(supabase);
   const fullContext = productContext + faqContext + policiesContext;
 
-  // Get agent config
   const agentConfig = await getAgentConfig(supabase);
 
-  // Generate AI answer
   let aiResult: { answer: string; tokens: number; timeMs: number };
   try {
     aiResult = await generateAIAnswer(
@@ -446,7 +551,6 @@ async function handleQuestion(resource: string, userId: number) {
   } catch (e) {
     log("ai_generation_failed", { error: String(e) });
 
-    // Save as failed
     await supabase.from("marketplace_questions").insert({
       platform: "mercado_livre",
       platform_question_id: questionId,
@@ -462,7 +566,6 @@ async function handleQuestion(resource: string, userId: number) {
     return;
   }
 
-  // Post answer to ML
   let postSuccess = false;
   let postError = "";
   try {
@@ -483,7 +586,6 @@ async function handleQuestion(resource: string, userId: number) {
     log("post_answer_exception", { error: String(e) });
   }
 
-  // Save to DB — FIX: standardize answered_by to 'ai_agent', clear error_message on success
   const record: Record<string, unknown> = {
     platform: "mercado_livre",
     platform_question_id: questionId,
@@ -501,21 +603,19 @@ async function handleQuestion(resource: string, userId: number) {
   if (postSuccess) {
     record.status = "answered";
     record.answer_text = aiResult.answer;
-    record.answered_by = "ai_agent"; // FIX: was 'ai'
+    record.answered_by = "ai_agent";
     record.answered_at = new Date().toISOString();
-    record.error_message = null; // FIX: don't leave stale error
+    record.error_message = null;
   } else {
-    // Check if the error is because it was already answered (race condition)
     if (postError.includes("not_active_item")) {
       record.status = "skipped";
       record.error_message = `item_inactive_on_post: ${postError}`;
     } else if (postError.includes("already_answered") || postError.includes("ALREADY_ANSWERED")) {
-      // Question was answered by someone else — save but don't mark as error
       record.status = "answered";
       record.answer_text = aiResult.answer;
       record.answered_by = "ai_agent";
       record.answered_at = new Date().toISOString();
-      record.error_message = null; // FIX: don't flag as error if answer was delivered
+      record.error_message = null;
       log("race_condition_already_answered", { questionId });
     } else {
       record.status = "failed";
@@ -554,7 +654,6 @@ Deno.serve(async (req) => {
     switch (topic) {
       case "questions": {
         log("question_notification", { resource });
-        // Process async to respond quickly to ML
         handleQuestion(resource, user_id).catch((e) =>
           log("question_handler_error", { error: String(e) })
         );
@@ -563,13 +662,11 @@ Deno.serve(async (req) => {
 
       case "items": {
         log("item_notification", { resource });
-        // Future: sync item updates
         break;
       }
 
       case "orders_v2": {
         log("order_notification", { resource });
-        // Future: sync order updates
         break;
       }
 
