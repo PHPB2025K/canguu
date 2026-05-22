@@ -17,6 +17,16 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: jpacmloqsfiebvagfomt
+      # ─── NO_JWT_FUNCTIONS ───────────────────────────────────────
+      # Functions invocadas INTERNAMENTE entre edge functions usando
+      # X-Internal-Token (INTERNAL_DISPATCH_TOKEN env var) em vez de
+      # JWT padrão do Supabase. Lista mantida aqui pra evitar que o CLI
+      # default (verify_jwt=true) reverta o bypass em redeploys.
+      # Bug histórico: JWT do SERVICE_ROLE_KEY rejeitado pelo gateway,
+      # ver DIAGNOSTICO_ANA.md. Adicionar uma function aqui = ela passa
+      # a depender de INTERNAL_DISPATCH_TOKEN. Não esquece de validar
+      # o header no STEP 0 do handler dela.
+      NO_JWT_FUNCTIONS: "process-message escalate ml-webhook"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,7 +63,12 @@ jobs:
             name=$(basename "$dir")
             [ "$name" = "_shared" ] && continue
             echo "::group::Deploying $name"
-            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+            if echo " $NO_JWT_FUNCTIONS " | grep -q " $name "; then
+              echo "  -> $name está em NO_JWT_FUNCTIONS, usando --no-verify-jwt"
+              supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+            else
+              supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+            fi
             echo "::endgroup::"
           done
 
@@ -63,6 +78,11 @@ jobs:
           while IFS= read -r name; do
             [ -z "$name" ] && continue
             echo "::group::Deploying $name"
-            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+            if echo " $NO_JWT_FUNCTIONS " | grep -q " $name "; then
+              echo "  -> $name está em NO_JWT_FUNCTIONS, usando --no-verify-jwt"
+              supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+            else
+              supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+            fi
             echo "::endgroup::"
           done <<< "${{ steps.detect.outputs.functions }}"
