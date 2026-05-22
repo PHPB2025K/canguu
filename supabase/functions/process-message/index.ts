@@ -46,6 +46,27 @@ serve(async (req: Request) => {
       return jsonResponse({ success: false, error: 'method_not_allowed' })
     }
 
+    // ─── STEP 0: VALIDATE INTERNAL DISPATCH TOKEN ────────────────
+    // Hotfix 21/05/2026: process-message agora roda com verify_jwt=false
+    // pra contornar JWT stale/desalinhado que rejeitava invocações do
+    // webhook-whatsapp com 401 (bug de 13 dias, ver decisoes/2026-05).
+    // Segurança equivalente via shared secret high-entropy em env var
+    // INTERNAL_DISPATCH_TOKEN — configurado no projeto Supabase, lido
+    // por webhook-whatsapp pra enviar no header X-Internal-Token.
+    const expectedToken = Deno.env.get('INTERNAL_DISPATCH_TOKEN')
+    if (!expectedToken) {
+      log('config_error', { reason: 'INTERNAL_DISPATCH_TOKEN env var missing' })
+      return jsonResponse({ success: false, error: 'misconfigured' }, 500)
+    }
+    const providedToken = req.headers.get('X-Internal-Token')
+    if (providedToken !== expectedToken) {
+      log('auth_failed', {
+        providedTokenLength: providedToken?.length ?? 0,
+        expectedTokenLength: expectedToken.length,
+      })
+      return jsonResponse({ success: false, error: 'unauthorized' }, 401)
+    }
+
     // ─── STEP 1: RECEIVE AND VALIDATE ───────────────────────────
     const body = await req.json() as ProcessMessageRequest
 

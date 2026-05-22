@@ -47,12 +47,52 @@ const ORIGIN_ROW_TO_SOURCE: Record<string, string> = {
 // Free-text detector for the numbered origin poll. We accept both the
 // number (1, 2…) and the channel name typed loosely. Returns the
 // customers.source value or null if the text doesn't look like a reply.
+//
+// Hotfix 21/05/2026: patterns ampliados pra tolerar typos comuns (shoppe,
+// shope, shopi, merc liv, mercadol, amazn, amzn, sit, budamix). Bug
+// originalmente exposto pelo caso da cliente Edneia que digitou "Shoppe"
+// e ficou presa sem source preenchido por dias.
 const ORIGIN_TEXT_PATTERNS: Array<{ source: string; patterns: RegExp[] }> = [
-  { source: 'mercado_livre', patterns: [/^\s*1[º°.)]?\s*$/i, /\bmercado\s*livre\b/i, /\bmeli\b/i, /\bml\b/i] },
-  { source: 'shopee',         patterns: [/^\s*2[º°.)]?\s*$/i, /\bshopee\b/i] },
-  { source: 'amazon',         patterns: [/^\s*3[º°.)]?\s*$/i, /\bamazon\b/i] },
-  { source: 'site',           patterns: [/^\s*4[º°.)]?\s*$/i, /\bsite\b/i, /\bbudamix\.com\b/i] },
-  { source: 'whatsapp',       patterns: [/^\s*5[º°.)]?\s*$/i, /\boutro\b/i, /\bnenhum\b/i] },
+  {
+    source: 'mercado_livre',
+    patterns: [
+      /^\s*1[º°.)]?\s*$/i,
+      /\bmerc(ad)?o?\s*l(iv|ib)?(re)?\b/i, // mercado livre, mercadolivre, merc livre, mercado lib
+      /\bmeli\b/i,
+      /\bml\b/i,
+    ],
+  },
+  {
+    source: 'shopee',
+    patterns: [
+      /^\s*2[º°.)]?\s*$/i,
+      /\bsh[op]+e?e?\b/i, // shopee, shopi, shoppe, shope, shop
+      /\bxopi+/i,         // xopi, xopee (variação fonética PT-BR)
+    ],
+  },
+  {
+    source: 'amazon',
+    patterns: [
+      /^\s*3[º°.)]?\s*$/i,
+      /\bama?zo?n\b/i,    // amazon, amzon, amazn, amzn, azon
+    ],
+  },
+  {
+    source: 'site',
+    patterns: [
+      /^\s*4[º°.)]?\s*$/i,
+      /\bsit[ei]?\b/i,    // site, sitee, sit
+      /\bbudami?x\.?(com)?\b/i, // budamix.com, budamix, budami
+    ],
+  },
+  {
+    source: 'whatsapp',
+    patterns: [
+      /^\s*5[º°.)]?\s*$/i,
+      /\boutro\b/i,
+      /\bnenhum\b/i,
+    ],
+  },
 ]
 
 function matchOriginFromText(text: string): string | null {
@@ -448,16 +488,52 @@ serve(async (req: Request) => {
     // below is returned and the invoke to process-message is cancelled.
     // Bug history: from 2026-05-08 to 2026-05-17, Ana stopped responding
     // entirely because of this exact race (see decisoes/2026-05).
+    //
+    // Hotfix 21/05/2026: logs estratégicos antes/dentro/depois do invoke
+    // pra dar visibilidade quando o dispatch falhar silenciosamente. Bug
+    // de 13 dias (08-21/05) só foi detectado porque Pedro abriu um caso
+    // específico no painel — sem esses logs, o silêncio engole tudo.
+    const dispatchStartedAt = Date.now()
+    // Hotfix 21/05/2026: process-message agora roda com verify_jwt=false e
+    // valida X-Internal-Token. Bypass do JWT stale/desalinhado que rejeitou
+    // invocações por 13 dias (08-21/05). Secret em INTERNAL_DISPATCH_TOKEN.
+    const internalDispatchToken = Deno.env.get('INTERNAL_DISPATCH_TOKEN') ?? ''
+    log('dispatch_start', {
+      conversationId: conversation.id,
+      messageId: savedMessage.id,
+      pendingCount,
+      consolidatedLength: consolidatedContent.length,
+      messageType: parsed.messageType,
+      processUrl: `${supabaseUrl}/functions/v1/process-message`,
+      hasServiceRoleKey: !!serviceRoleKey,
+      hasInternalDispatchToken: !!internalDispatchToken,
+    })
+
     const invokeProcessMessage = fetch(`${supabaseUrl}/functions/v1/process-message`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${serviceRoleKey}`,
+        'X-Internal-Token': internalDispatchToken,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(processRequest),
     })
-      .then(r => log('invoke_process_message_ok', { status: r.status }))
-      .catch(err => log('error', { step: 'invoke_process_message', error: String(err) }))
+      .then(async r => {
+        const bodyText = await r.text().catch(() => '<unreadable>')
+        log('invoke_process_message_response', {
+          conversationId: conversation.id,
+          status: r.status,
+          ok: r.ok,
+          elapsedMs: Date.now() - dispatchStartedAt,
+          bodyPreview: bodyText.slice(0, 400),
+        })
+      })
+      .catch(err => log('invoke_process_message_error', {
+        conversationId: conversation.id,
+        error: String(err),
+        stack: (err as Error)?.stack?.slice(0, 500) ?? null,
+        elapsedMs: Date.now() - dispatchStartedAt,
+      }))
     // @ts-ignore — EdgeRuntime is provided by Supabase's Deno Deploy runtime
     EdgeRuntime.waitUntil(invokeProcessMessage)
 

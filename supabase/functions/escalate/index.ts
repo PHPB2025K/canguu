@@ -54,6 +54,26 @@ serve(async (req: Request) => {
       return errorResponse('Method not allowed', 405)
     }
 
+    // ─── STEP 0: VALIDATE INTERNAL DISPATCH TOKEN ────────────────
+    // Hotfix 22/05/2026: escalate agora roda com verify_jwt=false pra
+    // contornar JWT desalinhado que rejeitava invocações do process-message
+    // com 401 (causa raiz da Ana muda em conversas de escalação por 24h+).
+    // Segurança equivalente via INTERNAL_DISPATCH_TOKEN — mesmo padrão
+    // já adotado em process-message ontem (21/05). Ver DIAGNOSTICO_ANA.md.
+    const expectedToken = Deno.env.get('INTERNAL_DISPATCH_TOKEN')
+    if (!expectedToken) {
+      log('config_error', { reason: 'INTERNAL_DISPATCH_TOKEN env var missing' })
+      return jsonResponse({ success: false, error: 'misconfigured' }, 500)
+    }
+    const providedToken = req.headers.get('X-Internal-Token')
+    if (providedToken !== expectedToken) {
+      log('auth_failed', {
+        providedTokenLength: providedToken?.length ?? 0,
+        expectedTokenLength: expectedToken.length,
+      })
+      return jsonResponse({ success: false, error: 'unauthorized' }, 401)
+    }
+
     // ─── STEP 1: VALIDATE REQUEST ─────────────────────────────
     const body = await req.json() as EscalateRequest
 

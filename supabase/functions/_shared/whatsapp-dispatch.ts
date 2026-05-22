@@ -156,10 +156,17 @@ export async function dispatchEscalation(args: {
     throw new Error('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured')
   }
 
+  // Hotfix 22/05/2026: enviar X-Internal-Token pra match com escalate
+  // que agora valida shared secret high-entropy (verify_jwt=false bypass).
+  // Mesmo padrão já adotado por webhook-whatsapp → process-message.
+  // Ver DIAGNOSTICO_ANA.md.
+  const internalDispatchToken = Deno.env.get('INTERNAL_DISPATCH_TOKEN') ?? ''
+
   const response = await fetch(`${supabaseUrl}/functions/v1/escalate`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${serviceRoleKey}`,
+      'X-Internal-Token': internalDispatchToken,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(args),
