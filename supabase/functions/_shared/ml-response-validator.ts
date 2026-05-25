@@ -12,12 +12,20 @@ const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 const PLATFORM_MENTIONS = /\b(shopee|amazon|site\s+pr[oó]prio|whatsapp|wpp|instagram|facebook|telegram|tiktok\s*shop)\b/gi
 const CHUNK_SEPARATOR = /\\\\/g
 
-// HARD BLOCKERS — phrases that ask the buyer to reach out off-platform.
-// Mercado Livre forbids redirecting buyers to external channels and
-// answering "entre em contato conosco" leaks a poor brand perception
-// even on WhatsApp. When any of these matches, the response is REJECTED
-// (not just stripped) so the caller can substitute it with a verified
-// answer or a technical fallback.
+// HARD BLOCKERS — phrases that violate ML policy or Budamix tone rules.
+// Two categories share the same downstream behavior (RAG substitution
+// or technical fallback) but are tracked separately for telemetry.
+//
+//  1. CONTACT — asking the buyer to reach out off-platform. ML forbids
+//     external channel redirects and even "fale conosco" reads as evasive
+//     boilerplate that buyers correctly identify as non-answers.
+//
+//  2. ADMIN LEAK (added 2026-05-25) — phrases that admit listing/cadastral
+//     failure or promise internal verification. These break the
+//     "sceptical-but-gentle" rule (Bloco 17 of system_prompt). The LLM
+//     reaches for them when product context lacks a specific compat field,
+//     even though the prompt explicitly forbids them. Hard-blocking here
+//     enforces the rule even when LLM adherence drifts.
 const FORBIDDEN_CONTACT_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\bentre[m]?\s+em\s+contato\b/i,                       reason: 'entre em contato' },
   { pattern: /\bentrar\s+em\s+contato\b/i,                          reason: 'entrar em contato' },
@@ -31,14 +39,33 @@ const FORBIDDEN_CONTACT_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\bpara\s+(?:mais|maiores)\s+(?:detalhes|informa[çc][õo]es)\b[^.]*\b(?:contat|fal[ae]|chame)\b/i, reason: 'para mais detalhes contate' },
 ]
 
+const FORBIDDEN_ADMIN_LEAK_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /\bn[ãa]o\s+(?:temos|consta|est[áa]\s+confirmad[ao])\s+(?:essa\s+)?(?:informa[çc][ãa]o)?\s*(?:no\s+)?cadastro\b/i, reason: 'não temos/consta no cadastro' },
+  { pattern: /\bn[ãa]o\s+(?:est[áa]|esta)\s+confirmad[ao]\s+no\s+cadastro\b/i, reason: 'não está confirmado no cadastro' },
+  { pattern: /\b(?:vamos|ir[ée]?mos|sera|ser[áa])\s+verificad[ao]?\s+internamente\b/i, reason: 'verificar internamente' },
+  { pattern: /\bverificar\s+(?:com\s+)?(?:nossa\s+)?(?:equipe|setor)\s+(?:t[ée]cnic[ao]|respons[áa]vel|de\s+separa[çc][ãa]o)\b/i, reason: 'verificar com equipe técnica' },
+  { pattern: /\b(?:vamos|ir[ée]?mos|sera|ser[áa])\s+atualizad[ao]?\s+(?:o\s+)?an[úu]ncio\b/i, reason: 'atualizar o anúncio' },
+  { pattern: /\batualizar(?:emos)?\s+(?:o\s+)?an[úu]ncio\b/i,        reason: 'atualizaremos o anúncio' },
+  { pattern: /\bpedimos\s+desculpas?\s+pela\s+diverg[êe]ncia\b/i,    reason: 'desculpas pela divergência' },
+  { pattern: /\blamentamos\s+a\s+inconsist[êe]ncia\b/i,              reason: 'lamentamos a inconsistência' },
+  { pattern: /\b(?:voc[êe]\s+pode|pode\s+solicitar)\s+a\s+devolu[çc][ãa]o\b/i, reason: 'pode solicitar devolução (proativo)' },
+  { pattern: /\bfazer\s+a\s+devolu[çc][ãa]o\b/i,                    reason: 'fazer a devolução (proativo)' },
+]
+
 export interface MLValidationResult {
   text: string
   warnings: string[]
   charCount: number
-  /** True when the response asked the buyer to reach out off-platform.
-   *  In that case `text` is empty — the caller must substitute it. */
+  /** True when ANY hard-block pattern matched (contact OR admin leak).
+   *  Field name kept for backwards compat with existing callers; the
+   *  semantic is "response was rejected as a whole and must be substituted".
+   *  When true, `text` is empty — the caller must substitute it. */
   forbiddenContactDetected?: boolean
+  /** All matched reasons, regardless of category. */
   forbiddenContactReasons?: string[]
+  /** Granular flag for telemetry: true when admin-leak phrases matched
+   *  (e.g. "não temos no cadastro", "atualizaremos o anúncio"). */
+  forbiddenAdminLeakDetected?: boolean
 }
 
 /**
@@ -48,6 +75,17 @@ export interface MLValidationResult {
 export function detectForbiddenContactRequest(text: string): string[] {
   const matches: string[] = []
   for (const { pattern, reason } of FORBIDDEN_CONTACT_PATTERNS) {
+    if (pattern.test(text)) matches.push(reason)
+  }
+  return matches
+}
+
+/**
+ * Pure detector for cadastral/admin leak phrases (Bloco 17 do prompt).
+ */
+export function detectForbiddenAdminLeak(text: string): string[] {
+  const matches: string[] = []
+  for (const { pattern, reason } of FORBIDDEN_ADMIN_LEAK_PATTERNS) {
     if (pattern.test(text)) matches.push(reason)
   }
   return matches
@@ -85,14 +123,23 @@ function validateMLResponse(
   // this fires — typically with a verified correction from search_corrections
   // or a technical fallback. We do NOT try to "fix" the LLM output here
   // because contextually-correct rewrites need product info we don't have.
-  const forbiddenReasons = detectForbiddenContactRequest(text)
-  if (forbiddenReasons.length > 0) {
+  //
+  // Two pattern families are checked. They share the same outcome (block +
+  // substitute) but are reported separately for telemetry.
+  const contactReasons = detectForbiddenContactRequest(text)
+  const adminLeakReasons = detectForbiddenAdminLeak(text)
+  const allReasons = [...contactReasons, ...adminLeakReasons]
+  if (allReasons.length > 0) {
     return {
       text: '', // empty signals the caller to substitute
-      warnings: [...forbiddenReasons.map(r => `forbidden_contact:${r}`)],
+      warnings: [
+        ...contactReasons.map(r => `forbidden_contact:${r}`),
+        ...adminLeakReasons.map(r => `forbidden_admin_leak:${r}`),
+      ],
       charCount: 0,
-      forbiddenContactDetected: true,
-      forbiddenContactReasons: forbiddenReasons,
+      forbiddenContactDetected: true, // back-compat: callers use this to branch
+      forbiddenContactReasons: allReasons,
+      forbiddenAdminLeakDetected: adminLeakReasons.length > 0,
     }
   }
 
