@@ -43,6 +43,57 @@ export function detectBusinessHoursLimit(text: string): string[] {
   return matches
 }
 
+// Overpromise em reclamação — Bloco 14/16 do system_prompt. A Ana pode
+// SÓ (a) coletar dados, (b) confirmar recebimento, (c) encaminhar pra
+// equipe. NÃO pode prometer "resolver", "vou solucionar" ou "rapidinho"
+// (prazo). Quando detecta, substituímos a frase INLINE (regex replace)
+// em vez de rejeitar a resposta inteira — coleta de dados costuma estar
+// correta, só o verbo precisa ser trocado pelo de encaminhamento.
+//
+// Caso real (25/05, conversa Grace Kelly): "Pra eu resolver isso pra
+// você, pode me enviar... Com essas informações consigo encaminhar seu
+// caso rapidinho!" — viola Bloco 14 mesmo com coleta de dados correta.
+const COMPLAINT_OVERPROMISE_PATTERNS: Array<{ pattern: RegExp; replacement: string; reason: string }> = [
+  {
+    pattern: /\bpra\s+eu\s+resolver\s+isso\s+pra\s+(?:voc[eê]|ti)\b/gi,
+    replacement: 'pra eu encaminhar pra equipe',
+    reason: 'pra eu resolver isso pra você',
+  },
+  {
+    pattern: /\b(?:vou|consigo|posso)\s+resolver\s+(?:isso|pra\s+voc[eê]|o\s+seu\s+caso|tudo\s+isso)\b/gi,
+    replacement: 'vou encaminhar pra equipe',
+    reason: 'vou/consigo resolver',
+  },
+  {
+    pattern: /\b(?:consigo|vou|posso)\s+encaminhar\s+(?:seu\s+caso\s+|isso\s+)?rapidinho\b/gi,
+    replacement: 'vou encaminhar seu caso pra equipe',
+    reason: 'encaminhar rapidinho',
+  },
+  {
+    pattern: /\b(?:vou|consigo|posso)\s+(?:solucionar|cuidar\s+disso)\b/gi,
+    replacement: 'vou encaminhar pra equipe',
+    reason: 'vou solucionar/cuidar disso',
+  },
+  // "Vou resolver agora mesmo" / "vou resolver agora pra você"
+  {
+    pattern: /\bvou\s+resolver\s+(?:agora|j[áa])\b[^.!?\\]*/gi,
+    replacement: 'vou encaminhar pra equipe',
+    reason: 'vou resolver agora/já',
+  },
+]
+
+/**
+ * Detector puro de overpromise em reclamação.
+ */
+export function detectComplaintOverpromise(text: string): string[] {
+  const matches: string[] = []
+  for (const { pattern, reason } of COMPLAINT_OVERPROMISE_PATTERNS) {
+    const re = new RegExp(pattern.source, pattern.flags.replace('g', ''))
+    if (re.test(text)) matches.push(reason)
+  }
+  return matches
+}
+
 export interface ValidationResult {
   text: string
   warnings: string[]
@@ -84,6 +135,17 @@ export function validateResponse(text: string): ValidationResult {
   }
 
   let cleaned = text.trim()
+
+  // ─── Overpromise em reclamação (Bloco 14/16) ─────────────────
+  // Substituição INLINE (diferente do business_hours que rejeita resposta
+  // inteira) — a coleta de dados costuma estar correta, só o verbo precisa
+  // ser trocado. Mantém continuidade pro cliente, evita micro-promessa.
+  for (const { pattern, replacement, reason } of COMPLAINT_OVERPROMISE_PATTERNS) {
+    if (pattern.test(cleaned)) {
+      cleaned = cleaned.replace(pattern, replacement)
+      warnings.push(`complaint_overpromise_cleaned:${reason}`)
+    }
+  }
 
   // ─── Remove AI self-references ────────────────────────────────
   cleaned = cleaned

@@ -7,40 +7,65 @@ import type { ClassificationResult, ClassifierIntention, ClassifierSentiment } f
 const CLASSIFIER_MODEL = 'claude-haiku-4-5-20251001'
 const CLASSIFIER_MAX_TOKENS = 300
 
-const CLASSIFIER_SYSTEM_PROMPT = `You are a customer service intent classifier for Budamix, a Brazilian kitchen/bar utensils brand.
+const CLASSIFIER_SYSTEM_PROMPT = `Você é um classificador de intenção de atendimento ao cliente da Budamix, marca brasileira de utilidades domésticas.
 
-Analyze the customer message and conversation context, then return ONLY a JSON object with these fields:
+Analise a mensagem do cliente e o contexto da conversa. Retorne SOMENTE um objeto JSON com estes campos:
 
 {
   "intention": "pre_sale|post_sale|complaint|faq|greeting|farewell|product_inquiry|order_status|human_request|other",
-  "subcategory": "brief description of specific topic",
+  "subcategory": "descrição breve do tópico específico EM PORTUGUÊS BRASILEIRO",
   "needs_product_lookup": true/false,
   "needs_order_lookup": true/false,
   "sentiment": "positive|negative|neutral",
   "should_escalate": true/false,
-  "escalation_reason": "reason string or null",
-  "confidence": 0.0 to 1.0
+  "escalation_reason": "motivo em PORTUGUÊS BRASILEIRO, ou null se should_escalate=false",
+  "confidence": 0.0 a 1.0
 }
 
-Classification rules:
-- "greeting": customer is just saying hi/hello
-- "farewell": customer is saying bye/thanks
-- "pre_sale": questions before buying (price, availability, features)
-- "product_inquiry": asking about specific product details
-- "post_sale": questions after purchase (tracking, delivery, usage)
-- "order_status": specifically asking about order/delivery status
-- "complaint": expressing dissatisfaction, reporting problems
-- "faq": general questions about policies, payment, shipping
-- "human_request": explicitly asking to talk to a person/human
-- "other": doesn't fit any category
+═══════════════════════════════════════════════════════════════
+REGRA CRÍTICA DE IDIOMA (inviolável)
+═══════════════════════════════════════════════════════════════
+Os campos "subcategory" e "escalation_reason" DEVEM SEMPRE estar em
+português brasileiro. Nunca em inglês, nem mesmo parcialmente.
+Esses textos vão direto pro painel de operadores humanos da Budamix
+em PT-BR; texto em inglês confunde e quebra a UX.
 
-Escalation triggers (should_escalate = true):
-- Customer mentions legal action, "Procon", "advogado", "processo"
-- Customer explicitly requests a human agent
-- Customer is extremely angry or uses offensive language
-- Issue involves safety concerns or physical harm
+Os valores enum de "intention" e "sentiment" PERMANECEM em inglês
+(são chaves de código usadas no branching downstream — não traduzir).
 
-Return ONLY valid JSON, no explanation.`
+✅ CORRETO:
+  "escalation_reason": "Cliente recebeu produto quebrado e tem dificuldade técnica pra enviar fotos pelo chat. Necessário atendimento humano."
+  "subcategory": "reclamação de produto quebrado"
+
+❌ ERRADO (NUNCA gerar assim):
+  "escalation_reason": "Customer has a legitimate complaint about a broken product..."
+  "subcategory": "broken product complaint"
+
+═══════════════════════════════════════════════════════════════
+Regras de classificação (intention)
+═══════════════════════════════════════════════════════════════
+- "greeting": cliente está só cumprimentando
+- "farewell": cliente está se despedindo ou agradecendo
+- "pre_sale": perguntas antes de comprar (preço, disponibilidade, características)
+- "product_inquiry": pergunta sobre detalhes de um produto específico
+- "post_sale": perguntas após a compra (rastreamento, entrega, uso)
+- "order_status": pergunta especificamente sobre status do pedido/entrega
+- "complaint": cliente expressando insatisfação, reportando problemas
+- "faq": pergunta geral sobre políticas, pagamento, envio
+- "human_request": cliente pedindo explicitamente pra falar com pessoa/humano
+- "other": não se encaixa em nenhuma categoria
+
+═══════════════════════════════════════════════════════════════
+Gatilhos de escalonamento (should_escalate = true)
+═══════════════════════════════════════════════════════════════
+- Cliente menciona ação legal, "Procon", "advogado", "processo", "jurídico"
+- Cliente pede explicitamente atendente humano
+- Cliente está muito irritado ou usa linguagem ofensiva
+- Problema envolve risco de segurança ou dano físico
+- Cliente tem reclamação grave com produto quebrado/defeituoso E já forneceu (ou tentou fornecer) os dados necessários
+- Cliente reporta dificuldade técnica de envio (mídia não carrega, mensagens duplicadas) APÓS reclamação iniciada
+
+Retorne SOMENTE JSON válido, sem explicação, sem markdown.`
 
 /**
  * Classify a customer message using Claude Haiku.
