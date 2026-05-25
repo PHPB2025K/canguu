@@ -224,25 +224,43 @@ serve(async (req: Request) => {
         log('origin_poll', { action: 'source_updated_from_button', source: sourceFromRow, rowId: parsed.selectedRowId })
       }
     } else if (!customer._isNew && customer.source == null && parsed.messageType === 'text' && parsed.content) {
-      // Look up the last agent message — if it was the origin poll, try to
-      // parse this customer reply as the answer.
-      const { data: lastAgent } = await supabase
+      // Procura QUALQUER mensagem do poll na conversa — não só a última agent
+      // msg. Bug histórico (caso Grace Kelly 25/05): cliente cumprimentou
+      // ("Boa noite", "Td bem?") antes de responder com "5". O debounce de 20s
+      // não esperou o "5" chegar (demorou 36s), a Ana respondeu à saudação,
+      // e quando o "5" chegou, lastAgent já era a resposta da Ana — não o
+      // poll. Detector falhava silenciosamente, source ficava null e a Ana
+      // gerava SEGUNDA saudação respondendo o "5" como mensagem genérica.
+      //
+      // Fix: enquanto source=null, procurar poll em qualquer ponto da
+      // conversa. Se match, atualizar source E silenciar AI desse turno —
+      // a próxima mensagem real do cliente dispara resposta com source ok.
+      const { data: pollMsg } = await supabase
         .from('messages')
-        .select('metadata')
+        .select('id')
         .eq('conversation_id', conversation.id)
         .in('sender', ['agent', 'human_agent'])
-        .order('created_at', { ascending: false })
+        .filter('metadata->>origin_poll', 'eq', 'true')
         .limit(1)
         .maybeSingle()
-      const lastWasPoll = (lastAgent?.metadata as { origin_poll?: boolean } | null | undefined)?.origin_poll === true
-      if (lastWasPoll) {
+
+      if (pollMsg) {
         const matched = matchOriginFromText(parsed.content)
         if (matched) {
           await supabase
             .from('customers')
             .update({ source: matched })
             .eq('id', customer.id)
-          log('origin_poll', { action: 'source_updated_from_text', source: matched, content: parsed.content.slice(0, 40) })
+          // Silencia AI nesse turno — o cliente acabou de identificar canal,
+          // não tem pergunta real ainda. Próxima msg dele vai disparar Ana
+          // normalmente, agora com source preenchido pro contexto.
+          skipAiPipeline = true
+          log('origin_poll', {
+            action: 'source_updated_from_text_anytime',
+            source: matched,
+            content: parsed.content.slice(0, 40),
+            ai_skipped: true,
+          })
         } else {
           log('origin_poll', { action: 'text_did_not_match', content: parsed.content.slice(0, 40) })
         }
