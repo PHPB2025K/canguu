@@ -53,14 +53,17 @@ export function detectBusinessHoursLimit(text: string): string[] {
 // Caso real (25/05, conversa Grace Kelly): "Pra eu resolver isso pra
 // você, pode me enviar... Com essas informações consigo encaminhar seu
 // caso rapidinho!" — viola Bloco 14 mesmo com coleta de dados correta.
+// Nota sobre regex: JavaScript `\b` é ASCII-only, então fronteiras após
+// letras acentuadas (ê, ç, á) não casam. Usar flag `u` + `(?!\p{L})`
+// pra fronteiras Unicode-aware quando o pattern termina em char acentuado.
 const COMPLAINT_OVERPROMISE_PATTERNS: Array<{ pattern: RegExp; replacement: string; reason: string }> = [
   {
-    pattern: /\bpra\s+eu\s+resolver\s+isso\s+pra\s+(?:voc[eê]|ti)\b/gi,
+    pattern: /\bpra\s+eu\s+resolver\s+isso\s+pra\s+(?:voc[eê]|ti)(?!\p{L})/giu,
     replacement: 'pra eu encaminhar pra equipe',
     reason: 'pra eu resolver isso pra você',
   },
   {
-    pattern: /\b(?:vou|consigo|posso)\s+resolver\s+(?:isso|pra\s+voc[eê]|o\s+seu\s+caso|tudo\s+isso)\b/gi,
+    pattern: /\b(?:vou|consigo|posso)\s+resolver\s+(?:isso|pra\s+voc[eê]|o\s+seu\s+caso|tudo\s+isso)(?!\p{L})/giu,
     replacement: 'vou encaminhar pra equipe',
     reason: 'vou/consigo resolver',
   },
@@ -74,9 +77,9 @@ const COMPLAINT_OVERPROMISE_PATTERNS: Array<{ pattern: RegExp; replacement: stri
     replacement: 'vou encaminhar pra equipe',
     reason: 'vou solucionar/cuidar disso',
   },
-  // "Vou resolver agora mesmo" / "vou resolver agora pra você"
+  // "Vou resolver agora mesmo" / "vou resolver já"
   {
-    pattern: /\bvou\s+resolver\s+(?:agora|j[áa])\b[^.!?\\]*/gi,
+    pattern: /\bvou\s+resolver\s+(?:agora|j[áa])(?!\p{L})[^.!?\\]*/giu,
     replacement: 'vou encaminhar pra equipe',
     reason: 'vou resolver agora/já',
   },
