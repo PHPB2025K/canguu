@@ -35,7 +35,7 @@ const FORBIDDEN_CONTACT_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\bcontate(?:[- ]nos|\s+nosso)\b/i,                    reason: 'contate-nos / contate nosso' },
   { pattern: /\bcontact(?:[- ]nos|\s+nosso)\b/i,                    reason: 'contact-nos' },
   { pattern: /\b(?:envie|mande|manda)\s+(?:uma\s+)?(?:mensagem|email)\b/i, reason: 'envie mensagem' },
-  { pattern: /\bestamos\s+(?:a|à)\s+disposi[çc][aã]o\b/i,           reason: 'estamos a disposição' },
+  { pattern: /\b(?:estou|estamos|fico|ficamos|seguimos)\s+(?:a|à)\s+disposi[çc][aã]o\b/i, reason: 'estou/estamos à disposição' },
   { pattern: /\bpara\s+(?:mais|maiores)\s+(?:detalhes|informa[çc][õo]es)\b[^.]*\b(?:contat|fal[ae]|chame)\b/i, reason: 'para mais detalhes contate' },
 ]
 
@@ -50,6 +50,14 @@ const FORBIDDEN_ADMIN_LEAK_PATTERNS: Array<{ pattern: RegExp; reason: string }> 
   { pattern: /\blamentamos\s+a\s+inconsist[êe]ncia\b/i,              reason: 'lamentamos a inconsistência' },
   { pattern: /\b(?:voc[êe]\s+pode|pode\s+solicitar)\s+a\s+devolu[çc][ãa]o\b/i, reason: 'pode solicitar devolução (proativo)' },
   { pattern: /\bfazer\s+a\s+devolu[çc][ãa]o\b/i,                    reason: 'fazer a devolução (proativo)' },
+  // Added 2026-06-19 — real variants that escaped the patterns above.
+  // The phrasing drifts ("não está DETALHADA", "Vou verificar", "não TENHO",
+  // "confirmada sobre X" without the "cadastro" anchor), so broaden coverage.
+  { pattern: /\bn[ãa]o\s+(?:est[áa]|esta)\s+detalhad[ao]\s+no\s+cadastro\b/i, reason: 'não está detalhada no cadastro' },
+  { pattern: /\bn[ãa]o\s+(?:tenho|temos)\s+(?:essa\s+)?informa[çc][ãa]o\s+confirmad[ao]\b/i, reason: 'não tenho/temos informação confirmada' },
+  { pattern: /\b(?:verificar|conferir|checar|consultar)\s+internamente\b/i, reason: 'verificar internamente (qualquer conjugação)' },
+  { pattern: /\batualizar(?:emos)?\s+por\s+aqui\b/i,                reason: 'atualizar por aqui' },
+  { pattern: /\bdevolu[çc][ãa]o\s+gratuita\s+em\s+at[ée]\b/i,       reason: 'promessa proativa de devolução gratuita em X dias' },
 ]
 
 export interface MLValidationResult {
