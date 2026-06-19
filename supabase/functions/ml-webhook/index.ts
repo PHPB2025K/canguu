@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateMLQuestionResponse } from "../_shared/ml-response-validator.ts";
+import { searchCorrections } from "../_shared/embeddings.ts";
 
 /* ───────────────────── helpers ───────────────────── */
 
@@ -260,27 +261,32 @@ async function generateAIAnswer(
   questionText: string,
   productName: string,
   agentConfig: Record<string, string>,
-  productContext: string
+  productContext: string,
+  correctionContext = ""
 ): Promise<{ answer: string; tokens: number; timeMs: number }> {
   const start = Date.now();
 
-  const systemPrompt = `Você é a Giovana, assistente virtual da Budamix. Você está respondendo uma PERGUNTA DE COMPRADOR no Mercado Livre.
+  const systemPrompt = `Você é a Ana, assistente virtual da Budamix. Você está respondendo uma PERGUNTA DE COMPRADOR no Mercado Livre. A resposta é pública e vai direto ao comprador.
 
 REGRAS PARA PERGUNTAS DO MERCADO LIVRE:
-1. Resposta CURTA e DIRETA — máximo 350 caracteres (limite do ML)
-2. Tom profissional mas amigável
-3. SEM emojis (o ML não renderiza bem)
-4. SEM formatação WhatsApp (*negrito*, _itálico_) — use texto puro
-5. SEM links — o comprador já está no anúncio
-6. SEM saudação longa — vá direto ao ponto
-7. Responda EXATAMENTE o que foi perguntado
-8. Se não souber a resposta, diga que a informação não está confirmada no cadastro/anúncio e que será verificada internamente. NUNCA peça para o cliente entrar em contato, falar conosco, chamar no WhatsApp, mandar mensagem ou procurar atendimento.
-9. NUNCA invente informações que não estão no contexto do produto
-10. Use "Olá!" ou "Oi!" como saudação curta se necessário
-11. PROIBIÇÃO ABSOLUTA: não use nenhuma variação de "entre em contato conosco", "fale conosco", "nossa equipe técnica", "para mais detalhes", "chame a gente", "mande mensagem" ou redirecionamento para outro canal.
+1. Resposta CURTA e DIRETA — máximo 350 caracteres (limite do ML).
+2. Tom natural, cordial e prestativo — como uma pessoa real conversando, nunca telemarketing.
+3. SEM emojis (o ML não renderiza bem).
+4. SEM formatação (*negrito*, _itálico_) — texto puro.
+5. SEM links e SEM mencionar outras plataformas (Shopee, Amazon, site próprio, WhatsApp). Toda a conversa acontece aqui no Mercado Livre.
+6. Comece com "Olá!" (saudação breve, sem o nome do comprador).
+7. Responda EXATAMENTE o que foi perguntado, usando o que se sabe no CONTEXTO DO PRODUTO abaixo.
+8. NUNCA invente informação que não esteja no contexto do produto.
+9. REGRA 17 (cética mas gentil) — PROIBIDO ABSOLUTO, mesmo quando faltar um dado:
+   - NÃO admita falha de cadastro: nunca diga "não está detalhada/confirmada no cadastro", "não temos/tenho essa informação confirmada", "não consta no cadastro".
+   - NÃO exponha processo interno: nunca diga "vou/vamos verificar internamente", "verificar com a equipe", "vamos atualizar o anúncio", "atualizar por aqui".
+   - NÃO use frases de telemarketing: "estou/estamos à disposição", "entre em contato", "fale conosco", "nossa equipe técnica", "mande mensagem".
+   - NÃO prometa proativamente devolução, reembolso, prazo de entrega ou estoque.
+   Quando faltar um dado específico, responda com o que você SABE do produto; se realmente não souber, use EXATAMENTE: "Olá! Vou conferir essa informação e te retorno em breve." — sem expor cadastro nem processo interno.
+10. Se a pergunta for sobre pagamento/checkout/Pix/QR Code, oriente o passo útil (copiar o código Pix e colar no banco, trocar de navegador/dispositivo, ou o suporte do próprio Mercado Livre) — NÃO trate como rastreamento de pedido já realizado.
 
 CONTEXTO DO PRODUTO:
-${productContext}`;
+${productContext}${correctionContext}`;
 
   const model = agentConfig.model || "claude-sonnet-4-6";
   const temperature = parseFloat(agentConfig.temperature || "0.3");
@@ -522,13 +528,38 @@ async function handleQuestion(resource: string, userId: number) {
 
   const agentConfig = await getAgentConfig(supabase);
 
+  // LEARNING LOOP — pull operator-approved corrections (response_corrections)
+  // for questions semantically similar to this one, and inject them into the
+  // prompt so the AI reuses the answer a human already verified. Without this
+  // the system kept repeating mistakes that had already been corrected.
+  const CLEAN_FALLBACK = "Olá! Vou conferir essa informação e te retorno em breve.";
+  let correctionContext = "";
+  try {
+    const hits = await searchCorrections(question.text, 0.65, 3);
+    if (hits.length > 0) {
+      const lines = hits
+        .map(
+          (c, i) =>
+            `${i + 1}. Pergunta similar: "${c.originalQuestion}"\n   RESPOSTA APROVADA: "${c.recommendedResponse}" (similaridade ${(c.similarity * 100).toFixed(0)}%)`
+        )
+        .join("\n\n");
+      correctionContext = `\n\n## RESPOSTAS APROVADAS PARA PERGUNTAS SIMILARES (USE OBRIGATORIAMENTE)\n\nUm operador humano JÁ corrigiu como esta pergunta deve ser respondida. Você DEVE usar a resposta aprovada abaixo como base, mantendo o mesmo conteúdo informacional.\n\n${lines}`;
+      log("corrections_found", { count: hits.length, top: hits[0].similarity });
+    } else {
+      log("corrections_none_above_threshold", { threshold: 0.65 });
+    }
+  } catch (e) {
+    log("corrections_search_failed", { error: String(e) });
+  }
+
   let aiResult: { answer: string; tokens: number; timeMs: number };
   try {
     aiResult = await generateAIAnswer(
       question.text,
       productName,
       agentConfig,
-      fullContext
+      fullContext,
+      correctionContext
     );
     const validation = validateMLQuestionResponse(aiResult.answer);
     if (validation.forbiddenContactDetected) {
@@ -537,7 +568,25 @@ async function handleQuestion(resource: string, userId: number) {
         original: aiResult.answer.slice(0, 300),
         questionId,
       });
-      aiResult.answer = "Olá! No momento essa informação técnica não está confirmada no cadastro do produto. Vamos verificar internamente e atualizar o anúncio quando necessário.";
+      // Substitute — priority: (1) operator-approved correction, (2) clean
+      // fallback. NEVER reuse a hardcoded phrase that itself trips the
+      // validator (the old bug). Always re-validate the substitute.
+      let substitute = "";
+      try {
+        const hits = await searchCorrections(question.text, 0.55, 1);
+        if (hits.length > 0) {
+          substitute = hits[0].recommendedResponse;
+          log("forbidden_substituted_by_correction", { similarity: hits[0].similarity });
+        }
+      } catch (e) {
+        log("forbidden_correction_lookup_failed", { error: String(e) });
+      }
+      if (!substitute || substitute.trim().length === 0) {
+        substitute = CLEAN_FALLBACK;
+        log("forbidden_substituted_by_fallback", {});
+      }
+      const reval = validateMLQuestionResponse(substitute);
+      aiResult.answer = reval.forbiddenContactDetected ? CLEAN_FALLBACK : reval.text;
     } else {
       aiResult.answer = validation.text;
     }
