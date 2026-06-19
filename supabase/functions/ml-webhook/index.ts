@@ -284,6 +284,7 @@ REGRAS PARA PERGUNTAS DO MERCADO LIVRE:
    - NÃO prometa proativamente devolução, reembolso, prazo de entrega ou estoque.
    Quando faltar um dado específico, responda com o que você SABE do produto; se realmente não souber, use EXATAMENTE: "Olá! Vou conferir essa informação e te retorno em breve." — sem expor cadastro nem processo interno.
 10. Se a pergunta for sobre pagamento/checkout/Pix/QR Code, oriente o passo útil (copiar o código Pix e colar no banco, trocar de navegador/dispositivo, ou o suporte do próprio Mercado Livre) — NÃO trate como rastreamento de pedido já realizado.
+11. Sobre ESTOQUE / DISPONIBILIDADE / quantidade: NÃO afirme que "tem em estoque" nem cite número de unidades. A disponibilidade real aparece no próprio anúncio ao adicionar ao carrinho/finalizar a compra — oriente o comprador por aí (ex.: "A quantidade disponível aparece no anúncio ao adicionar ao carrinho.").
 
 CONTEXTO DO PRODUTO:
 ${productContext}${correctionContext}`;
@@ -434,7 +435,10 @@ async function getProductContext(
   if (product.variations) parts.push(`Variações: ${JSON.stringify(product.variations)}`);
   if (product.usage_suggestions) parts.push(`Sugestões de uso: ${product.usage_suggestions}`);
   if (product.differentials) parts.push(`Diferenciais: ${product.differentials}`);
-  if (product.stock_status) parts.push(`Estoque: ${product.stock_status} (${product.stock_quantity ?? 0} un.)`);
+  // Estoque OMITIDO de proposito (19/06): o catalogo Canggu esta congelado desde ~abril (sem sync).
+  // Expor stock_status/quantity desatualizado fazia a Ana afirmar estoque errado.
+  // REATIVAR esta linha quando a sincronizacao diaria de estoque (por nome, Opcao 1) estiver no ar e validada.
+  // if (product.stock_status) parts.push(`Estoque: ${product.stock_status} (${product.stock_quantity ?? 0} un.)`);
 
   return parts.join("\n");
 }
