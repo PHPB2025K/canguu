@@ -81,7 +81,11 @@ export async function matchMLItemToProduct(
   // Step 2: Semantic search fallback (single product only)
   if (!itemTitle) return { products: [], relatedListings: [], source: 'none', isKit: false }
 
-  const results = await searchProducts(itemTitle, 3, 0.4)
+  // Threshold raised 0.4 -> 0.62 (audit 2026-06-24): 0.4 was too permissive and caused
+  // wrong-product grounding (e.g. "Kit 6 Potes Fit" described as "5 Potes Redondos Tampa Preta").
+  // A weak match now returns 'none' so the agent answers from the listing title instead of
+  // confidently describing the wrong product.
+  const results = await searchProducts(itemTitle, 3, 0.62)
   if (results.length === 0) return { products: [], relatedListings: [], source: 'none', isKit: false }
 
   const bestMatch = results[0]
