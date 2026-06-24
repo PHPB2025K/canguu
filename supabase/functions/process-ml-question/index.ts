@@ -267,7 +267,7 @@ serve(async (req: Request) => {
       }
 
       if (!substitute || substitute.trim().length === 0) {
-        substitute = 'Para essa especificação técnica do produto, recomendo verificar a descrição completa do anúncio. Caso a informação não esteja lá, podemos atualizá-la.'
+        substitute = 'Boa pergunta! Os detalhes completos desse produto estão nas fotos e na ficha técnica do anúncio — vale dar uma olhada por lá. Posso ajudar em mais alguma coisa?'
         log('forbidden_contact_substituted_by_fallback', {})
       }
 
@@ -278,9 +278,9 @@ serve(async (req: Request) => {
       if (validated.forbiddenContactDetected) {
         // Last-resort safety: hardcoded answer that cannot violate.
         validated = {
-          text: 'Obrigado pela pergunta. Vou verificar essa informação técnica e retorno em breve.',
+          text: 'Boa pergunta! Recomendo conferir as fotos e a ficha técnica do anúncio, que trazem os detalhes do produto.',
           warnings: ['hardcoded_safe_fallback'],
-          charCount: 90,
+          charCount: 108,
         }
       }
     }
@@ -345,7 +345,7 @@ A resposta fica visivel para TODOS os compradores. Regras inviolaveis:
 7. Comece com "Ola!" (saudacao breve, sem nome do comprador).
 8. Responda a pergunta de forma direta e objetiva.
 9. Encerre de forma natural quando fizer sentido (ex: "Espero ter ajudado!", "Boa compra!"). NAO use frases prontas tipo "estamos a disposicao", "fale conosco", "entre em contato" — sao PROIBIDAS pelo ML.
-10. Se nao souber a resposta com certeza: "Olá! Vou conferir essa informacao e te retorno em breve."
+10. Se NAO tiver certeza de uma especificacao: e PROIBIDO dizer "vou verificar/conferir e retorno", "nao consta/confirmado no cadastro" ou "vamos atualizar o anuncio". Em vez disso: (a) de a informacao que existe no contexto do produto acima; (b) se faltar precisao, diga o aproximado com ressalva honesta ("por ser importado pode ter pequena variacao") e indique que os detalhes estao nas fotos e na ficha tecnica do anuncio; (c) foque no que o produto FAZ BEM e trate limitacoes como consequencia tecnica (ex: o pote de vidro nao vai ao forno por causa da vedacao de silicone e do choque termico), nunca como falha de cadastro. Se o comprador quer uma variacao (cor/tamanho) que nao e a do anuncio, ofereca a alternativa Budamix mais proxima pelo NOME.
 11. NAO use o separador \\\\ — resposta do ML e texto unico, nao chunks.
 12. Linguagem natural e simples, como uma pessoa real conversando — cordial sem ser formal de telemarketing. Evite girias regionais e palavroes; o resto e livre.
 13. NAO use formatacao WhatsApp (*negrito*, _italico_) — resposta e texto puro.`

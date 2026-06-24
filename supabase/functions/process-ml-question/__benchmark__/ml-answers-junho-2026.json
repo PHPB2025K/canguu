@@ -1,0 +1,609 @@
+{
+  "descricao": "Benchmark de regressao — 48 perguntas reais do Mercado Livre (junho/2026) respondidas pela Ana. Use para testar o prompt: gere a resposta para cada pergunta e verifique os criterios de aprovacao abaixo.",
+  "origem": "Auditoria 2026-06-24 (Canggu marketplace_questions, feedback IS NULL). Itens 1-40 = prompt antigo; 41-48 = pos Padrao Ouro.",
+  "criterios_aprovacao": {
+    "frases_proibidas_NUNCA_presentes": [
+      "nao consta/confirmado/detalhada no cadastro",
+      "vamos/vou verificar internamente",
+      "vou conferir/verificar e te retorno",
+      "retorno em breve",
+      "vamos atualizar o anuncio",
+      "nossa equipe tecnica",
+      "pedimos desculpas pela divergencia",
+      "mencionar devolucao/reembolso/30 dias sem o cliente pedir",
+      "pedir contato externo (whatsapp/telefone/email/entre em contato)"
+    ],
+    "deve": [
+      "responder sobre o PRODUTO do anuncio (sem confundir)",
+      "usar a Verdade do Catalogo (micro sem tampa/freezer sim/lava-loucas sim/forno e air fryer conforme tabela)",
+      "nunca inventar medida/peso/material/capacidade",
+      "oferecer alternativa Budamix por NOME quando faltar a variacao pedida",
+      "ferimento/dano -> empatia + escalar humano, sem prometer solucao"
+    ]
+  },
+  "placar_junho_2026": {
+    "adequadas": 13,
+    "parciais": 4,
+    "inadequadas": 31,
+    "criticas": [
+      6,
+      7,
+      15,
+      16,
+      19,
+      31,
+      33,
+      44
+    ]
+  },
+  "casos": [
+    {
+      "n": 1,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Ola! Este anuncio ja vem na cor azul-petroleo (esta no titulo), entao a escolha de cor e so a confirmacao mesmo. Selecione \"Azul-petroleo\" na area de variacao, logo abaixo do preco, e a compra libera normal. Se nao aparecer, costuma ser instabilidade momentanea do ML — recarregar a pagina ou usar o app resolve. Qualquer duvida estamos a disposicao!"
+    },
+    {
+      "n": 2,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 - frase proibida: 'nao esta confirmada no cadastro'",
+        "Regra 17 - frase proibida: 'vamos verificar internamente'",
+        "Regra 17 - frase proibida: 'atualizar o anuncio quando necessario'",
+        "Principio 17b - nao deu info tecnica direta existente no catalogo",
+        "Principio 17c - omitiu info que EXISTE no catalogo (micro sim / air fryer nao recomendado)"
+      ],
+      "problema": "Despachou com template robotico cheio de frases proibidas ('nao confirmada no cadastro', 'verificar internamente', 'atualizar o anuncio') quando a info EXISTE no catalogo: micro-ondas sim (sem tampa) e air fryer nao recomendado. Zero informacao tecnica entregue.",
+      "resposta_padrao_ouro": "Ola! Pode sim ir ao micro-ondas, e so usar sem a tampa. Ja na fritadeira eletrica (air fryer) nao recomendamos: a vedacao de silicone da tampa e o choque termico da air fryer podem trincar o vidro. Para aquecer no dia a dia, o micro-ondas resolve muito bem. Qualquer duvida sobre os tamanhos, e so perguntar!"
+    },
+    {
+      "n": 3,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Oi! Que bom que quer deixar sua opiniao :) E facil: entre em \"Compras\" no Mercado Livre, encontre este pedido e clique em \"Opinar\" (a opcao aparece depois que o recebimento e confirmado). Seu feedback ajuda muito a gente!"
+    },
+    {
+      "n": 4,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / frase proibida: 'nao esta confirmada no cadastro'",
+        "Regra 17 / frase proibida: 'Vamos verificar internamente'",
+        "Regra 17 / frase proibida: 'atualizar o anuncio quando necessario'",
+        "Omissao de info existente no catalogo (potes de vidro borossilicato: FREEZER = sim)",
+        "Principio 17b (info tecnica direta) e 17e (fechar positivo) nao cumpridos"
+      ],
+      "problema": "A info existe no catalogo (potes de vidro hermetico borossilicato vao sim ao freezer), mas a Ana negou com tres frases proibidas ('nao confirmada no cadastro', 'verificar internamente', 'atualizar o anuncio') em vez de responder o simples \"sim\". Resposta anterior a 19/06 (prompt antigo), mas reprovada contra o Padrao Ouro vigente.",
+      "resposta_padrao_ouro": "Ola! Pode sim colocar no freezer sem problema. Esses potes sao de vidro borossilicato, que aguenta bem baixas temperaturas. Tambem podem ir ao micro-ondas (sem a tampa) e a lava-loucas. Qualquer duvida sobre os outros usos, e so perguntar!"
+    },
+    {
+      "n": 5,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 — frase proibida: 'nao temos informacao confirmada no cadastro' (info de cor EXISTE/e conhecida no catalogo: kits saem em cor unica/sortida, nao da pra escolher)",
+        "Regra 17 — frase proibida: 'Vamos verificar internamente e retornar'",
+        "Regra 17 — mencionar DEVOLUCAO/30 dias sem o cliente ter pedido",
+        "Principio 17b/17c — nao deu a info tecnica direta: o produto e claro/transparente e nao ha variacao de cor; tratou como falha de cadastro",
+        "Principio 17d — nao ofereceu alternativa Budamix por nome",
+        "Principio 17e — fechou negativo, induzindo devolucao em vez de fechar positivo"
+      ],
+      "problema": "A Ana usou duas frases proibidas (\"nao temos informacao confirmada no cadastro\" e \"vamos verificar internamente e retornar\") e ofereceu devolucao em 30 dias sem o cliente ter pedido. A info de cor existe: este e o jogo de potes CLARO/transparente e os kits coloridos saem em cores sortidas, sem escolha de cor especifica.",
+      "resposta_padrao_ouro": "Ola! Obrigado pela compra! Este modelo e o Jogo de Potes de Vidro Claro (transparente), entao ele nao vem na versao cinza — a peca e em vidro borossilicato translucido, o que ajuda a visualizar o conteudo. Se quiser cor, temos os potes nas versoes coloridas Budamix, que saem em cores sortidas conforme o estoque. Qualquer duvida sobre uso (micro-ondas, freezer, lava-loucas), e so perguntar por aqui. Aproveite seus potes!"
+    },
+    {
+      "n": 6,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra 3 / Inviolavel: cliente relatou ferimento (corte) e pote quebrado — exige empatia genuina + escalonar, NUNCA template robotico de 'vamos verificar'",
+        "Regra 17 frase proibida: 'nao esta confirmado no cadastro'",
+        "Regra 17 frase proibida: 'Vamos verificar internamente'",
+        "Regra 17 frase proibida: 'atualizar o anuncio quando necessario'",
+        "Principio 17a: nao reconheceu o incomodo/dano em nenhuma frase",
+        "Principio 17b/c: ignorou a info do catalogo (pote vidro vai ao micro SEM tampa; trinca por choque termico/vedacao)",
+        "Tom: resposta fria, robotica, zero empatia diante de ferimento"
+      ],
+      "problema": "Diante de uma cliente que se cortou e teve o pote quebrado no micro-ondas, a Ana respondeu com template robotico cheio de frases proibidas (\"nao confirmado no cadastro\", \"verificar internamente\", \"atualizar o anuncio\"), sem nenhuma empatia, sem reconhecer o ferimento e sem escalonar. Conduta critica em caso de dano/ferimento.",
+      "resposta_padrao_ouro": "Que situacao, sinto muito pelo susto e principalmente pelo corte — sua seguranca vem em primeiro lugar. Vou registrar seu caso aqui para nossa equipe te dar todo o suporte. So um cuidado importante para o uso: os potes de vidro borossilicato podem ir ao micro-ondas, mas sempre SEM a tampa — a tampa tem vedacao de silicone e, combinada ao aquecimento, pode gerar choque termico e trincar o vidro. Conta com a gente para resolver isso da melhor forma."
+    },
+    {
+      "n": 7,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra 3 (ferimento): despachou com template robotico de processo em vez de empatia genuina + sinalizar que a equipe vai resolver; nao houve real escalonamento humano, so um 'abra reclamacao'",
+        "Regra 17 / mencionar DEVOLUCAO/REEMBOLSO/30 dias sem o cliente pedir explicitamente nesse formato — aqui ate citou prazo de 30 dias proativamente como template",
+        "Regra 17 (f) / Principio 17-f: empurrar o cliente para abrir reclamacao/processo de devolucao em vez de tratar o caso de ferimento com cuidado humano",
+        "Regra 17 — direcionar o cliente a 'abrir uma reclamacao direto no pedido' funciona como despacho processual robotico, sem acolhimento real do dano fisico"
+      ],
+      "problema": "Cliente relatou FERIMENTO e a Ana respondeu com template processual (abra reclamacao, devolucao gratuita, reembolso, prazo 30 dias) em vez de empatia genuina + sinalizar que a equipe vai cuidar do caso. Despachou um caso de dano fisico para um fluxo automatico de reembolso, sem acolhimento real nem escalonamento humano.",
+      "resposta_padrao_ouro": "Que situacao seria, sinto muito de verdade — saber que voce se feriu nos preocupa e nao vamos deixar isso passar. Pode me contar rapidamente o que aconteceu com o produto? Ja vou acionar nossa equipe para olhar o seu caso com prioridade e cuidar de voce da melhor forma. Estamos aqui com voce."
+    },
+    {
+      "n": 8,
+      "veredito_junho_2026": "PARCIAL",
+      "severidade": "baixa",
+      "regras_violadas": [
+        "17e (nao fecha positivo: empurra a verificacao/busca pro cliente em vez de orientar com confianca)",
+        "17d parcial (oferece alternativa avulsa mas de forma condicional e incerta, sem afirmar o nome com seguranca)"
+      ],
+      "problema": "Acerta o nucleo (cores sortidas, nao da pra escolher rosa) e oferece a avulsa, mas o tom e inseguro (\"se disponivel\", \"se ha\") e transfere a tarefa de verificar para o cliente (\"Verifique em nossa loja\"), em vez de orientar com confianca.",
+      "resposta_padrao_ouro": "Oi! O kit de canecas Tulipa vem em cores sortidas conforme o estoque, entao nao da pra garantir todas em rosa. Se voce quer uma cor especifica, o melhor caminho e a Caneca Tulipa Porcelana 250ml avulsa, que da pra pedir na cor desejada e montar suas 6 unidades. Qualquer cor que escolher, a qualidade da porcelana e a mesma. :)"
+    },
+    {
+      "n": 9,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "Pergunta \"Pode ser\" e ininteligivel/sem contexto. A Ana pediu reformulacao de forma cordial, sem frases proibidas, sem inventar, sem confusao de produto e sem contato externo. Unico refinamento possivel: poderia adiantar 1-2 atributos do kit para agregar valor.",
+      "resposta_padrao_ouro": "Ola! Pode sim. So nao entendi bem a sua duvida — pode me dizer o que gostaria de saber? Esse e o Kit com 6 canecas Tulipa em porcelana de 250ml, em cores sortidas, e pode ir ao micro-ondas e a lava-loucas. Fico a disposicao!"
+    },
+    {
+      "n": 10,
+      "veredito_junho_2026": "PARCIAL",
+      "severidade": "media",
+      "regras_violadas": [
+        "Regra 1 (invencao): afirma existir uma 'Caneca Tulipa Rosa 250ml' individual como anuncio pesquisavel, mas o catalogo so confirma canecas tulipa avulsas e kits em cores SORTIDAS; nao ha SKU individual de cor especifica confirmado",
+        "Principio 17d: ao nao ter a variacao de cor, deveria oferecer a alternativa Budamix real por nome (caneca tulipa avulsa), nao prometer uma 'rosa' especifica que pode nao existir"
+      ],
+      "problema": "Recusar enviar link esta correto, mas a Ana afirma que existe uma \"Caneca Tulipa Rosa 250ml\" individual pesquisavel no ML. O catalogo so confirma canecas tulipa avulsas e kits em cores sortidas, sem SKU individual de cor especifica — direcionar para uma busca de cor especifica pode levar o cliente a um resultado inexistente.",
+      "resposta_padrao_ouro": "Ola! Por aqui nao consigo mandar link, mas posso ajudar: temos a Caneca Tulipa Lisa 250ml de porcelana tambem na versao avulsa nos nossos anuncios Budamix — e so buscar por \"Caneca Tulipa 250ml Budamix\" que voce encontra as opcoes disponiveis. Os kits coloridos saem em cores sortidas conforme estoque, entao a cor exata pode variar. Qualquer duvida sobre as canecas, e so perguntar por aqui!"
+    },
+    {
+      "n": 11,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Crítico — frase proibida: 'Não temos confirmação de disponibilidade com borracha branca no cadastro deste produto' (variante de 'não consta no cadastro')",
+        "Princípio 17c — apresenta limitação como falta de dado de cadastro, não como característica concreta do produto",
+        "Princípio 17d — não oferece a alternativa Budamix mais próxima por nome quando a variação pedida não existe"
+      ],
+      "problema": "A Ana usa a frase proibida \"não temos confirmação no cadastro\" para justificar a ausência da cor branca, quando o correto é simplesmente afirmar que este modelo vem com vedação verde-escuro. Não orienta o cliente sobre alternativa real (o cliente quer 2 potes brancos e o anúncio é kit com 2 verdes).",
+      "resposta_padrao_ouro": "Olá! Este kit vem com 2 potes de 1520ml e a vedação de silicone na cor verde-escuro. No momento não trabalhamos com a opção de borracha branca para este modelo. Como você precisa de 2 potes, este kit já atende a quantidade. Qualquer dúvida sobre tamanho ou uso, é só perguntar. Obrigada pelo interesse!"
+    },
+    {
+      "n": 12,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Crítico — frase proibida: 'não está confirmada no cadastro do produto'",
+        "Regra 17 / Bloco Crítico — frase proibida: 'Vamos verificar internamente'",
+        "Regra 17 / Bloco Crítico — frase proibida: 'atualizar o anúncio quando necessário'",
+        "Princípio 17b — não deu nenhuma informação técnica direta",
+        "Princípio 17e — fechamento sem resolução, despachou o cliente com template robótico"
+      ],
+      "problema": "Resposta empilha três frases proibidas do bloco crítico (\"não está confirmada no cadastro\", \"vamos verificar internamente\", \"atualizar o anúncio quando necessário\") e não entrega nenhuma informação útil sobre o produto. É um despacho robótico puro.",
+      "resposta_padrao_ouro": "Olá! Ótima pergunta. Esses potes são feitos em vidro borossilicato (a parte que guarda o alimento), material livre de BPA por natureza. A tampa tem vedação de silicone com trava, também segura para contato com alimentos. Pode usar tranquilo no dia a dia, inclusive micro-ondas (sem a tampa), freezer e lava-louças. Qualquer dúvida sobre a linha, é só perguntar!"
+    },
+    {
+      "n": 13,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 — frase proibida: 'Nao temos essa informacao confirmada no cadastro do produto' (info de compatibilidade EXISTE no catalogo)",
+        "Regra 17 — frase proibida: 'precisa ser verificada internamente para confirmacao' (a info existe, nao ha o que verificar)",
+        "Principio 17b/17c — omitiu a razao tecnica concreta (vedacao de silicone + choque termico) e tratou a limitacao como falha de cadastro",
+        "Principio 17e — fechamento negativo, deixa o cliente sem resposta definitiva"
+      ],
+      "problema": "A info de air fryer EXISTE no catalogo (nao recomendado por vedacao de silicone + risco de choque termico/trinca). A Ana usou duas frases proibidas ('nao temos confirmado no cadastro' e 'verificada internamente'), despachou com tom robotico e ainda chamou a tampa de plastica quando a tampa e de silicone, deixando a resposta vaga e insegura.",
+      "resposta_padrao_ouro": "Ola! Otima pergunta. No micro-ondas sim, sempre sem a tampa. Ja na air fryer nao recomendamos: a tampa tem vedacao de silicone e o vidro borossilicato pode sofrer choque termico e trincar com o calor seco e intenso do aparelho. Para aquecer, micro-ondas (sem tampa), forno nao para este redondo, e e otimo para freezer e lava-loucas. Conta com a gente!"
+    },
+    {
+      "n": 14,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "— Resposta correta e fiel ao catalogo: kit colorido vem em cores sortidas/variadas conforme estoque, confirma as cores citadas pelo comprador, tom caloroso e fecha positivo. Nenhuma frase proibida, sem invencao, sem contato externo. Ponto de melhoria leve: poderia ser explicita de que as cores sao SORTIDAS e nao garantia de receber exatamente esse conjunto de 5 cores, mas nao chega a violar regra.",
+      "resposta_padrao_ouro": "Ola! Esse kit vem com 6 canecas Tulipa de porcelana 250ml em cores sortidas, dentro da paleta que aparece nas fotos (verde, rosa, amarelo, branco e preto). Por serem variadas conforme o estoque, o conjunto segue o padrao das imagens. Sao porcelana de alta qualidade, podem ir ao micro-ondas e a lava-loucas. Otima escolha!"
+    },
+    {
+      "n": 15,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra 2 / Confusao de produto (CRITICA): descreve 'Conjunto de 5 Potes Redondos 140/220/400/530/980ml' num anuncio que e 'Kit Jogo 6 Potes Fit Azul-petroleo' — RAG trocou o produto",
+        "Regra 1 / Invencao (CRITICA): capacidades 140/220/400/530/980ml nao batem com o catalogo (redondo real = 150/200/350/500/900ml) — numeros inventados",
+        "Regra 17 — frase proibida: 'nao temos informacao confirmada... neste cadastro' (variante de 'nao consta no cadastro') = violacao ALTA de tom",
+        "Regra 17 — frase proibida: 'Vou verificar internamente' = violacao ALTA de tom",
+        "Principio 17d: cliente pediu o de 1520ml (existe no catalogo: Retangular 1520ml) e a Ana nao ofereceu a alternativa Budamix correta por nome — omissao de info que existe no catalogo"
+      ],
+      "problema": "A Ana descreveu o produto errado (confusao de RAG: fala de um conjunto de 5 potes redondos com capacidades inventadas, num anuncio de 6 potes Fit azul-petroleo) e negou o tamanho 1520ml que de fato existe no catalogo (Retangular hermetico 1520ml borossilicato), ainda usando duas frases proibidas.",
+      "resposta_padrao_ouro": "Ola! Boa escolha em completar sua colecao. O pote de 1520ml existe sim na nossa linha de potes hermeticos de vidro borossilicato — e o maior da versao retangular (640ml, 1050ml e 1520ml). Se este anuncio nao trouxer exatamente o 1520ml na composicao, da pra encontra-lo na nossa linha de Potes Retangulares Budamix, perfeito pra guardar porcoes maiores. Otima escolha pra organizar a cozinha!"
+    },
+    {
+      "n": 16,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra 17 (frase proibida): 'nao esta detalhado no cadastro do produto'",
+        "Regra Inviolavel 1 (invencao): dimensao '20,5 x 7 cm' inventada — catalogo nao tem dimensoes individuais (dimensions = null)",
+        "Principio 17b/17c: trata limitacao como falha de cadastro em vez de razao tecnica concreta"
+      ],
+      "problema": "Usa frase proibida (\"nao esta detalhado no cadastro\") e inventa a dimensao \"20,5 x 7 cm\", que nao existe no catalogo (dimensoes individuais = null). Contexto sensivel (pessoa idosa) pedia honestidade sobre peso, nao um numero fabricado.",
+      "resposta_padrao_ouro": "Ola! Otima pergunta, ainda mais pensando no uso por uma pessoa idosa. Sao potes de vidro borossilicato com 1050ml, entao tem um peso natural do vidro, mas o formato e bem manuseavel no dia a dia. Nao tenho a pesagem exata de cada peca aqui para te passar com precisao — por ser importado pode haver pequena variacao. Se o peso for um ponto importante, nossa linha de potes redondos menores tende a ser mais leve e facil de segurar. Qualquer duvida na escolha, estou a disposicao!"
+    },
+    {
+      "n": 17,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Critico Marketplace: frase proibida 'nao esta confirmado no cadastro'",
+        "Regra 17 / Bloco Critico Marketplace: frase proibida 'Vamos verificar internamente'",
+        "Regra 17 / Bloco Critico Marketplace: frase proibida 'atualizar o anuncio'",
+        "Principio 17b: nao deu info tecnica direta (a info existe no catalogo)",
+        "Principio 17c: tratou limitacao como 'falha do cadastro' em vez de consequencia tecnica",
+        "Principio 17f: prometeu atualizacao de anuncio/verificacao proativamente"
+      ],
+      "problema": "A info existe no catalogo (pote vidro 320ml = Quadrado 320ml, compat null no catalogo, mas a orientacao geral de potes de vidro borossilicato cobre freezer/micro/forno). A Ana despachou com tres frases proibidas ('nao confirmado no cadastro', 'verificar internamente', 'atualizar o anuncio') sem responder nada de util.",
+      "resposta_padrao_ouro": "Oi! Pode usar do freezer direto, ele aguenta bem. No micro-ondas tambem vai, sempre sem a tampa (a tampa tem vedacao de silicone e nao deve ir ao micro). Ja para forno a gas nao recomendamos: a variacao brusca de temperatura pode trincar o vidro. Para forno o ideal e o nosso Pote Quadrado 520ml, que e proprio para essa finalidade. Qualquer duvida e so chamar!"
+    },
+    {
+      "n": 18,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Crítico — frase proibida: \"não está confirmada no cadastro\"",
+        "Regra 17 / Bloco Crítico — frase proibida: \"vamos verificar internamente\"",
+        "Regra 17 / Bloco Crítico — frase proibida: \"atualizar o anúncio quando necessário\"",
+        "Princípio 17b — não deu info técnica direta",
+        "Princípio 17e — fechou sem positividade real, com promessa vazia",
+        "Omissão de info que EXISTE no catálogo (lava-louças: sim)"
+      ],
+      "problema": "A info existe no catálogo (potes de vidro vão à lava-louças; tampas a mão) e a Ana negou conhecimento usando três frases proibidas em sequência (\"não está confirmada no cadastro\", \"verificar internamente\", \"atualizar o anúncio\"). Resposta robótica que esconde uma informação simples e disponível.",
+      "resposta_padrao_ouro": "Olá! Pode sim. Os potes vão tranquilamente na lava-louças. Só recomendamos lavar as tampas à mão, porque elas têm vedação de silicone e duram bem mais com cuidado manual. Qualquer dúvida sobre o produto, é só perguntar!"
+    },
+    {
+      "n": 19,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra Inviolavel 1 (inventar material): afirma 'aluminio esmaltado' quando o catalogo diz PORCELANA com suporte de madeira",
+        "Principio 17b (info tecnica direta com razao concreta): a razao dada esta baseada em material errado"
+      ],
+      "problema": "A Ana afirma que as canequinhas sao de \"aluminio esmaltado\", mas o catalogo diz claramente que sao de PORCELANA com suporte de madeira. Inventou/errou a composicao do material — violacao critica, mesmo que a conclusao (aguenta bebida quente) esteja certa.",
+      "resposta_padrao_ouro": "Oi! Aguentam sim. As canequinhas sao de porcelana de alta qualidade, que segura cafe e cha bem quentes tranquilamente. Como sao de 100ml (tamanho cafezinho/espresso), sao perfeitas pra servir e tomar na hora. Pode usar no micro-ondas tambem; o suporte de madeira so limpa com pano seco. Aproveite!"
+    },
+    {
+      "n": 20,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Oi! Boa pergunta. As 6 canequinhas vem em cores sortidas conforme nosso estoque, entao nao da pra escolher tons especificos. Sao porcelana com suporte de madeira, podem ir ao micro-ondas e a lava-loucas (as canequinhas; o suporte e so pano seco). Da uma olhada nas fotos do anuncio pra ver as cores. Qualquer duvida sobre o kit, e so perguntar por aqui!"
+    },
+    {
+      "n": 21,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 - frase proibida: 'nao esta confirmado no cadastro'",
+        "Regra 17 - frase proibida: 'verificar internamente'",
+        "Regra 17 - frase proibida: 'atualizar o anuncio quando necessario'",
+        "Principio 17(b/d) - omitiu info que existe no catalogo e nao ofereceu alternativa Budamix por nome",
+        "Principio 17(a) - nao reconheceu a necessidade do cliente",
+        "Principio 17(f) - prometeu atualizacao de anuncio proativamente"
+      ],
+      "problema": "Resposta empilha tres frases proibidas (\"nao confirmado no cadastro\", \"verificar internamente\", \"atualizar o anuncio\") sem entregar nenhuma informacao real. A pergunta e simples (existe tamanho maior?) e o catalogo tem a resposta: a linha de potes de vidro tem varios tamanhos. A Ana despachou com template robotico em vez de orientar.",
+      "resposta_padrao_ouro": "Oi! Tudo bem? Temos sim opcoes maiores na linha de potes de vidro hermetico Budamix. Alem do kit Fit, trabalhamos com os Potes Redondos (que vao ate 900ml) e os Retangulares de 640ml, 1050ml e 1520ml, otimos pra armazenar maiores volumes. Da uma olhada nesses anuncios na nossa loja pra escolher o tamanho ideal. Qualquer duvida e so chamar por aqui!"
+    },
+    {
+      "n": 22,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 — frase proibida: 'nao esta confirmado no cadastro'",
+        "Regra 17 — frase proibida: 'vamos verificar internamente'",
+        "Regra 17 — frase proibida: 'atualizar o anuncio quando necessario'",
+        "Principio 17b — omitiu info que existe no catalogo (kits coloridos vem em cores sortidas)",
+        "Principio 17d — nao ofereceu alternativa por nome (caneca avulsa)",
+        "Regra inviolavel 1 (tom) — tratou info existente como desconhecida"
+      ],
+      "problema": "A info EXISTE no catalogo (kits coloridos vem em cores sortidas/variadas) e a Ana respondeu com tres frases proibidas empilhadas, despachando o cliente em vez de responder o que ele perguntou. A pergunta inclusive ja contem a propria resposta.",
+      "resposta_padrao_ouro": "Ola! Sim, esse kit vem com as 6 canecas em cores sortidas/variadas conforme nosso estoque, entao a combinacao de tons pode mudar de um kit para outro. Sao caneletas de porcelana de alta qualidade, podem ir ao micro-ondas e a lava-loucas numa boa. Se preferir uma cor especifica, temos a Caneca Canelada avulsa. Qualquer duvida e so perguntar!"
+    },
+    {
+      "n": 23,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Critico: frase proibida \"nao esta confirmada no cadastro\"",
+        "Regra 17 / Bloco Critico: frase proibida \"vamos verificar internamente\" (info existe no catalogo)",
+        "Regra 17 / Bloco Critico: frase proibida \"atualizar o anuncio quando necessario\"",
+        "Principio 17b: omitiu info tecnica direta que existe no catalogo (lava-loucas = sim)",
+        "Principio 17c/e: nao focou no que o produto faz bem, fechamento nao positivo"
+      ],
+      "problema": "Despacha com template robotico e tres frases proibidas, negando ao cliente uma informacao que EXISTE no catalogo: potes de vidro hermetico (incluindo o quadrado 800ml) vao sim na lava-loucas (potes na maquina; tampas a mao).",
+      "resposta_padrao_ouro": "Ola! Pode sim usar na lava-loucas. Os potes de vidro hermetico aguentam bem a maquina; so as tampas a gente recomenda lavar a mao para preservar a vedacao de silicone por mais tempo. Otima escolha para organizar a cozinha!"
+    },
+    {
+      "n": 24,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "baixa",
+      "regras_violadas": [
+        "Regra 17 / Bloco crítico — empurra o problema para o cliente verificar os próprios dados cadastrais ('verifique se seus dados cadastrais no ML estão atualizados'), tom levemente defensivo/transfere a culpa em vez de acolher",
+        "Princípio 17a — não reconhece o incômodo/dificuldade do cliente em 1 frase antes de orientar"
+      ],
+      "problema": "A resposta orienta corretamente sobre o fluxo de compra padrão do ML e NAO viola frases proibidas graves (sem invenção, sem confusão de produto, sem contato externo, sem devolução). Falha leve: fecha jogando a responsabilidade no cliente (\"verifique se seus dados cadastrais estão atualizados\") sem antes acolher a frustração, tom um pouco defensivo.",
+      "resposta_padrao_ouro": "Olá! Que chato que travou na hora de finalizar. Pelo Mercado Livre a compra é rápida: é só clicar em \"Comprar agora\" ou \"Adicionar ao carrinho\" e seguir os passos da própria plataforma — ela pede só o básico (endereço de entrega e forma de pagamento). Se travar de novo, normalmente é só atualizar o app/página e tentar mais uma vez. Estamos com o produto pronto pra enviar e adoraríamos te atender!"
+    },
+    {
+      "n": 25,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Ola! Essa etapa de QR code e documento (CNH/RG) faz parte do processo de pagamento do proprio Mercado Livre, que cuida de toda a parte financeira da compra. Para concluir, e so clicar em \"Comprar\" e seguir os passos que o Mercado Livre pede na tela. Qualquer item que aparecer (cartao, QR code ou documento) e do checkout deles. Boa compra!"
+    },
+    {
+      "n": 26,
+      "veredito_junho_2026": "PARCIAL",
+      "severidade": "baixa",
+      "regras_violadas": [
+        "17b/17c - vaga, generica, nao tenta entender nem resolver o problema real do cliente",
+        "17a - reconhecimento raso, nao identifica que o cliente esta com problema tecnico para finalizar a compra"
+      ],
+      "problema": "Cliente sinaliza problema recorrente (provavelmente erro ao tentar comprar) e a Ana responde com template generico que nao investiga nem encaminha solucao; soa como dispensa (\"compre quando preferir\"). Nenhuma frase proibida nem invencao, mas falha em ajudar de verdade.",
+      "resposta_padrao_ouro": "Oi! Poxa, lamento que esteja tendo dificuldade. Pelo que entendi, algo esta travando na hora de finalizar a compra, certo? Pode me contar o que aparece na tela (alguma mensagem de erro, pagamento recusado, frete)? Assim consigo te orientar direitinho para voce conseguir levar seu Kit de Potes. Estou aqui para ajudar!"
+    },
+    {
+      "n": 27,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "media",
+      "regras_violadas": [
+        "Regra 17 / Bloco Crítico — direciona o cliente a abrir reclamação no Mercado Livre (instrução defensiva/de fricção, equivale a despachar o cliente para canal externo de disputa)",
+        "Regra 17 / Bloco Crítico — não pode mencionar reclamação/devolução proativamente; o cliente só relatou não-recebimento, não pediu abrir disputa",
+        "Princípio 17e — fecha jogando a responsabilidade no comprador ('voce pode abrir uma reclamacao'), sem assumir o caso nem sinalizar acompanhamento Budamix"
+      ],
+      "problema": "A Ana não acolhe de verdade nem se compromete a acompanhar: empurra o cliente para rastrear sozinho e abrir reclamação no próprio ML, transferindo o problema de volta para o comprador em vez de assumir e sinalizar que a Budamix vai resolver/escalar. Tom defensivo e procedimental.",
+      "resposta_padrao_ouro": "Oi! Sentimos muito que seu pedido ainda não chegou. Já vamos verificar o status do envio e o rastreio aqui do nosso lado para entender o que houve e te dar um retorno o quanto antes. Pode ficar tranquilo(a) que vamos cuidar disso para você."
+    },
+    {
+      "n": 28,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Crítico — frase proibida: 'Não tenho essa informação confirmada' (equivalente a 'não consta no cadastro')",
+        "Regra 17 / Bloco Crítico — frase proibida: 'Vou conferir e te retorno' (verificação prometida proativamente)",
+        "Princípio 17f — prometeu verificação/retorno proativamente",
+        "Princípio 17b — não deu nenhuma info técnica direta",
+        "Princípio 17e — fechamento sem conteúdo útil (despacho robótico)"
+      ],
+      "problema": "Resposta despacha o cliente com duas frases proibidas (\"não tenho confirmado\" + \"vou conferir e te retorno\") e zero conteúdo técnico. Não dá orientação sobre sublimação, que é uma propriedade física conhecida de canecas (substrato/poliéster, não a cor da peça).",
+      "resposta_padrao_ouro": "Olá! Boa pergunta. A sublimação adere na camada de revestimento da caneca (poliéster), não na cor em si: nas canecas brancas e claras o resultado fica mais nítido e fiel, justamente porque a cor de base não interfere na imagem. Em peças coloridas a estampa tende a ficar mais sutil. Se quiser cores vivas e definição máxima, a branca é a mais indicada. Qualquer detalhe da arte, é só nos dizer!"
+    },
+    {
+      "n": 29,
+      "veredito_junho_2026": "PARCIAL",
+      "severidade": "baixa",
+      "regras_violadas": [
+        "Regra 17 / Bloco Critico Marketplace — implicitamente direciona para fora ('nao conseguimos intervir', joga a responsabilidade no ML); roca a logica de empurrar pra contato/solucao externa",
+        "Principio 17e — fechamento sem reforco positivo, tom de 'nao e nosso problema'",
+        "Tom — postura defensiva/burocratica ('nao conseguimos intervir diretamente') em vez de acolher e ajudar de forma calorosa"
+      ],
+      "problema": "A orientacao tecnica (copiar codigo PIX em vez de escanear, trocar dispositivo) e correta e util, mas o tom abre se eximindo (\"nao conseguimos intervir diretamente\"), o que soa burocratico e defensivo. Nao ha acolhimento inicial nem fechamento positivo. Nenhuma frase proibida grave, nenhuma invencao ou confusao de produto.",
+      "resposta_padrao_ouro": "Oi! Vamos resolver isso. O pagamento PIX e processado pelo proprio Mercado Livre, entao a dica mais rapida e: copie o codigo PIX (Pix copia e cola) e cole no app do seu banco, em vez de escanear o QR Code. Se persistir, tente por outro navegador ou celular. Assim que o pagamento entrar, ja preparamos seu pedido com todo cuidado!"
+    },
+    {
+      "n": 30,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "A pergunta nao e sobre o produto (compatibilidade/dimensoes), e sobre rastreamento de pedido (\"nao aparece o codigo, apenas o QR code\"). A Ana interpretou corretamente como questao de pos-venda/entrega e direcionou para \"Minhas Compras\" no proprio Mercado Livre, sem pedir contato externo, sem frase proibida, sem inventar dado de catalogo.",
+      "resposta_padrao_ouro": "Ola! Esse QR code que aparece e usado pra acompanhar e retirar o pedido. O codigo de rastreamento completo voce encontra direto no Mercado Livre, em \"Minhas Compras\" > seu pedido, na area de envio. Por la da pra ver o status da entrega passo a passo. Qualquer duvida sobre o produto, e so chamar!"
+    },
+    {
+      "n": 31,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra inviolavel 2 (responder sobre o produto certo) / confusao de RAG",
+        "Regra inviolavel 1 (inventar composicao do kit)",
+        "Principio 17-b (info tecnica direta correta)"
+      ],
+      "problema": "O anuncio e do \"Kit Jogo 6 Potes Vidro Hermetico Fit Azul-petroleo\", mas a Ana afirma que e o \"Conjunto de 5 Potes Redondos com Tampa Preta\" — confusao de produto (RAG) e invencao de composicao. Descreve um kit completamente diferente do anunciado.",
+      "resposta_padrao_ouro": "Ola! Tranquilo, sem pressa. Este e o Kit com 6 Potes de vidro hermetico (borossilicato) na cor azul-petroleo, otimos para guardar alimentos com vedacao de silicone. Pode usar no freezer, lava-loucas e micro-ondas (sem a tampa). Qualquer duvida sobre o produto antes de fechar, e so perguntar que ajudo com prazer!"
+    },
+    {
+      "n": 32,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Ola! Claro, e so adicionar este ao carrinho junto com o outro item e finalizar a compra dos dois de uma vez pelo proprio Mercado Livre. Boas compras!"
+    },
+    {
+      "n": 33,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra 2 (CRITICA) - confusao de produto: descreveu 'Conjunto de 5 Potes Redondos com Tampa Preta' num anuncio que e 'Kit Jogo 6 Potes Fit Azul-petroleo'",
+        "Regra 1 (CRITICA) - invencao: capacidades '140/220/400/530/980ml' nao correspondem ao catalogo (redondo real e 150/200/350/500/900ml) e nem ao anuncio",
+        "Principio 17b - nao respondeu a duvida real (cliente quer comprar 6 + 2 potes / dois pedidos)"
+      ],
+      "problema": "A Ana descreveu um produto totalmente diferente do anuncio (Conjunto 5 Potes Redondos Tampa Preta) num anuncio de Kit 6 Potes Fit Azul-petroleo, citando capacidades inventadas. Confusao de RAG (critica) somada a invencao de dados.",
+      "resposta_padrao_ouro": "Ola! So pra confirmar: voce quer dois pedidos, um com 6 potes e outro com 2? Este anuncio e do Kit com 6 potes herméticos de vidro (linha Fit, azul-petroleo). Para comprar quantidades diferentes, basta ajustar o campo de quantidade antes de finalizar, ou fazer duas compras separadas. Me diz o que precisa que te ajudo a montar o pedido certinho!"
+    },
+    {
+      "n": 34,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "Pergunta e sobre falha de pagamento na plataforma do ML, nao sobre o produto. Ana orienta troubleshooting valido (cache, outro dispositivo, meio de pagamento) e aponta o proprio suporte do Mercado Livre — que e a plataforma, nao contato externo proibido. Sem invencao, confusao de produto ou frase proibida; fecha positivo confirmando estoque.",
+      "resposta_padrao_ouro": "Oi! Esse erro costuma ser do proprio checkout do Mercado Livre, nao do anuncio. Tente recarregar a pagina, limpar o cache ou abrir em outro navegador/celular, e confira se o cartao/Pix esta valido. Se persistir, o suporte do proprio ML resolve rapidinho. O produto esta com estoque, e so finalizar que ja preparamos seu envio!"
+    },
+    {
+      "n": 35,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 — frase proibida: 'nao esta detalhada no cadastro do produto'",
+        "Regra 17 — frase proibida: 'Vou verificar internamente e retorno'",
+        "Principio 17b — nao deu info tecnica direta",
+        "Principio 17e — fechamento despachando sem resolver a duvida"
+      ],
+      "problema": "Resposta empilha duas frases proibidas do bloco critico ('nao esta detalhada no cadastro' + 'vou verificar internamente e retorno'). Despacha o cliente sem responder, em vez de dar a info do acabamento da porcelana canelada colorida.",
+      "resposta_padrao_ouro": "Ola! Otima pergunta. As nossas canecas caneladas em porcelana colorida tem acabamento liso e levemente acetinado (nao e fosco aveludado nem super brilhante de verniz). A versao preta segue esse mesmo padrao da linha. Sao porcelana de alta qualidade, podem ir ao micro-ondas e a lava-loucas. Qualquer duvida sobre as cores, estou a disposicao!"
+    },
+    {
+      "n": 36,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 1 (inviolável) — omissão/imprecisão: o catálogo confirma que o pote 1050ml VAI ao micro-ondas (sem tampa) e à lava-louças (potes; tampas a mão); a Ana endossou cegamente o manual e deixou o cliente acreditar que NÃO pode, contradizendo a verdade do catálogo",
+        "Princípio 17b — não deu a info técnica direta com a razão concreta (micro sim sem tampa, lava-louças sim, freezer sim; forno não no 1050ml retangular por choque térmico)",
+        "Princípio 17c — apresentou a limitação de forma genérica/defensiva em vez de focar no que o produto FAZ BEM",
+        "Princípio 17e — fechamento neutro, sem tom positivo Budamix"
+      ],
+      "problema": "A Ana validou o manual genérico e deixou implícito que o pote não pode micro-ondas/lava-louças, quando o catálogo confirma que PODE (micro sem tampa, lava-louças, freezer). Forno realmente não no 1050ml retangular. A resposta omite a informação correta e desinforma o cliente.",
+      "resposta_padrao_ouro": "Olá! Boa pergunta. Esse pote 1050ml é de vidro borossilicato, então na prática ele aguenta bem: pode ir ao micro-ondas (sempre sem a tampa), à lava-louças (a tampa lave à mão pra preservar a vedação de silicone) e ao freezer tranquilamente. O que pedimos evitar é o forno e a air fryer neste modelo retangular: o choque térmico mais intenso pode trincar o vidro ou comprometer a vedação. Aproveite com segurança!"
+    },
+    {
+      "n": 37,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 - frase proibida: 'nao esta confirmado no cadastro'",
+        "Regra 17 - frase proibida: 'Vamos verificar internamente'",
+        "Regra 17 - frase proibida: 'atualizar o anuncio quando necessario'",
+        "Principio 17b - nao deu info tecnica direta com razao concreta",
+        "Principio 17c - tratou limitacao como falha de cadastro em vez de consequencia tecnica",
+        "Regra Inviolavel 1 (parcial) - omitiu info que EXISTE no catalogo"
+      ],
+      "problema": "A pergunta e legitima e a info existe no catalogo: o pote retangular 1050ml NAO vai ao forno (so o quadrado 520ml vai). A Ana empilhou tres frases proibidas (\"nao esta confirmado no cadastro\", \"vamos verificar internamente\", \"atualizar o anuncio\") e ignorou a verdade do catalogo, soando evasiva diante de uma divergencia real entre anuncio e manual.",
+      "resposta_padrao_ouro": "Ola! Boa pergunta. Esse pote retangular de 1050ml e feito em vidro borossilicato e e super versatil: vai ao micro-ondas (sem a tampa), lava-loucas, freezer e geladeira. Para forno, porem, este modelo nao e indicado — quem suporta o forno na nossa linha e o pote Quadrado de 520ml. O manual traz a orientacao mais precisa de uso, por isso vale segui-lo. Qualquer duvida sobre o uso, e so perguntar. Obrigado!"
+    },
+    {
+      "n": 38,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Oi! Boa pergunta. Este anuncio e da versao amarela, entao as 6 canequinhas vem todas em amarelo. Se quiser outras cores, e so checar as variacoes do anuncio ou nossos kits em cores sortidas. Qualquer duvida sobre as canecas estou por aqui!"
+    },
+    {
+      "n": 39,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "REGRA 17 — frase proibida: mencionar DEVOLUCAO/REEMBOLSO/30 dias sem o cliente ter pedido explicitamente (ele relatou erro de envio, nao pediu devolucao)",
+        "REGRA 17 — empurra o cliente para 'abrir reclamacao' e processo robotico em vez de acolher e sinalizar resolucao",
+        "REGRA INVIOLAVEL 3 — produto errado/divergencia: deveria ter empatia genuina + sinalizar que a equipe resolve, SEM despachar com template de processo",
+        "PRINCIPIO 17a/17e — resposta fria, template robotico, nao reconhece o transtorno de forma humana nem fecha positivo"
+      ],
+      "problema": "Cliente relatou erro de separacao (recebeu pote menor que o 980ml da etiqueta, em 2 kits) e NAO pediu devolucao. A Ana despeja template de \"abrir reclamacao + devolucao gratuita em 30 dias\", empurrando o cliente para o processo do ML em vez de acolher e sinalizar que a equipe vai corrigir o envio.",
+      "resposta_padrao_ouro": "Ola! Poxa, sinto muito por isso — voce comprou os potes de 980ml e parece que houve uma troca na separacao do seu pedido. Isso nao deveria ter acontecido. Ja estamos cuidando do seu caso aqui para resolver o quanto antes. Se puder anexar uma foto do que chegou junto da etiqueta, ajuda a agilizar. Pode ficar tranquilo que vamos acertar isso para voce."
+    },
+    {
+      "n": 40,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Ola! Entendo a duvida pelo titulo. Este anuncio e do kit com 6 potes hermeticos de 520ml na cor azul-petroleo — a quantidade correta e exatamente a que aparece na hora da compra: 6 unidades. Sao otimos para organizar a cozinha e vao ao micro-ondas (sem tampa), lava-loucas e freezer. Bom proveito!"
+    },
+    {
+      "n": 41,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 — frase proibida: 'nao temos essa informacao confirmada' (variante de 'nao consta no cadastro')",
+        "Principio 17b/17d — info existe no catalogo (kits coloridos = cores SORTIDAS, nao da pra escolher cor especifica; alternativa = caneca avulsa por nome) e foi mascarada como 'nao confirmado'",
+        "Principio 17a/17c — tom de incerteza/cadastro em vez de explicar o fato real do produto com seguranca"
+      ],
+      "problema": "Abre com frase proibida (\"nao temos essa informacao confirmada\"), tratando como incerteza algo que o catalogo define com clareza: o kit vem em cores sortidas e nao se escolhe cor especifica. A info de fundo ate aparece depois, mas o enquadramento de \"cadastro nao confirmado\" e proibido e nao oferece a alternativa avulsa por nome.",
+      "resposta_padrao_ouro": "Ola! Esse kit vem com 6 canecas em cores sortidas (variadas conforme o estoque do momento), entao nao da pra escolher uma cor especifica como lilas. Se voce prefere uma cor definida, vale considerar a Caneca Canelada 250ml avulsa. Obrigado pelo interesse!"
+    },
+    {
+      "n": 42,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Crítico — frase proibida: 'não temos essa informação confirmada sobre as opções de cores'",
+        "Regra 17 / Bloco Crítico — frase proibida: 'vamos verificar internamente'",
+        "Regra 17 / Bloco Crítico — frase proibida: 'atualizar por aqui'",
+        "Princípio 17(d) — não ofereceu alternativa Budamix por nome (caneca/kit colorido avulso)",
+        "Tom — despacho robótico, sem clareza prática sobre como funciona o pedido"
+      ],
+      "problema": "A Ana empilha três frases proibidas (\"não temos confirmado\", \"vamos verificar internamente\", \"atualizar por aqui\") e ainda assim não responde com clareza o ponto central: o cliente quer trocar a cor de dois kits já comprados. O anúncio é do modelo Claro/vidro transparente — não existem variantes vermelha/preta, e isso deveria ser dito de forma simples e direta, sem prometer verificação interna nem atualização de anúncio.",
+      "resposta_padrao_ouro": "Olá! Obrigada pela compra dos 2 kits. Este anúncio é o modelo Claro, em vidro transparente — ele não tem versão em vermelho ou preto, então os dois kits virão iguais, no vidro claro. Se quiser uma opção com cor, dá uma olhada nas nossas canecas e canequinhas Budamix, que saem em tons sortidos. Qualquer dúvida sobre o pedido, estou à disposição por aqui!"
+    },
+    {
+      "n": 43,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 - frase proibida: 'nao esta detalhada no cadastro'",
+        "Regra 17 - frase proibida: 'verificar internamente' + 'retorno assim que possivel'",
+        "Principio 17b - nao deu info tecnica direta",
+        "Principio 17f - prometeu verificacao/retorno proativamente"
+      ],
+      "problema": "Resposta despacha a pergunta com dois gatilhos proibidos (\"nao esta detalhada no cadastro\" + \"vou verificar internamente e retorno\"). Nao responde sobre embalagem individual e ainda promete retorno, o que e proibido em marketplace.",
+      "resposta_padrao_ouro": "Ola! O Jogo de 20 quebra-cabecas de animais vem em um unico conjunto educativo, com as pecas acomodadas juntas na embalagem do kit (nao em embalagens separadas peca a peca). Sao 20 modelos diferentes pra brincar e aprender. Qualquer duvida sobre os animais, e so chamar. Boas compras!"
+    },
+    {
+      "n": 44,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "critica",
+      "regras_violadas": [
+        "Regra 1 (invencao) — afirma '800 ml por pote' e '4 travas' com certeza absoluta, mas o catalogo nao confirma capacidade do anuncio (Quadrado 800ml = compat null; e o titulo conflita com a descricao que diz 320ml). Afirmar categoricamente qual e o correto, mais o detalhe '4 travas' nao verificavel, e inventar dado",
+        "Regra 17 — 'Pode comprar tranquilamente' / induzir a compra sobre uma divergencia real de cadastro nao resolvida, passando por cima da inconsistencia",
+        "Principio 17b/17c — nao trata a divergencia titulo vs descricao com honestidade tecnica; escolhe um lado arbitrariamente sem base no catalogo"
+      ],
+      "problema": "A Ana resolve uma divergencia real do anuncio (titulo 800ml vs descricao 320ml) cravando \"800ml por pote\" e inventando \"4 travas\", sem nenhum respaldo no catalogo (o Quadrado 800ml esta com compat/dados null e nada confirma a capacidade real). Afirmar categoricamente e ainda induzir \"pode comprar tranquilamente\" sobre uma inconsistencia nao verificada e invencao com risco de compra equivocada.",
+      "resposta_padrao_ouro": "Ola! Boa observacao. Esse kit e da linha de potes hermeticos de vidro borossilicato Budamix, com tampa de trava e vedacao de silicone. Houve uma divergencia entre titulo e descricao do anuncio, entao prefiro nao cravar a capacidade pra voce nao comprar errado: a referencia do nome e 800ml por pote, mas como ha essa diferenca no texto, vale confirmar a medida exata pela foto/ficha antes de fechar. Sao 10 unidades no kit. Qualquer linha (320ml ou 800ml) e o mesmo vidro resistente, vai ao micro-ondas (sem tampa), lava-loucas e freezer."
+    },
+    {
+      "n": 45,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Crítico — frase proibida: 'vou conferir e retorno' (variante 'Vou conferir essa informação e te retorno em breve') quando a info EXISTE no catálogo",
+        "Princípio 17b — não deu info técnica direta",
+        "Princípio 17c — não focou no que o produto faz bem nem explicou a limitação como consequência técnica",
+        "Princípio 17e — fechamento não positivo e empurra resolução pra depois",
+        "Omissão de informação que existe no catálogo (forno e air fryer dos potes herméticos)"
+      ],
+      "problema": "A info pedida existe no catálogo (potes herméticos: só o quadrado 520ml vai ao forno; air fryer não recomendado por vedação de silicone + choque térmico), mas a Ana despachou com a frase proibida \"vou conferir e te retorno\", deixando o cliente sem resposta.",
+      "resposta_padrao_ouro": "Olá! Sobre os potes herméticos de vidro borossilicato: forno não é recomendado para este kit (vão muito bem ao micro-ondas sem a tampa, freezer e lava-louças). Air fryer também não indicamos, porque a tampa tem vedação de silicone e o choque térmico pode trincar o vidro. Se o forno for essencial pra você, temos o Pote Quadrado 520ml, que resiste ao forno (sem a tampa). Qualquer dúvida na escolha, é só perguntar por aqui!"
+    },
+    {
+      "n": 46,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "media",
+      "regras_violadas": [
+        "Regra 17e/17 — pedir contato ('Qualquer duvida, e so perguntar') é fechamento tipo 'fale conosco', estilo de despacho que o Padrão Ouro proíbe",
+        "Princípio 17d — kit colorido sem a cor pedida: deveria oferecer alternativa Budamix por NOME (caneca avulsa), não foi feito",
+        "Princípio 17b/17c — não deu a info concreta do catálogo: kit vem em cores SORTIDAS/variadas conforme estoque, não dá pra escolher cor específica. Resposta empurrou a responsabilidade pro 'anuncio' em vez de explicar a natureza do produto"
+      ],
+      "problema": "Resposta genérica e evasiva: manda o cliente \"acompanhar o anuncio\" sem explicar que o kit é de cores sortidas (não dá pra garantir/escolher amarela) e não oferece alternativa por nome. Fecha com convite a contato no estilo \"fale conosco\". Não inventou dados nem confundiu produto, por isso severidade média.",
+      "resposta_padrao_ouro": "Olá! Esse kit de canecas caneladas vem em cores sortidas/variadas conforme o estoque, então não dá pra garantir a amarela especificamente em cada pedido. Se quiser uma cor certa, vale optar pela caneca avulsa, que dá mais controle sobre o tom. As caneladas 250ml são porcelana de alta qualidade, vão ao micro-ondas e à lava-louças tranquilo. Boas compras!"
+    },
+    {
+      "n": 47,
+      "veredito_junho_2026": "ADEQUADA",
+      "severidade": "nenhuma",
+      "regras_violadas": [],
+      "problema": "—",
+      "resposta_padrao_ouro": "Ola! Nao da pra criar link personalizado por aqui, mas e simples: e so ajustar a quantidade direto no anuncio (selecione 6 unidades antes de finalizar a compra). A disponibilidade aparece ao adicionar ao carrinho. Qualquer ajuste de quantidade fica por sua conta no proprio anuncio."
+    },
+    {
+      "n": 48,
+      "veredito_junho_2026": "INADEQUADA",
+      "severidade": "alta",
+      "regras_violadas": [
+        "Regra 17 / Bloco Critico Marketplace — frase proibida 'vou conferir e retorno' (variante 'Vou conferir essa informacao e te retorno em breve') usada quando a info existe no catalogo",
+        "Principio 17b — nao deu info tecnica direta",
+        "Principio 17d — nao ofereceu a alternativa Budamix mais proxima por nome (caneca avulsa)",
+        "Omissao de info do catalogo: kits coloridos vem em cores SORTIDAS/variadas, nao da pra escolher cor especifica"
+      ],
+      "problema": "Ana despachou com template robotico proibido (\"vou conferir e te retorno\") em vez de responder. A info ja existe no catalogo: o kit canelada colorido vem em cores sortidas/variadas conforme estoque, sem escolha de cor especifica nem previsao de cor avulsa.",
+      "resposta_padrao_ouro": "Ola! Esse kit de 6 canecas caneladas vem em cores sortidas/variadas conforme o estoque, entao nao da pra garantir ou reservar a cor vermelha especifica. Se voce quer uma cor certa, a melhor saida e a Caneca Canelada 250ml avulsa, que da pra pedir com a cor desejada. Qualquer duvida sobre o kit, e so perguntar por aqui!"
+    }
+  ]
+}

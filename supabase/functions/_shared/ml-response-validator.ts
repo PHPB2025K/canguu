@@ -58,6 +58,11 @@ const FORBIDDEN_ADMIN_LEAK_PATTERNS: Array<{ pattern: RegExp; reason: string }> 
   { pattern: /\b(?:verificar|conferir|checar|consultar)\s+internamente\b/i, reason: 'verificar internamente (qualquer conjugação)' },
   { pattern: /\batualizar(?:emos)?\s+por\s+aqui\b/i,                reason: 'atualizar por aqui' },
   { pattern: /\bdevolu[çc][ãa]o\s+gratuita\s+em\s+at[ée]\b/i,       reason: 'promessa proativa de devolução gratuita em X dias' },
+  // "vou conferir/verificar essa informação e te retorno em breve" — slipped through (no "internamente").
+  // Was literally the old hardcoded fallback / prompt rule 10. Audit 2026-06-24.
+  { pattern: /\b(?:vou|vamos|irei|iremos)\s+(?:conferir|verificar|checar|consultar)\b[^.!?]*\b(?:retorn|aviso|informo)\w*\b/i, reason: 'vou conferir e te retorno (promessa de verificação)' },
+  { pattern: /\b(?:te|lhe)\s+retorno\b/i,                            reason: 'te retorno (promessa de retorno)' },
+  { pattern: /\bretorn(?:o|amos|arei)\s+(?:em\s+breve|assim\s+que|o\s+mais\s+r[áa]pido)\b/i, reason: 'retorno em breve / assim que possível' },
 ]
 
 export interface MLValidationResult {
