@@ -19,6 +19,7 @@ const platforms = [
 export function QuestionsTab() {
   const [platform, setPlatform] = useState('all');
   const [status, setStatus] = useState('all');
+  const [analysis, setAnalysis] = useState('all');
   const [search, setSearch] = useState('');
 
   const { data: questions, isLoading, isError, refetch } = useMarketplaceQuestions(
@@ -26,6 +27,17 @@ export function QuestionsTab() {
     status,
     search || undefined
   );
+
+  // Filtro client-side por análise (feedback já dado à Ana)
+  const filtered = (questions ?? []).filter((q) => {
+    const fb = (q as any).feedback as string | null | undefined;
+    if (analysis === 'analyzed') return !!fb;
+    if (analysis === 'pending') return !fb;
+    if (analysis === 'good') return fb === 'good';
+    if (analysis === 'bad') return fb === 'bad';
+    return true;
+  });
+  const analyzedCount = (questions ?? []).filter((q) => !!(q as any).feedback).length;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -63,6 +75,19 @@ export function QuestionsTab() {
           </SelectContent>
         </Select>
 
+        <Select value={analysis} onValueChange={setAnalysis}>
+          <SelectTrigger className="w-[170px] h-8">
+            <SelectValue placeholder="Análise" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Análise: todas</SelectItem>
+            <SelectItem value="analyzed">Analisadas</SelectItem>
+            <SelectItem value="pending">Pendentes de análise</SelectItem>
+            <SelectItem value="good">Aprovadas</SelectItem>
+            <SelectItem value="bad">A corrigir</SelectItem>
+          </SelectContent>
+        </Select>
+
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -72,6 +97,12 @@ export function QuestionsTab() {
             className="pl-9 h-8"
           />
         </div>
+
+        {questions && questions.length > 0 && (
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {analyzedCount}/{questions.length} analisadas
+          </span>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0">
@@ -98,17 +129,19 @@ export function QuestionsTab() {
           </div>
         )}
 
-        {!isLoading && !isError && questions?.length === 0 && (
+        {!isLoading && !isError && filtered.length === 0 && (
           <div className="flex flex-col items-center py-16 text-center">
             <HelpCircle className="h-12 w-12 text-muted-foreground mb-3" />
-            <p className="text-base font-medium text-foreground">Nenhuma pergunta pendente 🎉</p>
-            <p className="text-sm text-muted-foreground mt-1">Suas perguntas estão em dia!</p>
+            <p className="text-base font-medium text-foreground">Nenhuma pergunta por aqui 🎉</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {analysis === 'all' ? 'Suas perguntas estão em dia!' : 'Nenhuma pergunta neste filtro de análise.'}
+            </p>
           </div>
         )}
 
-        {!isLoading && !isError && questions && questions.length > 0 && (
+        {!isLoading && !isError && filtered.length > 0 && (
           <div className="space-y-3">
-            {questions.map((q) => (
+            {filtered.map((q) => (
               <QuestionCard key={q.id} question={q} />
             ))}
           </div>
