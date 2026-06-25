@@ -38,7 +38,7 @@ const Conversations = () => {
           <p className="text-sm text-muted-foreground mb-3">
             Aprendizados que se aplicam ao WhatsApp (específicos + transversais) — recorte da base central.
           </p>
-          <LearningList channel="whatsapp" />
+          <LearningList channel="whatsapp" statuses={['auto_review', 'processed']} />
         </TabsContent>
       </Tabs>
     </div>

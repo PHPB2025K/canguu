@@ -11,7 +11,7 @@ export function LearningTab() {
         </p>
       </div>
       <div className="flex-1 overflow-y-auto min-h-0">
-        <LearningList channel="mercado_livre" />
+        <LearningList channel="mercado_livre" statuses={['auto_review', 'processed']} />
       </div>
     </div>
   );
