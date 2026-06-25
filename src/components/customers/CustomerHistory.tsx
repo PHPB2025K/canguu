@@ -5,7 +5,7 @@ import { RelativeTime } from "@/components/common/RelativeTime";
 import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MessageSquare } from "lucide-react";
-import { truncateText } from "@/lib/formatters";
+import { lastMessagePreview } from "@/lib/formatters";
 import { useCustomerConversations } from "@/hooks/useCustomers";
 
 interface CustomerHistoryProps {
@@ -40,7 +40,7 @@ export function CustomerHistory({ customerId }: CustomerHistoryProps) {
                     {c.category && <span className="text-xs text-muted-foreground">{c.category}</span>}
                   </div>
                   {c.lastMessage && (
-                    <p className="text-sm text-muted-foreground truncate">{truncateText(c.lastMessage, 80)}</p>
+                    <p className="text-sm text-muted-foreground truncate">{lastMessagePreview(c.lastMessage, 80)}</p>
                   )}
                 </div>
                 {c.updated_at && <RelativeTime date={c.updated_at} className="text-xs text-muted-foreground whitespace-nowrap" />}

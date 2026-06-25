@@ -1,9 +1,15 @@
 import { useState } from "react";
-import { User, Bot, UserCheck, Mic, Image, FileText, Video, Play } from "lucide-react";
+import { User, Bot, UserCheck, Mic, Image, FileText, Video, Play, MoreVertical, Languages } from "lucide-react";
 import { format } from "date-fns";
 import type { Message } from "@/types/database";
 import { cn } from "@/lib/utils";
 import { MediaLightbox } from "./MediaLightbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface MessageBubbleProps {
   message: Message;
@@ -33,12 +39,65 @@ const senderConfig: Record<string, { label: string; icon: typeof User; bubbleCla
   },
 };
 
+// `content` é o texto que a IA (Ana) lê nos bastidores — pra imagem ele carrega
+// a descrição automática do Gemini ("[Foto enviada pelo cliente] ..."), pra áudio
+// a transcrição do Groq. Na tela do Canggu quem olha é uma PESSOA: ela vê a mídia
+// com os próprios olhos, então NUNCA mostramos a descrição/transcrição da IA por
+// padrão — só a legenda REAL que o cliente digitou (se houver).
+//
+// Descrição automática da imagem (Gemini) — corta do marcador até o fim do texto:
+const AI_IMAGE_DESC_RE = /\[(Foto|Imagem) enviada pelo cliente\][\s\S]*$/i;
+// Placeholder de foto sem legenda:
+const FOTO_RECEBIDA_RE = /^\[Foto recebida\]\s*/i;
+// Conteúdo de áudio que é só placeholder (sem transcrição de fato):
+const AUDIO_PLACEHOLDER_RE = /^\[[ÁA]udio recebido[^\]]*\]$/i;
 // Strip the leading '[Imagem recebida]' / '[Vídeo recebido]' marker so the
 // caption from the customer (if any) shows below the media without the prefix.
 const MEDIA_PLACEHOLDER_RE = /^\[(Imagem recebida|V[ií]deo recebido|Sticker recebido|Documento recebido|\u00c1udio recebido[^\]]*)\]\s*/i;
 
 function extractCaption(content: string): string {
-  return content.replace(MEDIA_PLACEHOLDER_RE, "").trim();
+  return content
+    .replace(AI_IMAGE_DESC_RE, "")
+    .replace(MEDIA_PLACEHOLDER_RE, "")
+    .replace(FOTO_RECEBIDA_RE, "")
+    .trim();
+}
+
+// Transcrição do áudio para o botão opcional "Transcrever". Prioriza um campo
+// explícito em metadata (caso o backend venha a salvar) e cai pro `content`
+// (formato atual). Retorna null quando é só placeholder — aí nem oferecemos.
+function getAudioTranscription(message: Message): string | null {
+  const meta =
+    message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+      ? (message.metadata as Record<string, unknown>)
+      : null;
+  const explicit = meta && typeof meta.transcription === "string" ? meta.transcription : null;
+  const text = (explicit ?? message.content ?? "").trim();
+  if (!text || AUDIO_PLACEHOLDER_RE.test(text)) return null;
+  return text;
+}
+
+// Menu de 3 pontinhos do áudio: oferece "Transcrever" (opcional, sob demanda).
+function AudioTranscribeMenu({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Opções do áudio"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onToggle}>
+          <Languages className="mr-2 h-4 w-4" />
+          {open ? "Ocultar transcrição" : "Transcrever"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function getMediaUrls(metadata: Message["metadata"]): { imageUrl: string | null; videoUrl: string | null; audioUrl: string | null } {
@@ -69,10 +128,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isVideo = message.message_type === "video";
   const isAudio = message.message_type === "audio";
   const caption = isImage || isVideo ? extractCaption(message.content) : "";
+  // Transcrição fica ESCONDIDA por padrão; só aparece se a pessoa clicar em "Transcrever".
+  const audioTranscription = isAudio ? getAudioTranscription(message) : null;
 
   // Lightbox open state — single bubble can host either an image or a video.
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const openMedia = () => setLightboxOpen(true);
+  // Transcrição do áudio (opcional, sob demanda)
+  const [showTranscript, setShowTranscript] = useState(false);
 
   // Document still uses the legacy text label (no inline player)
   const fallbackLabel = !isImage && !isVideo && !isAudio ? getNonRenderableTypeLabel(message.message_type) : null;
@@ -191,29 +254,47 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         ) : isAudio && audioUrl ? (
           <div className="space-y-1.5">
-            <audio
-              src={audioUrl}
-              controls
-              preload="metadata"
-              className="block w-full max-w-[280px]"
-            />
-            {/* Transcrição abaixo do player — Yasmin tanto ouve quanto lê */}
-            {message.content && (
-              <p className="text-xs text-muted-foreground italic">
+            {/* Player só — a pessoa dá play e ouve. Sem transcrição na cara. */}
+            <div className="flex items-center gap-1">
+              <audio
+                src={audioUrl}
+                controls
+                preload="metadata"
+                className="block w-full max-w-[280px]"
+              />
+              {audioTranscription && (
+                <AudioTranscribeMenu
+                  open={showTranscript}
+                  onToggle={() => setShowTranscript((v) => !v)}
+                />
+              )}
+            </div>
+            {/* Transcrição opcional — só quando a pessoa pede em "Transcrever" */}
+            {showTranscript && audioTranscription && (
+              <p className="border-t border-border/50 pt-1.5 text-xs italic text-muted-foreground whitespace-pre-wrap break-words">
                 <Mic className="mr-1 inline-block h-3 w-3" />
-                {message.content}
+                {audioTranscription}
               </p>
             )}
           </div>
         ) : isAudio ? (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-sm text-foreground italic">
-              <Mic className="h-4 w-4" />
-              Mensagem de áudio
+            {/* Sem arquivo de áudio: rótulo + transcrição opcional sob demanda */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm text-foreground italic">
+                <Mic className="h-4 w-4" />
+                Mensagem de áudio
+              </div>
+              {audioTranscription && (
+                <AudioTranscribeMenu
+                  open={showTranscript}
+                  onToggle={() => setShowTranscript((v) => !v)}
+                />
+              )}
             </div>
-            {message.content && (
-              <p className="text-xs text-muted-foreground italic whitespace-pre-wrap break-words">
-                {message.content}
+            {showTranscript && audioTranscription && (
+              <p className="border-t border-border/50 pt-1.5 text-xs italic text-muted-foreground whitespace-pre-wrap break-words">
+                {audioTranscription}
               </p>
             )}
           </div>
