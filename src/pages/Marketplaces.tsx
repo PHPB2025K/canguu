@@ -4,7 +4,8 @@ import { MarketplaceKPICards } from '@/components/marketplaces/MarketplaceKPICar
 import { QuestionsTab } from '@/components/marketplaces/QuestionsTab';
 import { ChatsTab } from '@/components/marketplaces/ChatsTab';
 import { ConfigTab } from '@/components/marketplaces/ConfigTab';
-import { useUnansweredCount, useTotalUnreadCount, useMarketplaceRealtime } from '@/hooks/useMarketplaces';
+import { LearningTab } from '@/components/marketplaces/LearningTab';
+import { useUnansweredCount, useTotalUnreadCount, useMarketplaceRealtime, useLearningQueueCount } from '@/hooks/useMarketplaces';
 import { useMarketplaceTokenStatus } from '@/hooks/useMarketplaceTokens';
 
 function ConnectionIndicators() {
@@ -43,6 +44,7 @@ const Marketplaces = () => {
   useMarketplaceRealtime();
   const { data: unanswered = 0 } = useUnansweredCount();
   const { data: totalUnread = 0 } = useTotalUnreadCount();
+  const { data: learningCount = 0 } = useLearningQueueCount();
 
   return (
     <div className="flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden gap-6">
@@ -76,6 +78,14 @@ const Marketplaces = () => {
               </span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="learning" className="gap-1.5">
+            Aprendizados
+            {learningCount > 0 && (
+              <span className="bg-amber-100 text-amber-700 text-xs font-bold px-1.5 py-0.5 rounded-full ml-1">
+                {learningCount}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="config">Configurações</TabsTrigger>
         </TabsList>
 
@@ -84,6 +94,9 @@ const Marketplaces = () => {
         </TabsContent>
         <TabsContent value="chats" className="flex-1 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-4">
           <ChatsTab />
+        </TabsContent>
+        <TabsContent value="learning" className="flex-1 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-4">
+          <LearningTab />
         </TabsContent>
         <TabsContent value="config" className="flex-1 min-h-0 overflow-y-auto mt-4">
           <ConfigTab />

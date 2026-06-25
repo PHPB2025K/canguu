@@ -353,3 +353,92 @@ export function useSubmitCorrection() {
     },
   });
 }
+
+// ─── Fila de Aprendizados (correções geradas pela auditoria/cron, aguardando revisão) ───
+export interface LearningCorrection {
+  id: string;
+  original_question: string;
+  ai_response: string | null;
+  recommended_response: string;
+  product_sku: string | null;
+  corrected_by: string | null;
+  status: string;
+  created_at: string;
+}
+
+export function useLearningQueue() {
+  return useQuery({
+    queryKey: ['learning-queue'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('response_corrections' as any)
+        .select('id, original_question, ai_response, recommended_response, product_sku, corrected_by, status, created_at')
+        .eq('status', 'auto_review')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as LearningCorrection[];
+    },
+  });
+}
+
+export function useLearningQueueCount() {
+  return useQuery({
+    queryKey: ['learning-queue-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('response_corrections' as any)
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'auto_review');
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+/** Aprova uma correção (vira ativa). Se editar o texto, regenera o embedding. */
+export function useApproveCorrection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, recommendedResponse }: { id: string; recommendedResponse?: string }) => {
+      const edited = recommendedResponse !== undefined && recommendedResponse.trim().length > 0;
+      const patch: Record<string, unknown> = edited
+        ? { recommended_response: recommendedResponse!.trim(), status: 'pending', embedding: null }
+        : { status: 'processed', processed_at: new Date().toISOString() };
+      const { error } = await supabase.from('response_corrections' as any).update(patch as any).eq('id', id);
+      if (error) throw error;
+      if (edited) {
+        // regenera embedding (fire-and-forget) -> vira 'processed'
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          fetch('https://jpacmloqsfiebvagfomt.supabase.co/functions/v1/process-correction-embedding', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }).catch(() => {});
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['learning-queue'] });
+      qc.invalidateQueries({ queryKey: ['learning-queue-count'] });
+    },
+  });
+}
+
+/** Descarta uma correção da fila (não vira ativa, sai da revisão). */
+export function useDiscardCorrection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('response_corrections' as any)
+        .update({ status: 'dismissed' } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['learning-queue'] });
+      qc.invalidateQueries({ queryKey: ['learning-queue-count'] });
+    },
+  });
+}
