@@ -53,6 +53,32 @@ function AnsweredByBadge({ answeredBy }: { answeredBy: string }) {
   );
 }
 
+// Indica se a resposta já foi analisada (feedback dado à Ana) e qual o veredito.
+function AnalysisBadge({ feedback }: { feedback?: string | null }) {
+  if (feedback === 'good') {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-success/15 text-success"
+        title="Analisada — resposta aprovada"
+      >
+        <CheckCircle className="h-3 w-3" />
+        Analisada
+      </span>
+    );
+  }
+  if (feedback === 'bad') {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700"
+        title="Analisada — precisa de correção"
+      >
+        📝 A corrigir
+      </span>
+    );
+  }
+  return null;
+}
+
 export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
   const [expanded, setExpanded] = useState(false);
   const [manualAnswer, setManualAnswer] = useState('');
@@ -130,6 +156,7 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
         </div>
         <div className="flex items-center gap-1.5">
           {question.answered_by && <AnsweredByBadge answeredBy={question.answered_by} />}
+          <AnalysisBadge feedback={(question as any).feedback} />
           {(isFailed || isAlreadyAnswered || isSkipped) && hasErrorMessage ? (
             <Tooltip>
               <TooltipTrigger asChild>{statusBadge}</TooltipTrigger>
@@ -258,10 +285,15 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
           {/* ─── Feedback buttons (for answered questions) ─── */}
           {(question.status === 'answered' || isAlreadyAnswered) && (question.answer_text || hasAiSuggestion) && (
             <div className="space-y-3">
-              {/* Show "Corrigido" badge if already has feedback=bad */}
+              {/* Status de análise (feedback já dado à Ana) */}
+              {(question as any).feedback === 'good' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/15 text-success">
+                  <CheckCircle className="h-3 w-3" /> Analisada — resposta aprovada
+                </span>
+              )}
               {(question as any).feedback === 'bad' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                  📝 Corrigido
+                  📝 Analisada — marcada para correção
                 </span>
               )}
 
