@@ -442,3 +442,61 @@ export function useDiscardCorrection() {
     },
   });
 }
+
+// ─── Base ÚNICA de aprendizados — leitura flexível (central + recortes por canal) ───
+export interface Learning extends LearningCorrection {
+  origin_channel: string | null;
+  scope: string[] | null;
+  category: string | null;
+  processed_at?: string | null;
+}
+
+/** Lê a base única. channel => recorte (scope contém o canal OU 'all'). statuses => filtro de status. */
+export function useLearnings(opts: { channel?: string; statuses?: string[] } = {}) {
+  const { channel, statuses } = opts;
+  return useQuery({
+    queryKey: ['learnings', channel ?? 'all', statuses ?? 'default'],
+    queryFn: async () => {
+      let q = supabase
+        .from('response_corrections' as any)
+        .select('id, original_question, ai_response, recommended_response, product_sku, corrected_by, status, created_at, processed_at, origin_channel, scope, category')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (statuses && statuses.length) q = q.in('status', statuses);
+      if (channel) q = q.or(`scope.cs.{all},scope.cs.{${channel}}`);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as Learning[];
+    },
+  });
+}
+
+/** Curadoria genérica: editar texto, ajustar escopo/categoria, arquivar. */
+export function useCurateLearning() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: { id: string; recommended_response?: string; scope?: string[]; category?: string; status?: string }) => {
+      const { id, ...fields } = patch;
+      const body: Record<string, unknown> = { ...fields };
+      // Se editou o texto e a correção já está ativa, regenera embedding (volta p/ pending->processed)
+      if (fields.recommended_response !== undefined) { body.status = 'pending'; body.embedding = null; }
+      const { error } = await supabase.from('response_corrections' as any).update(body as any).eq('id', id);
+      if (error) throw error;
+      if (fields.recommended_response !== undefined) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          fetch('https://jpacmloqsfiebvagfomt.supabase.co/functions/v1/process-correction-embedding', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }).catch(() => {});
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['learnings'] });
+      qc.invalidateQueries({ queryKey: ['learning-queue'] });
+      qc.invalidateQueries({ queryKey: ['learning-queue-count'] });
+    },
+  });
+}

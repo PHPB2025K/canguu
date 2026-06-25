@@ -51,8 +51,20 @@ const RUBRICA_CHAT = `Voce e auditor do atendimento da "Ana" (Budamix) em CHAT (
 ${COMUM}`
 
 const SCHEMA_HINT = `Responda SOMENTE um JSON valido:
-{"veredito":"adequada"|"inadequada","confianca":0.0-1.0,"motivo":"...","resposta_correta":"...","licao":"..."}
-Se adequada: resposta_correta e licao podem ser "".`
+{"veredito":"adequada"|"inadequada","confianca":0.0-1.0,"motivo":"...","resposta_correta":"...","licao":"...","escopo":"todos"|"so_marketplace"|"so_conversa"|"so_este_canal","categoria":"<tema curto: entrega|troca|compatibilidade|material|cor|pagamento|tom|outro>"}
+Se adequada: resposta_correta/licao podem ser "".
+escopo: "todos" = vale em qualquer canal (politica, prazo de entrega, fato de produto); "so_marketplace" = so faz sentido em anuncio publico; "so_conversa" = so em chat (WhatsApp/Instagram Direct); "so_este_canal" = especifico do canal avaliado.`
+
+// escopo sugerido pelo juiz -> array de canais ({all} eh canonico para "todos")
+function mapScope(escopo: unknown, originChannel: string): string[] {
+  switch (String(escopo || '').toLowerCase()) {
+    case 'todos': return ['all']
+    case 'so_marketplace': return ['mercado_livre']
+    case 'so_conversa': return ['whatsapp', 'instagram']
+    case 'so_este_canal': return [originChannel]
+    default: return ['all']
+  }
+}
 
 function parseJudge(raw: string): any | null {
   try { const m = raw.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null } catch { return null }
@@ -80,7 +92,7 @@ serve(async (req) => {
       return parseJudge(extractText(resp))
     }
 
-    async function record(question: string, aiResp: string | null, sku: string | null, recommended: string, conf: number) {
+    async function record(question: string, aiResp: string | null, sku: string | null, recommended: string, conf: number, originChannel: string, scope: string[], category: string | null) {
       const qEmb = await generateEmbedding(question)
       const { data: dup } = await supabase.rpc('search_corrections', { query_embedding: JSON.stringify(qEmb), match_threshold: DEDUP_SIM, match_count: 1 })
       if (dup && dup.length > 0) { sum.deduped++; return }
@@ -90,6 +102,7 @@ serve(async (req) => {
         product_sku: sku, original_question: question, ai_response: aiResp,
         recommended_response: recommended, corrected_by: 'daily_learning_ia',
         status: willApply ? 'processed' : 'auto_review', embedding: JSON.stringify(recEmb),
+        origin_channel: originChannel, scope, category: category || null,
       } as any)
       if (error) { sum.errors.push(`rec: ${error.message}`); return }
       if (willApply) sum.auto_applied++; else sum.queued++
@@ -112,7 +125,7 @@ serve(async (req) => {
         if (!bad) { sum.good++; continue }
         sum.bad++
         const rec = (j.resposta_correta || '').trim()
-        if (rec) await record(q.question_text, q.answer_text, q.platform_item_id, rec, Number(j.confianca) || 0)
+        if (rec) await record(q.question_text, q.answer_text, q.platform_item_id, rec, Number(j.confianca) || 0, 'mercado_livre', mapScope(j.escopo, 'mercado_livre'), j.categoria)
       } catch (e) { sum.errors.push(`${q.id}: ${String(e)}`) }
     }
 
@@ -142,7 +155,7 @@ serve(async (req) => {
         if (!bad) { sum.good++; continue }
         sum.bad++
         const rec = (j.resposta_correta || '').trim()
-        if (rec) await record(clientMsg, m.content, null, rec, Number(j.confianca) || 0)
+        if (rec) await record(clientMsg, m.content, null, rec, Number(j.confianca) || 0, canal, mapScope(j.escopo, canal), j.categoria)
       } catch (e) { sum.errors.push(`msg ${m.id}: ${String(e)}`) }
     }
 

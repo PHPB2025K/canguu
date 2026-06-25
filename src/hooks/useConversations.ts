@@ -11,6 +11,8 @@ interface ConversationFilters {
   search?: string;
   /** customers.source — 'mercado_livre' | 'shopee' | 'amazon' | 'site' | 'whatsapp' */
   source?: string;
+  /** conversations.channel — 'whatsapp' | 'instagram' */
+  channel?: string;
 }
 
 export function useConversationList(filters: ConversationFilters = {}) {
@@ -27,6 +29,7 @@ export function useConversationList(filters: ConversationFilters = {}) {
       if (filters.status) q = q.eq("status", filters.status);
       if (filters.category) q = q.eq("category", filters.category);
       if (filters.sentiment) q = q.eq("sentiment", filters.sentiment);
+      if (filters.channel) q = q.eq("channel", filters.channel);
 
       const { data, error } = await q;
       if (error) throw error;
