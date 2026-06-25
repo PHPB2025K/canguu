@@ -56,7 +56,7 @@ const InstagramPage = () => {
           <p className="text-sm text-muted-foreground mb-3">
             Aprendizados que se aplicam ao Instagram (específicos + transversais) — recorte da base central.
           </p>
-          <LearningList channel="instagram" />
+          <LearningList channel="instagram" statuses={['auto_review', 'processed']} />
         </TabsContent>
       </Tabs>
     </div>
