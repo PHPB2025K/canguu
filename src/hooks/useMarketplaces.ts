@@ -465,7 +465,8 @@ export interface Learning extends LearningCorrection {
   processed_at?: string | null;
 }
 
-/** Lê a base única. channel => recorte (scope contém o canal OU 'all'). statuses => filtro de status. */
+/** Lê a base única. channel => recorte por ORIGEM (aprendizados que surgiram nesse canal).
+ *  statuses => filtro de status. (O escopo governa onde a Ana APLICA — é separado, no central.) */
 export function useLearnings(opts: { channel?: string; statuses?: string[] } = {}) {
   const { channel, statuses } = opts;
   return useQuery({
@@ -477,7 +478,7 @@ export function useLearnings(opts: { channel?: string; statuses?: string[] } = {
         .order('created_at', { ascending: false })
         .limit(500);
       if (statuses && statuses.length) q = q.in('status', statuses);
-      if (channel) q = q.or(`scope.cs.{all},scope.cs.{${channel}}`);
+      if (channel) q = q.eq('origin_channel', channel);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as Learning[];

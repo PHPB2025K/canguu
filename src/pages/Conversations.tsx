@@ -36,7 +36,7 @@ const Conversations = () => {
 
         <TabsContent value="aprendizados" className="flex-1 min-h-0 overflow-y-auto p-4">
           <p className="text-sm text-muted-foreground mb-3">
-            Aprendizados deste canal aguardando sua revisão. O histórico completo (aprovados, arquivados) fica no módulo Aprendizados.
+            Aprendizados que surgiram no WhatsApp, aguardando sua revisão. O histórico completo e a gestão por escopo ficam no módulo Aprendizados.
           </p>
           <LearningList channel="whatsapp" statuses={['auto_review']} />
         </TabsContent>
