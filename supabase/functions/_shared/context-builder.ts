@@ -141,7 +141,7 @@ export async function buildContext(
       // process-ml-question: customer questions vary too much in surface
       // form for 0.85 to catch operator-approved corrections, leading to
       // evasive boilerplate replies instead of using the verified answer.
-      corrections = await searchCorrections(messageContent, 0.65, 3)
+      corrections = await searchCorrections(messageContent, 0.65, 3, 'whatsapp')
     } catch (err) {
       console.error('[context-builder] searchCorrections failed:', String(err))
     }

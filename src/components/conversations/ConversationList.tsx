@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 interface ConversationListProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Filtra por canal da conversa (whatsapp | instagram). Omitido = todos. */
+  channel?: string;
 }
 
 function getInitials(name: string | null): string {
@@ -24,7 +26,7 @@ function getInitials(name: string | null): string {
   return name.split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 }
 
-export function ConversationList({ selectedId, onSelect }: ConversationListProps) {
+export function ConversationList({ selectedId, onSelect, channel }: ConversationListProps) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("");
   const [category, setCategory] = useState<string>("");
@@ -39,6 +41,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
     sentiment: sentiment || undefined,
     search: search || undefined,
     source: source || undefined,
+    channel: channel || undefined,
   });
 
   const clearFilters = () => {

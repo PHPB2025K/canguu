@@ -198,6 +198,7 @@ serve(async (req: Request) => {
         query_embedding: JSON.stringify(questionEmbedding),
         match_threshold: 0.65,
         match_count: 3,
+        p_channel: 'mercado_livre',
       })
       if (corrections && corrections.length > 0) {
         const lines = corrections.map((c: { original_question: string; recommended_response: string; similarity: number }, i: number) =>
@@ -257,6 +258,7 @@ serve(async (req: Request) => {
           query_embedding: JSON.stringify(questionEmbedding),
           match_threshold: 0.55, // even more permissive on this fallback
           match_count: 1,
+          p_channel: 'mercado_livre',
         })
         if (corrections && corrections.length > 0) {
           substitute = corrections[0].recommended_response as string

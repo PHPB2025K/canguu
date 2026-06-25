@@ -19,6 +19,8 @@ import Escalations from "./pages/Escalations";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Marketplaces from "./pages/Marketplaces";
+import InstagramPage from "./pages/Instagram";
+import Learnings from "./pages/Learnings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +40,8 @@ const App = () => (
               <Route path="/conversations" element={<Conversations />} />
               <Route path="/conversations/:id" element={<ConversationDetail />} />
               <Route path="/marketplaces" element={<Marketplaces />} />
+              <Route path="/instagram" element={<InstagramPage />} />
+              <Route path="/aprendizados" element={<Learnings />} />
               <Route path="/products" element={<Products />} />
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/policies" element={<Policies />} />

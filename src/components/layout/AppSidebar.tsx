@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, MessageSquare, Store, Package, FileText,
-  Users, AlertTriangle, BarChart3, Settings, LogOut,
+  Users, AlertTriangle, BarChart3, Settings, LogOut, Instagram, GraduationCap,
 } from 'lucide-react';
 import logoDark from '@/assets/canggu-logo-dark.png';
 import { useNavigate } from 'react-router-dom';
@@ -11,8 +11,10 @@ import { Separator } from '@/components/ui/separator';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', badgeKey: null },
-  { icon: MessageSquare, label: 'Conversas', path: '/conversations', badgeKey: 'activeConversations' as const },
+  { icon: MessageSquare, label: 'WhatsApp', path: '/conversations', badgeKey: 'activeConversations' as const },
+  { icon: Instagram, label: 'Instagram', path: '/instagram', badgeKey: null },
   { icon: Store, label: 'Marketplaces', path: '/marketplaces', badgeKey: 'marketplacePending' as const },
+  { icon: GraduationCap, label: 'Aprendizados', path: '/aprendizados', badgeKey: null },
   { icon: Package, label: 'Produtos', path: '/products', badgeKey: null },
   { icon: FileText, label: 'Políticas/FAQ', path: '/policies', badgeKey: null },
   { icon: Users, label: 'Clientes', path: '/customers', badgeKey: null },

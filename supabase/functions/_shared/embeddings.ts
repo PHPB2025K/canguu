@@ -399,6 +399,7 @@ export async function searchCorrections(
   query: string,
   threshold = 0.85,
   maxResults = 3,
+  channel?: string,
 ): Promise<CorrectionHit[]> {
   const embedding = await generateEmbedding(query)
 
@@ -406,6 +407,7 @@ export async function searchCorrections(
     query_embedding: JSON.stringify(embedding),
     match_threshold: threshold,
     match_count: maxResults,
+    p_channel: channel ?? null,
   })
 
   if (error) {
