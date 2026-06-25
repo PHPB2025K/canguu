@@ -425,18 +425,32 @@ export function useApproveCorrection() {
   });
 }
 
-/** Descarta uma correção da fila (não vira ativa, sai da revisão). */
+/** Descarta um aprendizado: APAGA do banco e some da interface na hora (otimista). */
 export function useDiscardCorrection() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('response_corrections' as any)
-        .update({ status: 'dismissed' } as any)
-        .eq('id', id);
+      const { error } = await supabase.from('response_corrections' as any).delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ['learnings'] });
+      await qc.cancelQueries({ queryKey: ['learning-queue'] });
+      const prev = qc.getQueriesData({ queryKey: ['learnings'] });
+      const prevQueue = qc.getQueriesData({ queryKey: ['learning-queue'] });
+      const drop = (old: unknown) => Array.isArray(old) ? old.filter((c: { id: string }) => c.id !== id) : old;
+      qc.setQueriesData({ queryKey: ['learnings'] }, drop);
+      qc.setQueriesData({ queryKey: ['learning-queue'] }, drop);
+      qc.setQueryData(['learning-queue-count'], (old: unknown) => typeof old === 'number' ? Math.max(0, old - 1) : old);
+      return { prev, prevQueue };
+    },
+    onError: (_e, _id, ctx) => {
+      const c = ctx as { prev?: [readonly unknown[], unknown][]; prevQueue?: [readonly unknown[], unknown][] } | undefined;
+      c?.prev?.forEach(([key, data]) => qc.setQueryData(key, data));
+      c?.prevQueue?.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['learnings'] });
       qc.invalidateQueries({ queryKey: ['learning-queue'] });
       qc.invalidateQueries({ queryKey: ['learning-queue-count'] });
     },

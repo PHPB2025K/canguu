@@ -140,7 +140,7 @@ function LearningCard({ c, curation }: { c: Learning; curation: boolean }) {
         )}
         {isQueued && (
           <Button size="sm" variant="ghost" disabled={discard.isPending}
-            onClick={() => discard.mutate(c.id, { onSuccess: () => toast({ title: 'Descartado' }) })}>
+            onClick={() => discard.mutate(c.id, { onSuccess: () => toast({ title: 'Aprendizado apagado' }) })}>
             <X className="h-4 w-4 mr-1" /> Descartar
           </Button>
         )}

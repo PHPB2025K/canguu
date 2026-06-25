@@ -8,7 +8,6 @@ import { useLearningQueueCount } from '@/hooks/useMarketplaces';
 const STATUS_OPTIONS = [
   { value: 'auto_review', label: 'Aguardando revisão' },
   { value: 'processed', label: 'Ativos' },
-  { value: 'dismissed', label: 'Descartados' },
   { value: 'archived', label: 'Arquivados' },
   { value: 'all', label: 'Todos os status' },
 ];
