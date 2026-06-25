@@ -6,8 +6,8 @@ export function LearningTab() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="shrink-0 pb-3">
         <p className="text-sm text-muted-foreground">
-          Aprendizados deste canal aguardando sua revisão. Aprovar/editar aqui reflete em todos os lugares.
-          O histórico completo (aprovados, arquivados) fica no módulo Aprendizados.
+          Aprendizados que surgiram no Marketplace, aguardando sua revisão. Aprovar/editar aqui reflete em todos
+          os lugares. O histórico completo e a gestão por escopo ficam no módulo Aprendizados.
         </p>
       </div>
       <div className="flex-1 overflow-y-auto min-h-0">
