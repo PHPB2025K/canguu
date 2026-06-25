@@ -60,6 +60,25 @@ export function truncateText(text: string, maxLength: number): string {
   return text.slice(0, maxLength) + "...";
 }
 
+// Preview da última mensagem (igual ao WhatsApp): quando é mídia, mostra um rótulo
+// curto em vez de despejar a descrição/transcrição que a IA gravou no `content`.
+const MEDIA_PREVIEW_LABEL: Record<string, string> = {
+  image: "📷 Foto",
+  audio: "🎤 Áudio",
+  video: "🎬 Vídeo",
+  document: "📄 Documento",
+  sticker: "💟 Figurinha",
+};
+
+export function lastMessagePreview(
+  msg: { content: string; message_type?: string | null } | null | undefined,
+  maxLength = 60
+): string {
+  if (!msg) return "Sem mensagens";
+  const label = msg.message_type ? MEDIA_PREVIEW_LABEL[msg.message_type] : null;
+  return label ?? truncateText(msg.content, maxLength);
+}
+
 export function getRelativeTime(isoDate: string): string {
   const now = Date.now();
   const then = new Date(isoDate).getTime();

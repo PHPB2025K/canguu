@@ -11,7 +11,7 @@ import { RelativeTime } from "@/components/common/RelativeTime";
 import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { useConversationList } from "@/hooks/useConversations";
-import { truncateText, displayName, displayInitials } from "@/lib/formatters";
+import { lastMessagePreview, displayName, displayInitials } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 interface ConversationListProps {
@@ -160,7 +160,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {conv.lastMessage ? truncateText(conv.lastMessage.content, 60) : "Sem mensagens"}
+                      {lastMessagePreview(conv.lastMessage)}
                     </p>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {conv.status && <StatusBadge status={conv.status} className="text-[10px] px-1.5 py-0" />}

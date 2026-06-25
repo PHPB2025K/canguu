@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { MessageSquare } from "lucide-react";
-import { displayName, displayInitials } from "@/lib/formatters";
+import { displayName, displayInitials, lastMessagePreview } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -8,7 +8,6 @@ import { SentimentBadge } from "@/components/common/SentimentBadge";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
-import { truncateText } from "@/lib/formatters";
 
 interface ConversationItem {
   id: string;
@@ -16,7 +15,7 @@ interface ConversationItem {
   sentiment: string | null;
   updated_at: string | null;
   customers: { id: string; name: string | null; phone: string } | null;
-  lastMessage: string | null;
+  lastMessage: { content: string; message_type: string | null } | null;
 }
 
 interface RecentConversationsProps {
@@ -68,7 +67,7 @@ export function RecentConversations({ conversations, isLoading }: RecentConversa
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {c.lastMessage ? truncateText(c.lastMessage, 60) : "Sem mensagens"}
+                    {lastMessagePreview(c.lastMessage)}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">

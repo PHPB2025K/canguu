@@ -49,16 +49,17 @@ export function useCustomerConversations(customerId?: string) {
 
       const { data: messages } = await supabase
         .from("messages")
-        .select("conversation_id, content, created_at")
+        .select("conversation_id, content, created_at, message_type")
         .in("conversation_id", convIds)
         .order("created_at", { ascending: false });
 
-      const lastMsgMap = new Map<string, string>();
+      const lastMsgMap = new Map<string, { content: string; message_type: string | null }>();
       (messages ?? []).forEach((m) => {
-        if (!lastMsgMap.has(m.conversation_id)) lastMsgMap.set(m.conversation_id, m.content);
+        if (!lastMsgMap.has(m.conversation_id))
+          lastMsgMap.set(m.conversation_id, { content: m.content, message_type: m.message_type });
       });
 
-      return data.map((c) => ({ ...c, lastMessage: lastMsgMap.get(c.id) ?? "" }));
+      return data.map((c) => ({ ...c, lastMessage: lastMsgMap.get(c.id) ?? null }));
     },
     enabled: !!customerId,
   });

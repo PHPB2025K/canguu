@@ -140,14 +140,14 @@ export function useRecentConversations() {
       // Fetch latest message per conversation
       const { data: messages } = await supabase
         .from("messages")
-        .select("conversation_id, content, created_at")
+        .select("conversation_id, content, created_at, message_type")
         .in("conversation_id", ids)
         .order("created_at", { ascending: false });
 
-      const lastMessageMap: Record<string, string> = {};
+      const lastMessageMap: Record<string, { content: string; message_type: string | null }> = {};
       (messages ?? []).forEach((m) => {
         if (!lastMessageMap[m.conversation_id]) {
-          lastMessageMap[m.conversation_id] = m.content;
+          lastMessageMap[m.conversation_id] = { content: m.content, message_type: m.message_type };
         }
       });
 

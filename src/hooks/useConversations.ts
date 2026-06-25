@@ -54,11 +54,11 @@ export function useConversationList(filters: ConversationFilters = {}) {
       if (ids.length > 0) {
         const { data: msgs } = await supabase
           .from("messages")
-          .select("conversation_id, content, sender, created_at")
+          .select("conversation_id, content, sender, created_at, message_type")
           .in("conversation_id", ids)
           .order("created_at", { ascending: false });
 
-        const lastMsgMap = new Map<string, { content: string; sender: string; created_at: string }>();
+        const lastMsgMap = new Map<string, { content: string; sender: string; created_at: string; message_type: string | null }>();
         msgs?.forEach((m) => {
           if (!lastMsgMap.has(m.conversation_id)) {
             lastMsgMap.set(m.conversation_id, m);
