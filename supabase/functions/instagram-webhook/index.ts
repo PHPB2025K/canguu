@@ -213,7 +213,9 @@ function fmtProduct(p) {
 }
 async function getPolicies() {
   try {
-    const r = await db("policies?is_active=eq.true&select=title,category,marketplace,summary&order=priority.desc&limit=6");
+    // Escopo por canal: só policies GLOBAIS (marketplace null) + do DM do IG (instagram_dm).
+    // Evita vazamento de policy de outro canal (ex.: "canal público ML") pro DM, que é privado.
+    const r = await db("policies?is_active=eq.true&or=(marketplace.is.null,marketplace.eq.instagram_dm)&select=title,category,marketplace,summary&order=priority.desc&limit=6");
     const rows = await r.json();
     if (!Array.isArray(rows) || !rows.length) return "";
     return rows.map((p)=>"- [" + (p.category || "geral") + (p.marketplace ? "/" + p.marketplace : "") + "] " + p.title + (p.summary ? ": " + p.summary : "")).join("\n");
