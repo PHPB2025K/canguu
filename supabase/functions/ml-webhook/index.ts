@@ -397,7 +397,7 @@ async function getProductContext(
     const { data } = await supabase
       .from("products")
       .select(
-        "name, short_description, full_description, material, dimensions, price_site, price_marketplace, usage_suggestions, differentials, variations, stock_quantity, stock_status"
+        "name, short_description, full_description, material, dimensions, price_site, price_marketplace, usage_suggestions, differentials, variations, stock_quantity, stock_status, updated_at"
       )
       .eq("id", listings[0].product_id)
       .single();
@@ -415,7 +415,7 @@ async function getProductContext(
       const { data } = await supabase
         .from("products")
         .select(
-          "name, short_description, full_description, material, dimensions, price_site, price_marketplace, usage_suggestions, differentials, variations, stock_quantity, stock_status"
+          "name, short_description, full_description, material, dimensions, price_site, price_marketplace, usage_suggestions, differentials, variations, stock_quantity, stock_status, updated_at"
         )
         .eq("id", mapping[0].product_id)
         .single();
@@ -435,10 +435,24 @@ async function getProductContext(
   if (product.variations) parts.push(`Variações: ${JSON.stringify(product.variations)}`);
   if (product.usage_suggestions) parts.push(`Sugestões de uso: ${product.usage_suggestions}`);
   if (product.differentials) parts.push(`Diferenciais: ${product.differentials}`);
-  // Estoque OMITIDO de proposito (19/06): o catalogo Canggu esta congelado desde ~abril (sem sync).
-  // Expor stock_status/quantity desatualizado fazia a Ana afirmar estoque errado.
-  // REATIVAR esta linha quando a sincronizacao diaria de estoque (por nome, Opcao 1) estiver no ar e validada.
-  // if (product.stock_status) parts.push(`Estoque: ${product.stock_status} (${product.stock_quantity ?? 0} un.)`);
+  // Estoque RELIGADO (27/06): sync diario de estoque ativo (lote ~08:00 BRT em products).
+  // SEGURANCA: (1) expoe so DISPONIBILIDADE, nunca a quantidade crua (evita a Ana afirmar
+  // numero que pode estar errado); (2) GUARDA DE FRESCOR — se o produto nao e atualizado ha
+  // >3 dias, OMITE (sync pode ter quebrado; melhor a Ana nao falar de estoque do que errar).
+  const stockStale =
+    product.updated_at &&
+    Date.now() - new Date(product.updated_at as string).getTime() > 3 * 24 * 60 * 60 * 1000;
+  if (!stockStale && product.stock_status) {
+    const disp =
+      product.stock_status === "in_stock"
+        ? "disponível em estoque"
+        : product.stock_status === "out_of_stock"
+        ? "sem estoque no momento"
+        : String(product.stock_status);
+    parts.push(`Disponibilidade: ${disp}`);
+  }
+  // NOTA: estoque por COR/variante ainda nao existe (campo variations vazio). Para perguntas de
+  // cor especifica, a Ana NAO deve afirmar disponibilidade da cor — orientar a conferir no anuncio.
 
   return parts.join("\n");
 }
