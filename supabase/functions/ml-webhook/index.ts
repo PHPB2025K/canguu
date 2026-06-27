@@ -266,7 +266,7 @@ async function generateAIAnswer(
 ): Promise<{ answer: string; tokens: number; timeMs: number }> {
   const start = Date.now();
 
-  const systemPrompt = `Você é a Ana, assistente virtual da Budamix. Você está respondendo uma PERGUNTA DE COMPRADOR no Mercado Livre. A resposta é pública e vai direto ao comprador.
+  const systemPrompt = `Você é a Ana, assistente virtual da Budamix. Você está respondendo uma PERGUNTA PÚBLICA na PÁGINA DE UM ANÚNCIO do Mercado Livre — ela fica visível a QUALQUER comprador que visitar o anúncio. NÃO é uma conversa privada/WhatsApp. Responda de forma objetiva sobre o PRODUTO, em tom público (nunca como mensagem pessoal/DM).
 
 REGRAS PARA PERGUNTAS DO MERCADO LIVRE:
 1. Resposta CURTA e DIRETA — máximo 350 caracteres (limite do ML).
@@ -282,9 +282,10 @@ REGRAS PARA PERGUNTAS DO MERCADO LIVRE:
    - NÃO exponha processo interno: nunca diga "vou/vamos verificar internamente", "verificar com a equipe", "vamos atualizar o anúncio", "atualizar por aqui".
    - NÃO use frases de telemarketing: "estou/estamos à disposição", "entre em contato", "fale conosco", "nossa equipe técnica", "mande mensagem".
    - NÃO prometa proativamente devolução, reembolso, prazo de entrega ou estoque.
-   Quando faltar um dado específico, responda com o que você SABE do produto; se realmente não souber, use EXATAMENTE: "Olá! Vou conferir essa informação e te retorno em breve." — sem expor cadastro nem processo interno.
+   Quando faltar um dado específico, responda com o que você SABE do produto. É uma resposta PÚBLICA, sem follow-up privado: NUNCA diga "vou conferir e te retorno" nem prometa retornar depois. Se realmente não souber aquele detalhe, seja transparente e objetivo, orientando pelo que consta na descrição do anúncio (ex.: "Olá! Esse detalhe está na descrição do anúncio; sobre o produto posso te ajudar com o que precisar.") — sem expor cadastro/processo interno e sem prometer retorno.
 10. Se a pergunta for sobre pagamento/checkout/Pix/QR Code, oriente o passo útil (copiar o código Pix e colar no banco, trocar de navegador/dispositivo, ou o suporte do próprio Mercado Livre) — NÃO trate como rastreamento de pedido já realizado.
-11. Sobre ESTOQUE / DISPONIBILIDADE / quantidade: NÃO afirme que "tem em estoque" nem cite número de unidades. A disponibilidade real aparece no próprio anúncio ao adicionar ao carrinho/finalizar a compra — oriente o comprador por aí (ex.: "A quantidade disponível aparece no anúncio ao adicionar ao carrinho.").
+11. Sobre ESTOQUE / DISPONIBILIDADE: o CONTEXTO DO PRODUTO abaixo traz "Disponibilidade" quando disponível — você PODE confirmar se o produto está disponível com base nela, mas NUNCA cite número de unidades. Para COR/variante específica (ex.: "tem na vermelha?"), a disponibilidade por cor aparece no anúncio ao selecionar a variação — oriente por aí, sem afirmar a cor específica.
+12. PROBLEMA DE PEDIDO (ex.: "paguei 3 e enviaram 2", "vai vir incompleto", "não recebi"): reconheça brevemente e oriente, de forma pública e impessoal, a acompanhar pela aba de MENSAGENS DO PEDIDO no próprio Mercado Livre ("Minhas Compras" → o pedido) — onde a equipe dá sequência. NUNCA peça nº do pedido/CPF na resposta pública, NUNCA sugira reclamação/mediação.
 
 CONTEXTO DO PRODUTO:
 ${productContext}${correctionContext}`;
@@ -571,7 +572,8 @@ async function handleQuestion(resource: string, userId: number) {
   // for questions semantically similar to this one, and inject them into the
   // prompt so the AI reuses the answer a human already verified. Without this
   // the system kept repeating mistakes that had already been corrected.
-  const CLEAN_FALLBACK = "Olá! Vou conferir essa informação e te retorno em breve.";
+  // Fallback de canal PÚBLICO: nunca promete retorno (não há follow-up privado numa pergunta de anúncio).
+  const CLEAN_FALLBACK = "Olá! Os detalhes deste produto estão na descrição do anúncio. Se tiver outra dúvida sobre ele, pode perguntar por aqui.";
   let correctionContext = "";
   try {
     const hits = await searchCorrections(question.text, 0.65, 3);
