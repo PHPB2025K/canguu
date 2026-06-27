@@ -539,6 +539,27 @@ async function handleQuestion(resource: string, userId: number) {
   const productName = await fetchItemTitle(itemId, token);
   log("item_title_fetched", { itemId, productName });
 
+  // GUARDA DE ANÚNCIO INATIVO (proativa): não gera nem posta em item inativo.
+  // Evita o erro not_active_item e respostas obsoletas de anúncios antigos reingeridos
+  // (ex.: pergunta de meses atrás reentrando após reconexão). Registra skipped p/ auditoria.
+  const itemInfo = await mlGet(`/items/${itemId}?attributes=id,status`, token);
+  if (itemInfo && itemInfo.status && itemInfo.status !== "active") {
+    log("item_inactive_skip", { itemId, status: itemInfo.status });
+    await supabase.from("marketplace_questions").insert({
+      platform: "mercado_livre",
+      platform_question_id: questionId,
+      platform_item_id: itemId,
+      product_name: productName,
+      question_text: question.text,
+      buyer_nickname: question.from?.nickname || "Comprador",
+      seller_id: String(userId),
+      status: "skipped",
+      error_message: `item_inactive_skip: status=${itemInfo.status}`,
+      external_created_at: question.date_created,
+    });
+    return;
+  }
+
   const productContext = await getProductContext(supabase, itemId, productName);
   const faqContext = await getFAQContext(supabase);
   const policiesContext = await getPoliciesContext(supabase);

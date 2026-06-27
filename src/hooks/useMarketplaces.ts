@@ -51,12 +51,15 @@ export function useMarketplaceQuestions(platform?: string, status?: string, sear
       const { data, error } = await query;
       if (error) throw error;
 
+      // Ordem por acionabilidade: o que precisa de ação primeiro; 'skipped' (ex.: anúncio
+      // inativo, sem ação possível) vai pro FIM — senão uma pergunta antiga ignorada sobe ao topo.
       const priority: Record<string, number> = {
         unanswered: 0,
         failed: 1,
         ai_suggested: 2,
-        skipped: 3,
-        answered: 4,
+        answered: 3,
+        already_answered: 4,
+        skipped: 5,
       };
       return (data as MarketplaceQuestion[]).sort((a, b) => {
         const pa = priority[a.status] ?? 5;
