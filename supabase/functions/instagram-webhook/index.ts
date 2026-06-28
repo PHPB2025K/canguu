@@ -530,6 +530,18 @@ async function handleEvent(ev) {
   });
   return { igsid, convId, lastMsgId: mid };
 }
+// Mensagem "desfeita" (unsend) pelo cliente no Instagram -> apaga a nossa copia
+// (privacidade/LGPD + exigencia da Meta: deletar a copia local quando o usuario apaga).
+async function deleteMessageByMid(mid) {
+  if (!mid) return;
+  try {
+    const r = await db("messages?whatsapp_message_id=eq." + encodeURIComponent(mid), { method: "DELETE" });
+    if (!r.ok) console.log("ig unsend del http " + r.status, (await r.text()).slice(0, 160));
+    else console.log("ig unsend: apagada copia local mid=" + mid);
+  } catch (e) {
+    console.log("ig unsend exc", String(e));
+  }
+}
 // Depois de salvar a rajada, decide e responde (uma vez por conversa).
 async function replyConversation(convId, igsid, lastMsgId) {
   await sleep(DEBOUNCE_MS);
@@ -571,16 +583,22 @@ Deno.serve(async (req)=>{
       return new Response("EVENT_RECEIVED", { status: 200 });
     }
     const events = [];
+    const deletions = [];
     for (const e of body.entry || []){
       for (const ev of e.messaging || []){
         // ignora eco (mensagem que a própria conta enviou) e eventos sem mensagem real
         if (ev.message && (ev.message.is_echo || (ev.sender && ev.sender.id === IG_BUSINESS_ID))) continue;
+        // cliente "desfez o envio" (unsend) no IG -> apagar a nossa copia
+        if (ev.message && ev.message.is_deleted) { if (ev.message.mid) deletions.push(ev.message.mid); continue; }
         if (!ev.message) continue;                       // read/reaction/postback -> ignora (v1)
         if (!ev.message.text && !(ev.message.attachments && ev.message.attachments.length)) continue;
         events.push(ev);
       }
     }
     globalThis.EdgeRuntime?.waitUntil((async ()=>{
+      for (const mid of deletions){
+        await deleteMessageByMid(mid);
+      }
       const touched = new Map();
       for (const ev of events){
         try {
