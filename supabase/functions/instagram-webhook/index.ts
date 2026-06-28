@@ -28,7 +28,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const GRAPH = "https://graph.instagram.com";
 const SU = Deno.env.get("SUPABASE_URL");
 const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const IG_TOKEN = Deno.env.get("IG_PAGE_TOKEN");
+let IG_TOKEN = Deno.env.get("IG_PAGE_TOKEN"); // fallback inicial; loadIgToken() sobrescreve com o da tabela (renovado pelo cron)
 const IG_BUSINESS_ID = Deno.env.get("IG_BUSINESS_ID") || "";
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY");
 const GROQ_KEY = Deno.env.get("GROQ_API_KEY");
@@ -542,6 +542,19 @@ async function deleteMessageByMid(mid) {
     console.log("ig unsend exc", String(e));
   }
 }
+// Carrega o token IG da tabela integration_tokens (renovado pelo cron a cada 3 dias);
+// cai pro env IG_PAGE_TOKEN se a tabela ainda estiver vazia (1o boot, antes do 1o refresh).
+async function loadIgToken() {
+  try {
+    const r = await db("integration_tokens?provider=eq.instagram&select=access_token&limit=1");
+    if (r.ok) {
+      const j = await r.json();
+      if (j[0] && j[0].access_token) IG_TOKEN = j[0].access_token;
+    }
+  } catch (e) {
+    console.log("loadIgToken exc", String(e));
+  }
+}
 // Depois de salvar a rajada, decide e responde (uma vez por conversa).
 async function replyConversation(convId, igsid, lastMsgId) {
   await sleep(DEBOUNCE_MS);
@@ -596,6 +609,7 @@ Deno.serve(async (req)=>{
       }
     }
     globalThis.EdgeRuntime?.waitUntil((async ()=>{
+      await loadIgToken();              // usa o token renovado da tabela (cron a cada 3 dias)
       for (const mid of deletions){
         await deleteMessageByMid(mid);
       }

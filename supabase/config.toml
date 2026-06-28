@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.sync-product-embedding]
 verify_jwt = false
+
+[functions.instagram-token-refresh]
+verify_jwt = false
