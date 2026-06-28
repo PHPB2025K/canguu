@@ -20,7 +20,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //   ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY  (reuso)
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY                            (reuso)
 // ─────────────────────────────────────────────────────────────────────────────
-const GRAPH = "https://graph.facebook.com/v25.0";
+// Fluxo "Instagram API with Instagram Login" (login empresarial): envio/leitura via
+// graph.instagram.com com Instagram user access token (NÃO Page token do graph.facebook.com).
+// App IG: GB ATENDIMENTO-IG (1031407156045572) · conta @budamix.br (IG id 28143817631888077).
+const GRAPH = "https://graph.instagram.com";
 const SU = Deno.env.get("SUPABASE_URL");
 const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const IG_TOKEN = Deno.env.get("IG_PAGE_TOKEN");
