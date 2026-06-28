@@ -23,6 +23,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // Fluxo "Instagram API with Instagram Login" (login empresarial): envio/leitura via
 // graph.instagram.com com Instagram user access token (NÃO Page token do graph.facebook.com).
 // App IG: GB ATENDIMENTO-IG (1031407156045572) · conta @budamix.br (IG id 28143817631888077).
+// Deploy SEM JWT (verify_jwt=false em config.toml + NO_JWT_FUNCTIONS): o Meta chama sem JWT
+// Supabase; a proteção é hub.verify_token (GET) + assinatura HMAC (POST), não o gateway.
 const GRAPH = "https://graph.instagram.com";
 const SU = Deno.env.get("SUPABASE_URL");
 const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
