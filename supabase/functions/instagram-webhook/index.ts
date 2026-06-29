@@ -91,8 +91,8 @@ async function getOrCreateCustomer(igsid, name) {
   const cr = await c.json();
   return cr[0].id;
 }
-async function getOrCreateConversation(customerId) {
-  const r = await db("conversations?customer_id=eq." + customerId + "&status=eq.active&order=started_at.desc&limit=1&select=id");
+async function getOrCreateConversation(customerId, channel = "instagram") {
+  const r = await db("conversations?customer_id=eq." + customerId + "&status=eq.active&channel=eq." + encodeURIComponent(channel) + "&order=started_at.desc&limit=1&select=id");
   const rows = await r.json();
   if (Array.isArray(rows) && rows.length) return rows[0].id;
   const c = await db("conversations", {
@@ -102,7 +102,7 @@ async function getOrCreateConversation(customerId) {
     },
     body: JSON.stringify({
       customer_id: customerId,
-      channel: "instagram",
+      channel: channel,
       status: "active",
       assigned_to: "agent"
     })
@@ -631,11 +631,14 @@ async function handleComment(value) {
   } catch (_e) {}
 
   const igsid = from.id;
+  const isAd = !!(value.media && value.media.media_product_type === "AD");
   const customerId = await getOrCreateCustomer(igsid, from.username || "");
-  const convId = await getOrCreateConversation(customerId);
-  await saveMessage(convId, "customer", "[comentario no Instagram] " + (text || "(sem texto)"), {
+  // conversa de COMENTÁRIO separada do Direct (channel='instagram_comment') → aba Comentários no Canggu
+  const convId = await getOrCreateConversation(customerId, "instagram_comment");
+  await saveMessage(convId, "customer", (isAd ? "[comentário · anúncio] " : "[comentário · post] ") + (text || "(sem texto)"), {
     message_type: "comment",
-    whatsapp_message_id: "cmt:" + commentId
+    whatsapp_message_id: "cmt:" + commentId,
+    metadata: { comment_origin: isAd ? "ad" : "post", media_id: (value.media && value.media.id) || null }
   });
 
   const sys = await getSystemPrompt();

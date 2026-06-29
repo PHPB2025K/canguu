@@ -37,18 +37,13 @@ const InstagramPage = () => {
           </div>
         </TabsContent>
 
-        {/* Comentários em posts/anúncios = pergunta/comentário — ainda NÃO integrado */}
-        <TabsContent value="comentarios" className="flex-1 min-h-0 overflow-y-auto mt-2">
-          <div className="flex flex-col items-center justify-center h-full text-center px-6 py-16">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 mb-3">
-              Em breve · não integrado
-            </span>
-            <Hash className="h-12 w-12 text-muted-foreground mb-3" />
-            <p className="text-base font-medium text-foreground">Comentários em posts e anúncios</p>
-            <p className="text-sm text-muted-foreground mt-1 max-w-md">
-              Aqui vão aparecer perguntas e comentários do Instagram (posts/anúncios). A integração ainda
-              não está ligada — esta aba é um placeholder. Não é bug: a fonte de comentários não existe ainda.
-            </p>
+        {/* Comentários em posts/anúncios = conversa separada (channel='instagram_comment') */}
+        <TabsContent value="comentarios" className="flex-1 min-h-0 data-[state=active]:flex mt-2">
+          <div className="w-full lg:w-96 lg:border-r border-border flex flex-col">
+            <ConversationList selectedId={selectedId} onSelect={handleSelect} channel="instagram_comment" />
+          </div>
+          <div className="hidden lg:flex flex-1 flex-col">
+            <ConversationChat conversationId={selectedId} />
           </div>
         </TabsContent>
 
