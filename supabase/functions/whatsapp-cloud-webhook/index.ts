@@ -641,12 +641,31 @@ async function handleValue(value) {
     let ctx = await buildGrounding(latestUserText(hist));
     const originNote = known ? "## Cliente\nOrigem do cliente: " + src + ". NAO pergunte por onde nos encontrou (ja sabemos). Para link de compra, prefira o do canal " + src + "." : pickerSent ? "## Cliente\nO menu de canais ja foi enviado ao cliente. NAO pergunte a origem em texto; apenas ajude. Se precisar mandar link, use o do site." : "";
     if (originNote) ctx = ctx ? ctx + "\n\n" + originNote : "=== CONTEXTO DE ATENDIMENTO ===\n" + originNote;
-    const reply = await anaReply(sys, hist, ctx);
+    ctx = ctx ? ctx + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + ESCALATION_NOTE;
+    let reply = await anaReply(sys, hist, ctx);
     if (reply && reply.trim()) {
+      const esc = await escalateIfFlagged(reply, convId, "whatsapp", latestUserText(hist));
+      reply = esc.reply;
       await sendWhatsApp(info.from, reply, info.lastMsgId);
       await saveMessage(convId, "agent", reply);
     }
   }));
+}
+// Escalonamento: a Ana sinaliza com [[ESCALAR: motivo]] quando o caso precisa de humano.
+const ESCALATION_NOTE = "## Escalonamento\nSe o cliente PEDIR explicitamente falar com um humano/atendente/pessoa, OU for uma reclamacao seria (produto quebrado/com defeito/faltando/errado, pedido de reembolso/estorno, pedido que nao chegou, cliente claramente irritado, ou mencao a Procon/processo/advogado), comece sua resposta EXATAMENTE com o marcador [[ESCALAR: motivo curto]] e depois escreva UMA frase curta avisando que vai transferir para um atendente humano. Caso contrario, responda normalmente, SEM marcador.";
+async function escalateIfFlagged(reply, convId, channel, preview) {
+  const m = reply.match(/^\s*\[\[\s*ESCALAR\s*:?\s*([^\]]*)\]\]\s*/i);
+  if (!m) return { escalated: false, reply };
+  const reason = (m[1] || "").trim() || "Cliente precisa de atendimento humano";
+  const clean = reply.slice(m[0].length).trim() || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui 🙏";
+  try {
+    await fetch((Deno.env.get("SUPABASE_URL") || "") + "/functions/v1/escalate-notify?key=" + encodeURIComponent(Deno.env.get("IG_VERIFY_TOKEN") || ""), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation_id: convId, reason, channel, preview: (preview || "").slice(0, 180) })
+    });
+  } catch (e) { console.log("escalate call err", String(e)); }
+  return { escalated: true, reply: clean };
 }
 Deno.serve(async (req)=>{
   if (req.method === "GET") {
