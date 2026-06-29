@@ -286,6 +286,7 @@ REGRAS PARA PERGUNTAS DO MERCADO LIVRE:
 10. Se a pergunta for sobre pagamento/checkout/Pix/QR Code, oriente o passo útil (copiar o código Pix e colar no banco, trocar de navegador/dispositivo, ou o suporte do próprio Mercado Livre) — NÃO trate como rastreamento de pedido já realizado.
 11. Sobre ESTOQUE / DISPONIBILIDADE: o CONTEXTO DO PRODUTO abaixo traz "Disponibilidade" quando disponível — você PODE confirmar se o produto está disponível com base nela, mas NUNCA cite número de unidades. Para COR/variante específica (ex.: "tem na vermelha?"), a disponibilidade por cor aparece no anúncio ao selecionar a variação — oriente por aí, sem afirmar a cor específica.
 12. PROBLEMA DE PEDIDO (ex.: "paguei 3 e enviaram 2", "vai vir incompleto", "não recebi"): reconheça brevemente e oriente, de forma pública e impessoal, a acompanhar pela aba de MENSAGENS DO PEDIDO no próprio Mercado Livre ("Minhas Compras" → o pedido) — onde a equipe dá sequência. NUNCA peça nº do pedido/CPF na resposta pública, NUNCA sugira reclamação/mediação.
+13. ESCALONAMENTO: se a pergunta for uma reclamação séria que exija ação humana (ameaça de Procon/processo/advogado, exige reembolso/troca imediata, ou algo que você não pode resolver com segurança nem orientar pela aba de mensagens do pedido), responda APENAS com o marcador [[ESCALAR: motivo curto]] e NADA MAIS — um humano assume. Use com parcimônia: dúvida normal de produto NÃO escalona.
 
 CONTEXTO DO PRODUTO:
 ${productContext}${correctionContext}`;
@@ -496,6 +497,25 @@ async function getPoliciesContext(supabase: ReturnType<typeof createClient>): Pr
 
 /* ───────────────────── Handle question notification ───────────────────── */
 
+// Alerta de escalonamento ML no Telegram (pergunta pública não tem "conversa" p/ marcar).
+async function notifyTelegramML(supabase: any, questionText: string, productName: string, reason: string) {
+  try {
+    const { data } = await supabase.from("integration_tokens").select("access_token").eq("provider", "telegram_bot").single();
+    const bot = data?.access_token;
+    if (!bot) { console.log("ml escalate: sem telegram_bot"); return; }
+    const esc = (s: string) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const msg = "🚨 <b>Escalonamento — Mercado Livre (pergunta)</b>\n"
+      + "Produto: " + esc(productName) + "\n"
+      + "Pergunta: <i>" + esc(String(questionText).slice(0, 180)) + "</i>\n"
+      + "Motivo: " + esc(reason) + "\n"
+      + "\n👉 Responda pelo painel Canggu (Marketplaces → Perguntas).";
+    await fetch("https://api.telegram.org/bot" + bot + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: "-1003730816228", message_thread_id: 15411, text: msg, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+  } catch (e) { console.log("ml escalate tg exc", String(e)); }
+}
 async function handleQuestion(resource: string, userId: number) {
   const supabase = getSupabase();
   const questionId = resource.replace("/questions/", "");
@@ -602,6 +622,26 @@ async function handleQuestion(resource: string, userId: number) {
       fullContext,
       correctionContext
     );
+    // Escalonamento ML: Ana marca [[ESCALAR]] → NÃO posta no ML (deixa p/ humano) + alerta Telegram + marca pendente.
+    const mlEsc = aiResult.answer.match(/\[\[\s*ESCALAR\s*:?\s*([^\]]*)\]\]/i);
+    if (mlEsc) {
+      const reason = (mlEsc[1] || "").trim() || "Pergunta precisa de atendimento humano";
+      log("ml_escalated", { questionId, reason });
+      await notifyTelegramML(supabase, question.text, productName, reason);
+      await supabase.from("marketplace_questions").insert({
+        platform: "mercado_livre",
+        platform_question_id: questionId,
+        platform_item_id: itemId,
+        product_name: productName,
+        question_text: question.text,
+        buyer_nickname: question.from?.nickname || "Comprador",
+        seller_id: String(userId),
+        status: "pending",
+        error_message: `escalado_humano: ${reason}`,
+        external_created_at: question.date_created,
+      });
+      return;
+    }
     const validation = validateMLQuestionResponse(aiResult.answer);
     if (validation.forbiddenContactDetected) {
       log("forbidden_contact_blocked_before_ml_post", {
