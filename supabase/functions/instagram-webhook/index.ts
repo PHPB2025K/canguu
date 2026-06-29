@@ -576,6 +576,83 @@ async function replyConversation(convId, igsid, lastMsgId) {
     await saveMessage(convId, "agent", reply);
   }
 }
+// ─── Comentários (posts + anúncios do Instagram) — modo híbrido: DM completo + reply público curto ───
+function commentLooksAnswerable(text) {
+  if (!text) return false;
+  const t = text.toLowerCase().trim();
+  if (t.includes("?")) return true;
+  const letters = t.replace(/[^\p{L}]/gu, "");
+  if (letters.length < 3) return false; // só emoji / curtida / @marcação / número solto
+  const kw = ["preç","preco","valor","quanto","custa","comprar","compr","onde","como","tem ","disponiv","disponí","estoque","entrega","frete","tamanho","medida","cor ","cores","link","vende","quero","interess","promo","desconto","parcel","pix","boleto","catalog","loja","site"];
+  return kw.some((k)=>t.includes(k));
+}
+async function sendPublicCommentReply(commentId, text) {
+  try {
+    const r = await fetch(GRAPH + "/" + commentId + "/replies?access_token=" + IG_TOKEN, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+    const j = await r.json();
+    if (j.error) console.log("cmt public reply err", JSON.stringify(j.error));
+  } catch (e) { console.log("cmt public exc", String(e)); }
+}
+// Resposta privada ancorada no comentário (1o balão via comment_id; resto como DM normal). true se o DM saiu.
+async function sendPrivateReplyToComment(commentId, igsid, text) {
+  const chunks = splitChunks(text);
+  if (!chunks.length) return false;
+  try {
+    const r = await fetch(GRAPH + "/me/messages?access_token=" + IG_TOKEN, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { comment_id: commentId }, message: { text: chunks[0] } })
+    });
+    const j = await r.json();
+    if (j.error) { console.log("cmt private reply err", JSON.stringify(j.error)); return false; }
+  } catch (e) { console.log("cmt private exc", String(e)); return false; }
+  for (let i = 1; i < chunks.length; i++){
+    await sleep(Math.min(Math.max(chunks[i].length * 45, 800), 3000));
+    await sendOne(igsid, chunks[i]);
+  }
+  return true;
+}
+async function handleComment(value) {
+  const commentId = value && value.id;
+  const from = value && value.from;
+  const text = ((value && value.text) || "").trim();
+  if (!commentId || !from || !from.id) return;
+  // anti-loop: ignora comentário/reply da própria conta
+  if (from.id === IG_BUSINESS_ID || ((from.username || "").toLowerCase() === "budamix.br")) return;
+  if (!commentLooksAnswerable(text)) { console.log("cmt skip (sem intencao):", text.slice(0, 60)); return; }
+  // dedup: já respondemos esse comentário?
+  try {
+    const seen = await db("messages?whatsapp_message_id=eq." + encodeURIComponent("cmt:" + commentId) + "&select=id&limit=1");
+    if (seen.ok) { const sj = await seen.json(); if (sj.length) return; }
+  } catch (_e) {}
+
+  const igsid = from.id;
+  const customerId = await getOrCreateCustomer(igsid, from.username || "");
+  const convId = await getOrCreateConversation(customerId);
+  await saveMessage(convId, "customer", "[comentario no Instagram] " + (text || "(sem texto)"), {
+    message_type: "comment",
+    whatsapp_message_id: "cmt:" + commentId
+  });
+
+  const sys = await getSystemPrompt();
+  const hist = await getRecentMessages(convId);
+  let ctx = await buildGrounding(text);
+  const note = "## Canal\nIsto e um COMENTARIO PUBLICO num post/anuncio do Instagram (@budamix.br), visivel a qualquer pessoa. A resposta completa vai por DM (direct); o reply publico e so um aceno curto. Seja cordial e util. NUNCA peca dado pessoal em publico, NUNCA sugira reclamacao. Para link de compra, prefira o site da Budamix.";
+  ctx = ctx ? ctx + "\n\n" + note : "=== CONTEXTO DE ATENDIMENTO ===\n" + note;
+  const reply = await anaReply(sys, hist, ctx);
+  if (!reply || !reply.trim()) return;
+
+  const okPriv = await sendPrivateReplyToComment(commentId, igsid, reply);
+  const pub = okPriv
+    ? "Oi! 😊 Te respondi no seu direct com todos os detalhes 💬"
+    : ("Oi! 😊 " + reply.split(CHUNK_SEP).join(" ").slice(0, 200));
+  await sendPublicCommentReply(commentId, pub);
+  await saveMessage(convId, "agent", reply);
+}
 // ─── Webhook ───
 Deno.serve(async (req)=>{
   // Verificação do webhook (handshake da Meta)
@@ -597,6 +674,7 @@ Deno.serve(async (req)=>{
     }
     const events = [];
     const deletions = [];
+    const comments = [];
     for (const e of body.entry || []){
       for (const ev of e.messaging || []){
         // ignora eco (mensagem que a própria conta enviou) e eventos sem mensagem real
@@ -606,6 +684,9 @@ Deno.serve(async (req)=>{
         if (!ev.message) continue;                       // read/reaction/postback -> ignora (v1)
         if (!ev.message.text && !(ev.message.attachments && ev.message.attachments.length)) continue;
         events.push(ev);
+      }
+      for (const ch of e.changes || []){            // comentários (posts + anúncios no IG)
+        if (ch.field === "comments" && ch.value) comments.push(ch.value);
       }
     }
     globalThis.EdgeRuntime?.waitUntil((async ()=>{
@@ -625,6 +706,9 @@ Deno.serve(async (req)=>{
       await Promise.all([...touched.entries()].map(([convId, info])=>
         replyConversation(convId, info.igsid, info.lastMsgId).catch((e)=>console.log("reply err", String(e)))
       ));
+      for (const cv of comments){
+        try { await handleComment(cv); } catch (e) { console.log("comment err", String(e)); }
+      }
     })());
     return new Response("EVENT_RECEIVED", { status: 200 });
   }
