@@ -10,12 +10,14 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 // Módulo Instagram — Direct (conversa) + Comentários (pergunta/comentário, em breve) + Aprendizados.
 const InstagramPage = () => {
   usePageTitle("Instagram");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Seleção SEPARADA por aba (Direct vs Comentários) — senão o chat "vaza" de uma aba pra outra.
+  const [selDirect, setSelDirect] = useState<string | null>(null);
+  const [selComment, setSelComment] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleSelect = (id: string) => {
+  const makeSelect = (setter: (id: string | null) => void) => (id: string) => {
     if (window.innerWidth < 1024) navigate(`/conversations/${id}`);
-    else setSelectedId(id);
+    else setter(id);
   };
 
   return (
@@ -30,20 +32,20 @@ const InstagramPage = () => {
         {/* Direct = conversa multi-turno (channel='instagram') */}
         <TabsContent value="direct" className="flex-1 min-h-0 data-[state=active]:flex mt-2">
           <div className="w-full lg:w-96 lg:border-r border-border flex flex-col">
-            <ConversationList selectedId={selectedId} onSelect={handleSelect} channel="instagram" />
+            <ConversationList selectedId={selDirect} onSelect={makeSelect(setSelDirect)} channel="instagram" />
           </div>
           <div className="hidden lg:flex flex-1 flex-col">
-            <ConversationChat conversationId={selectedId} />
+            <ConversationChat conversationId={selDirect} />
           </div>
         </TabsContent>
 
         {/* Comentários em posts/anúncios = conversa separada (channel='instagram_comment') */}
         <TabsContent value="comentarios" className="flex-1 min-h-0 data-[state=active]:flex mt-2">
           <div className="w-full lg:w-96 lg:border-r border-border flex flex-col">
-            <ConversationList selectedId={selectedId} onSelect={handleSelect} channel="instagram_comment" />
+            <ConversationList selectedId={selComment} onSelect={makeSelect(setSelComment)} channel="instagram_comment" />
           </div>
           <div className="hidden lg:flex flex-1 flex-col">
-            <ConversationChat conversationId={selectedId} />
+            <ConversationChat conversationId={selComment} />
           </div>
         </TabsContent>
 
