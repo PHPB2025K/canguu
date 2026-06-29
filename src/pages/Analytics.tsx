@@ -45,6 +45,10 @@ const Analytics = () => {
   const { data: summary, isLoading: loadingSummary } = useAnalyticsSummary(startDate, endDate);
   const { data: daily, isLoading: loadingDaily } = useAnalyticsDaily(startDate, endDate);
 
+  // Frescor dos dados: data mais recente presente no período (daily vem ordenado asc).
+  // Se o rollup parar de atualizar, este selo passa a mostrar uma data antiga — sinal visível.
+  const lastDataDate = daily && daily.length ? daily[daily.length - 1].date : null;
+
   const handleDateChange = (start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
@@ -62,6 +66,16 @@ const Analytics = () => {
       </PageHeader>
 
       <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
+
+      {lastDataDate ? (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Dados até {lastDataDate.split("-").reverse().join("/")} · atualização automática a cada 3h
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Nenhum dado no período selecionado.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard title="Total Conversas" value={summary?.totalConversations ?? 0} icon={MessageSquare} />

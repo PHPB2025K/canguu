@@ -16,15 +16,20 @@ export function useAnalyticsSummary(startDate: string, endDate: string) {
       const rows = (data ?? []) as AnalyticsDaily[];
       const sum = (fn: (r: AnalyticsDaily) => number | null) =>
         rows.reduce((acc, r) => acc + (fn(r) ?? 0), 0);
-      const avg = (fn: (r: AnalyticsDaily) => number | null) => {
-        const vals = rows.map(fn).filter((v): v is number => v != null);
-        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-      };
+
+      // Taxa de resolução PONDERADA pelo volume (resolvidas ÷ total no período),
+      // não a média simples das taxas diárias — evita que um dia de 1 conversa pese
+      // igual a um dia de 50. Reconstrói as resolvidas/dia a partir de rate × total.
+      const totalConv = sum((r) => r.total_conversations);
+      const resolvedApprox = rows.reduce(
+        (acc, r) => acc + ((r.resolution_rate ?? 0) / 100) * (r.total_conversations ?? 0),
+        0
+      );
 
       return {
-        totalConversations: sum((r) => r.total_conversations),
+        totalConversations: totalConv,
         totalMessages: sum((r) => r.total_messages),
-        avgResolutionRate: avg((r) => r.resolution_rate),
+        avgResolutionRate: totalConv > 0 ? (resolvedApprox / totalConv) * 100 : 0,
         totalCostBRL: sum((r) => r.estimated_cost) * 5.0,
       };
     },
