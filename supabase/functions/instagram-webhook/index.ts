@@ -555,6 +555,22 @@ async function loadIgToken() {
     console.log("loadIgToken exc", String(e));
   }
 }
+// Escalonamento: a Ana sinaliza com [[ESCALAR: motivo]] quando o caso precisa de humano.
+const ESCALATION_NOTE = "## Escalonamento\nSe o cliente PEDIR explicitamente falar com um humano/atendente/pessoa, OU for uma reclamacao seria (produto quebrado/com defeito/faltando/errado, pedido de reembolso/estorno, pedido que nao chegou, cliente claramente irritado, ou mencao a Procon/processo/advogado), comece sua resposta EXATAMENTE com o marcador [[ESCALAR: motivo curto]] e depois escreva UMA frase curta avisando que vai transferir para um atendente humano. Caso contrario, responda normalmente, SEM marcador.";
+async function escalateIfFlagged(reply, convId, channel, preview) {
+  const m = reply.match(/^\s*\[\[\s*ESCALAR\s*:?\s*([^\]]*)\]\]\s*/i);
+  if (!m) return { escalated: false, reply };
+  const reason = (m[1] || "").trim() || "Cliente precisa de atendimento humano";
+  const clean = reply.slice(m[0].length).trim() || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui 🙏";
+  try {
+    await fetch(SU + "/functions/v1/escalate-notify?key=" + encodeURIComponent(Deno.env.get("IG_VERIFY_TOKEN") || ""), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation_id: convId, reason, channel, preview: (preview || "").slice(0, 180) })
+    });
+  } catch (e) { console.log("escalate call err", String(e)); }
+  return { escalated: true, reply: clean };
+}
 // Depois de salvar a rajada, decide e responde (uma vez por conversa).
 async function replyConversation(convId, igsid, lastMsgId) {
   await sleep(DEBOUNCE_MS);
@@ -569,9 +585,11 @@ async function replyConversation(convId, igsid, lastMsgId) {
   const hist = await getRecentMessages(convId);
   let ctx = await buildGrounding(latestUserText(hist));
   const originNote = "## Cliente\nEste atendimento chegou pelo DIRECT DO INSTAGRAM (@budamix.br). NAO pergunte por onde o cliente nos encontrou. Para link de compra, prefira o do site da Budamix. Respostas curtas, no maximo ~2 paragrafos por balao.";
-  ctx = ctx ? ctx + "\n\n" + originNote : "=== CONTEXTO DE ATENDIMENTO ===\n" + originNote;
-  const reply = await anaReply(sys, hist, ctx);
+  ctx = ctx ? ctx + "\n\n" + originNote + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + originNote + "\n\n" + ESCALATION_NOTE;
+  let reply = await anaReply(sys, hist, ctx);
   if (reply && reply.trim()) {
+    const esc = await escalateIfFlagged(reply, convId, "instagram", latestUserText(hist));
+    reply = esc.reply;
     await sendInstagram(igsid, reply);
     await saveMessage(convId, "agent", reply);
   }
@@ -645,14 +663,18 @@ async function handleComment(value) {
   const hist = await getRecentMessages(convId);
   let ctx = await buildGrounding(text);
   const note = "## Canal\nIsto e um COMENTARIO PUBLICO num post/anuncio do Instagram (@budamix.br), visivel a qualquer pessoa. A resposta completa vai por DM (direct); o reply publico e so um aceno curto. Seja cordial e util. NUNCA peca dado pessoal em publico, NUNCA sugira reclamacao. Para link de compra, prefira o site da Budamix.";
-  ctx = ctx ? ctx + "\n\n" + note : "=== CONTEXTO DE ATENDIMENTO ===\n" + note;
-  const reply = await anaReply(sys, hist, ctx);
+  ctx = ctx ? ctx + "\n\n" + note + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + note + "\n\n" + ESCALATION_NOTE;
+  let reply = await anaReply(sys, hist, ctx);
   if (!reply || !reply.trim()) return;
 
+  const escC = await escalateIfFlagged(reply, convId, "instagram_comment", text);
+  reply = escC.reply;
   const okPriv = await sendPrivateReplyToComment(commentId, igsid, reply);
-  const pub = okPriv
-    ? "Oi! 😊 Te respondi no seu direct com todos os detalhes 💬"
-    : ("Oi! 😊 " + reply.split(CHUNK_SEP).join(" ").slice(0, 200));
+  const pub = escC.escalated
+    ? "Oi! 😊 Já pedi pra nossa equipe te responder no seu direct 🙏"
+    : (okPriv
+      ? "Oi! 😊 Te respondi no seu direct com todos os detalhes 💬"
+      : ("Oi! 😊 " + reply.split(CHUNK_SEP).join(" ").slice(0, 200)));
   await sendPublicCommentReply(commentId, pub);
   await saveMessage(convId, "agent", reply);
 }
