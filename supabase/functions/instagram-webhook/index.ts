@@ -461,9 +461,10 @@ async function processAttachments(message, convId, msgId) {
   try {
     if (a.type === "image" && url) {
       const md = await downloadUrl(url);
+      const imgMime = (md.mime && md.mime.startsWith("image/")) ? md.mime : "image/jpeg"; // blinda content-type p/ o <img> renderizar
       try {
-        meta.image_url = await uploadToStorage("image", convId, msgId, md.bytes, md.mime);
-        meta.image_mimetype = md.mime;
+        meta.image_url = await uploadToStorage("image", convId, msgId, md.bytes, imgMime);
+        meta.image_mimetype = imgMime;
       } catch (e) { console.log("img upload err", String(e)); }
       const desc = await describeImage(md.base64, md.mime);
       if (desc) meta.ai_description = desc;
@@ -471,9 +472,11 @@ async function processAttachments(message, convId, msgId) {
     }
     if (a.type === "audio" && url) {
       const md = await downloadUrl(url);
+      // IG entrega voz como video/mp4 → normaliza p/ audio/mp4 (.m4a), senão o <audio> do front não toca.
+      const audMime = (md.mime && md.mime.startsWith("audio/")) ? md.mime : "audio/mp4";
       try {
-        meta.audio_url = await uploadToStorage("audio", convId, msgId, md.bytes, md.mime);
-        meta.audio_mimetype = md.mime;
+        meta.audio_url = await uploadToStorage("audio", convId, msgId, md.bytes, audMime);
+        meta.audio_mimetype = audMime;
       } catch (e) { console.log("audio upload err", String(e)); }
       const txt = await transcribeAudio(md.base64, md.mime);
       meta.transcribed = !!(txt && txt.trim());
