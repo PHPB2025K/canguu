@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.instagram-token-refresh]
 verify_jwt = false
+
+[functions.instagram-ad-comments-poll]
+verify_jwt = false
