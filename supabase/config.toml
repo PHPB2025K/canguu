@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.escalate-notify]
 verify_jwt = false
+
+[functions.classify-pending-sentiment]
+verify_jwt = false
