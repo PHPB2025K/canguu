@@ -6,18 +6,18 @@
 // DESACOPLADA do fluxo de resposta da Ana (NÃO toca process-message): pega conversas com sentiment,
 // category OU products_asked nulos e preenche só o que falta (nunca sobrescreve o que a Ana já gravou):
 //   - sentiment / category : classificador Claude Haiku (mesmo do process-message)
-//   - products_asked        : busca semântica no catálogo (mesmo mecanismo do buildContext:
-//                             OpenAI embedding + RPC match_products), threshold alto p/ precisão.
+//   - products_asked        : busca semântica em PRODUTOS-BASE/família (mesmo motor do buildContext:
+//                             OpenAI embedding + RPC search_products_semantic), threshold p/ precisão.
 // Roda via cron (backfill + contínuo). Protegida por ?key=IG_VERIFY_TOKEN. Deploy --no-verify-jwt.
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 import { handleCors, jsonResponse } from '../_shared/cors.ts'
 import { supabase } from '../_shared/supabase-client.ts'
 import { classifyIntent } from '../_shared/intent-classifier.ts'
-import { searchProducts } from '../_shared/embeddings.ts'
+import { searchProductsEnriched } from '../_shared/embeddings.ts'
 
 const KEY = Deno.env.get('IG_VERIFY_TOKEN')
 const BATCH = 12 // por rodada (cada conversa pode fazer até 2 chamadas de API; cabe no limite do edge)
-const PRODUCT_SIM_THRESHOLD = 0.45 // só conta produto claramente mencionado (precisão > recall)
+const PRODUCT_SIM_THRESHOLD = 0.35 // busca em produtos-base (família, sem variante de cor)
 
 // classificador retorna positive|negative|neutral; DB usa positivo|neutro|negativo
 function mapSentimentToDb(s: string): string {
@@ -104,12 +104,13 @@ serve(async (req) => {
       }
     }
 
-    // produtos consultados: busca semântica no catálogo sobre o texto do cliente
+    // produtos consultados: busca semântica em PRODUTOS-BASE (família, sem variante de cor)
+    // sobre o texto do cliente. Top 2 famílias por conversa.
     if (row.products_asked == null) {
       const query = customerMsgs.map((m) => m.content).join('  ').slice(0, 2000)
       let names: string[] = []
       try {
-        const matches = await searchProducts(query, 3, PRODUCT_SIM_THRESHOLD)
+        const matches = await searchProductsEnriched(query, 2, PRODUCT_SIM_THRESHOLD)
         names = [...new Set(
           matches.map((m) => m.name).filter((n): n is string => !!n && n.trim().length > 0),
         )]
