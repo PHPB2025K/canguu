@@ -46,6 +46,32 @@ function aggregateJsonb(data: AnalyticsDaily[], field: "top_categories" | "top_p
     .map(([name, value]) => ({ name, value }));
 }
 
+// Encurta o nome do produto só pro rótulo do eixo (evita sobreposição no ranking):
+// remove palavras de enchimento (Porcelana, Vidro...) e abrevia termos longos,
+// PRESERVANDO tamanho/ml (a parte que distingue). O nome completo continua no tooltip.
+function shortenProductName(name: string): string {
+  let s = name
+    .replace(/\s*\bde Madeira\b/gi, "")
+    .replace(/\bcom Suporte\b/gi, "c/ Suporte")
+    .replace(/\bVidro Hermético\b/gi, "Hermético")
+    .replace(/\bPorcelana\b/gi, "")
+    .replace(/\bAcrílico\b/gi, "")
+    .replace(/\bCerâmica\b/gi, "")
+    .replace(/\bVidro\b/gi, "")
+    .replace(/\bHermético\b/gi, "Herm.")
+    .replace(/\bQuadrado\b/gi, "Quad.")
+    .replace(/\bRetangular\b/gi, "Retang.")
+    .replace(/\bRedondo\b/gi, "Red.")
+    .replace(/\bMedidora\b/gi, "Med.")
+    .replace(/\btamanhos\b/gi, "tam.")
+    .replace(/\s+([)\]])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const MAX = 28;
+  if (s.length > MAX) s = s.slice(0, MAX - 1).trimEnd() + "…";
+  return s;
+}
+
 export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
   const chartData = useMemo(() => data.map((r) => ({
     date: fmtDate(r.date),
@@ -141,7 +167,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
         <BarChart data={products} layout="vertical">
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={120} />
+          <YAxis type="category" dataKey="name" tickFormatter={shortenProductName} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" width={150} interval={0} />
           <Tooltip contentStyle={tooltipStyle} />
           <Bar dataKey="value" fill="#7EADAD" radius={[0, 4, 4, 0]} name="Consultas" />
         </BarChart>
