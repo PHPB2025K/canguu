@@ -90,9 +90,10 @@ export function ConversationList({ selectedId, onSelect, channel }: Conversation
               <SelectValue placeholder="Sentimento" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="positivo">Positivo</SelectItem>
-              <SelectItem value="negativo">Negativo</SelectItem>
-              <SelectItem value="neutro">Neutro</SelectItem>
+              <SelectItem value="positivo">😊 Positivo</SelectItem>
+              <SelectItem value="neutro">😐 Neutro</SelectItem>
+              <SelectItem value="negativo">😞 Negativo</SelectItem>
+              <SelectItem value="critico">🔴 Crítico</SelectItem>
             </SelectContent>
           </Select>
           <Select value={source} onValueChange={setSource}>
