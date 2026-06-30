@@ -30,7 +30,7 @@ export function useAnalyticsSummary(startDate: string, endDate: string) {
         totalConversations: totalConv,
         totalMessages: sum((r) => r.total_messages),
         avgResolutionRate: totalConv > 0 ? (resolvedApprox / totalConv) * 100 : 0,
-        totalCostBRL: sum((r) => r.estimated_cost) * 5.0,
+        totalCostBRL: sum((r) => r.estimated_cost_brl ?? 0),
       };
     },
   });

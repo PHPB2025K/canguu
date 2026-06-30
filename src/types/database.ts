@@ -161,6 +161,9 @@ export interface AnalyticsDaily {
   top_categories: Json | null;
   top_products_asked: Json | null;
   estimated_cost: number | null;
+  estimated_cost_brl: number | null;
+  total_tokens_in: number | null;
+  total_tokens_out: number | null;
   avg_messages_per_conversation: number | null;
   total_tokens_used: number | null;
   created_at: string | null;

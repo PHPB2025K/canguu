@@ -290,7 +290,7 @@ async function anaReply(systemPrompt, history, contextBlock) {
     });
   }
   while(merged.length && merged[0].role !== "user")merged.shift();
-  if (!merged.length) return "";
+  if (!merged.length) return { text: "", tokens_in: 0, tokens_out: 0 };
   if (contextBlock && contextBlock.trim()) {
     for(let i = merged.length - 1; i >= 0; i--){
       if (merged[i].role === "user") {
@@ -316,9 +316,12 @@ async function anaReply(systemPrompt, history, contextBlock) {
   const j = await res.json();
   if (j.error) {
     console.log("anthropic err", JSON.stringify(j.error));
-    return "";
+    return { text: "", tokens_in: 0, tokens_out: 0 };
   }
-  return j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
+  const text = j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
+  const tokens_in = j.usage ? (j.usage.input_tokens || 0) : 0;
+  const tokens_out = j.usage ? (j.usage.output_tokens || 0) : 0;
+  return { text, tokens_in, tokens_out };
 }
 // Quebra a resposta em "balões" e respeita o limite de tamanho do Instagram.
 function hardWrap(s) {
@@ -586,15 +589,21 @@ async function replyConversation(convId, igsid, lastMsgId) {
   await igAction(igsid, "mark_seen");
   await igAction(igsid, "typing_on");
   const hist = await getRecentMessages(convId);
+  const t0 = Date.now();
   let ctx = await buildGrounding(latestUserText(hist));
   const originNote = "## Cliente\nEste atendimento chegou pelo DIRECT DO INSTAGRAM (@budamix.br). NAO pergunte por onde o cliente nos encontrou. Para link de compra, prefira o do site da Budamix. Respostas curtas, no maximo ~2 paragrafos por balao.";
   ctx = ctx ? ctx + "\n\n" + originNote + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + originNote + "\n\n" + ESCALATION_NOTE;
-  let reply = await anaReply(sys, hist, ctx);
+  const gen = await anaReply(sys, hist, ctx);
+  let reply = gen.text;
+  const response_time_ms = Date.now() - t0;
+  const tokens_in = gen.tokens_in || 0;
+  const tokens_out = gen.tokens_out || 0;
+  const tokens_used = (tokens_in + tokens_out) || null;
   if (reply && reply.trim()) {
     const esc = await escalateIfFlagged(reply, convId, "instagram", latestUserText(hist));
     reply = esc.reply;
     await sendInstagram(igsid, reply);
-    await saveMessage(convId, "agent", reply);
+    await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out });
   }
 }
 // ─── Comentários (posts + anúncios do Instagram) — modo híbrido: DM completo + reply público curto ───
@@ -664,10 +673,16 @@ async function handleComment(value) {
 
   const sys = await getSystemPrompt();
   const hist = await getRecentMessages(convId);
+  const t0 = Date.now();
   let ctx = await buildGrounding(text);
   const note = "## Canal\nIsto e um COMENTARIO PUBLICO num post/anuncio do Instagram (@budamix.br), visivel a qualquer pessoa. A resposta completa vai por DM (direct); o reply publico e so um aceno curto. Seja cordial e util. NUNCA peca dado pessoal em publico, NUNCA sugira reclamacao. Para link de compra, prefira o site da Budamix.";
   ctx = ctx ? ctx + "\n\n" + note + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + note + "\n\n" + ESCALATION_NOTE;
-  let reply = await anaReply(sys, hist, ctx);
+  const gen = await anaReply(sys, hist, ctx);
+  let reply = gen.text;
+  const response_time_ms = Date.now() - t0;
+  const tokens_in = gen.tokens_in || 0;
+  const tokens_out = gen.tokens_out || 0;
+  const tokens_used = (tokens_in + tokens_out) || null;
   if (!reply || !reply.trim()) return;
 
   const escC = await escalateIfFlagged(reply, convId, "instagram_comment", text);
@@ -679,7 +694,7 @@ async function handleComment(value) {
       ? "Oi! 😊 Te respondi no seu direct com todos os detalhes 💬"
       : ("Oi! 😊 " + reply.split(CHUNK_SEP).join(" ").slice(0, 200)));
   await sendPublicCommentReply(commentId, pub);
-  await saveMessage(convId, "agent", reply);
+  await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out });
 }
 // ─── Webhook ───
 Deno.serve(async (req)=>{

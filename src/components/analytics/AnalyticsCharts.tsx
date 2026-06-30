@@ -99,7 +99,7 @@ export function AnalyticsCharts({ data }: AnalyticsChartsProps) {
   const costData = useMemo(() => {
     let acc = 0;
     return data.map((r) => {
-      acc += (r.estimated_cost ?? 0) * 5.0;
+      acc += (r.estimated_cost_brl ?? 0);
       return { date: fmtDate(r.date), cost: acc };
     });
   }, [data]);

@@ -307,7 +307,7 @@ async function anaReply(systemPrompt, history, contextBlock) {
     });
   }
   while(merged.length && merged[0].role !== "user")merged.shift();
-  if (!merged.length) return "";
+  if (!merged.length) return { text: "", tokens_in: 0, tokens_out: 0 };
   if (contextBlock && contextBlock.trim()) {
     for(let i = merged.length - 1; i >= 0; i--){
       if (merged[i].role === "user") {
@@ -333,9 +333,12 @@ async function anaReply(systemPrompt, history, contextBlock) {
   const j = await res.json();
   if (j.error) {
     console.log("anthropic err", JSON.stringify(j.error));
-    return "";
+    return { text: "", tokens_in: 0, tokens_out: 0 };
   }
-  return j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
+  const text = j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
+  const tokens_in = j.usage ? (j.usage.input_tokens || 0) : 0;
+  const tokens_out = j.usage ? (j.usage.output_tokens || 0) : 0;
+  return { text, tokens_in, tokens_out };
 }
 function splitChunks(text) {
   let chunks = text.split(CHUNK_SEP).map((c)=>c.trim()).filter((c)=>c.length > 0);
@@ -638,16 +641,22 @@ async function handleValue(value) {
     const sys = await getSystemPrompt();
     if (info.lastMsgId) await sendTyping(info.lastMsgId);
     const hist = await getRecentMessages(convId);
+    const t0 = Date.now();
     let ctx = await buildGrounding(latestUserText(hist));
     const originNote = known ? "## Cliente\nOrigem do cliente: " + src + ". NAO pergunte por onde nos encontrou (ja sabemos). Para link de compra, prefira o do canal " + src + "." : pickerSent ? "## Cliente\nO menu de canais ja foi enviado ao cliente. NAO pergunte a origem em texto; apenas ajude. Se precisar mandar link, use o do site." : "";
     if (originNote) ctx = ctx ? ctx + "\n\n" + originNote : "=== CONTEXTO DE ATENDIMENTO ===\n" + originNote;
     ctx = ctx ? ctx + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + ESCALATION_NOTE;
-    let reply = await anaReply(sys, hist, ctx);
+    const gen = await anaReply(sys, hist, ctx);
+    let reply = gen.text;
+    const response_time_ms = Date.now() - t0;
+    const tokens_in = gen.tokens_in || 0;
+    const tokens_out = gen.tokens_out || 0;
+    const tokens_used = (tokens_in + tokens_out) || null;
     if (reply && reply.trim()) {
       const esc = await escalateIfFlagged(reply, convId, "whatsapp", latestUserText(hist));
       reply = esc.reply;
       await sendWhatsApp(info.from, reply, info.lastMsgId);
-      await saveMessage(convId, "agent", reply);
+      await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out });
     }
   }));
 }

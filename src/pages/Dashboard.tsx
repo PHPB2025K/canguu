@@ -38,8 +38,8 @@ const Dashboard = () => {
     ? `${(analyticsData.avg_response_time_ms / 1000).toFixed(1)}s`
     : "--";
   const resolutionRate = analyticsData?.resolution_rate ?? 0;
-  const estimatedCostBRL = analyticsData?.estimated_cost
-    ? formatCurrency(Number(analyticsData.estimated_cost) * 5)
+  const estimatedCostBRL = analyticsData?.estimated_cost_brl != null
+    ? formatCurrency(Number(analyticsData.estimated_cost_brl))
     : "--";
   const sentPos = analyticsData?.sentiment_positive ?? 0;
   const sentNeg = analyticsData?.sentiment_negative ?? 0;

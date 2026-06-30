@@ -24,7 +24,7 @@ function exportCSV(data: any[], startDate: string, endDate: string) {
       r.sentiment_positive ?? 0,
       r.sentiment_negative ?? 0,
       r.sentiment_neutral ?? 0,
-      ((r.estimated_cost ?? 0) * 5.0).toFixed(2),
+      ((r.estimated_cost_brl ?? 0)).toFixed(2),
     ].join(",")
   ).join("\n");
 
