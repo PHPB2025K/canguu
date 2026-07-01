@@ -307,7 +307,7 @@ async function anaReply(systemPrompt, history, contextBlock) {
     });
   }
   while(merged.length && merged[0].role !== "user")merged.shift();
-  if (!merged.length) return { text: "", tokens_in: 0, tokens_out: 0 };
+  if (!merged.length) return { text: "", tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0 };
   if (contextBlock && contextBlock.trim()) {
     for(let i = merged.length - 1; i >= 0; i--){
       if (merged[i].role === "user") {
@@ -326,19 +326,21 @@ async function anaReply(systemPrompt, history, contextBlock) {
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 800,
-      system: systemPrompt,
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: merged
     })
   });
   const j = await res.json();
   if (j.error) {
     console.log("anthropic err", JSON.stringify(j.error));
-    return { text: "", tokens_in: 0, tokens_out: 0 };
+    return { text: "", tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0 };
   }
   const text = j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
   const tokens_in = j.usage ? (j.usage.input_tokens || 0) : 0;
   const tokens_out = j.usage ? (j.usage.output_tokens || 0) : 0;
-  return { text, tokens_in, tokens_out };
+  const cache_read = j.usage ? (j.usage.cache_read_input_tokens || 0) : 0;
+  const cache_write = j.usage ? (j.usage.cache_creation_input_tokens || 0) : 0;
+  return { text, tokens_in, tokens_out, cache_read, cache_write };
 }
 function splitChunks(text) {
   let chunks = text.split(CHUNK_SEP).map((c)=>c.trim()).filter((c)=>c.length > 0);
@@ -651,12 +653,14 @@ async function handleValue(value) {
     const response_time_ms = Date.now() - t0;
     const tokens_in = gen.tokens_in || 0;
     const tokens_out = gen.tokens_out || 0;
+    const tokens_cache_read = gen.cache_read || 0;
+    const tokens_cache_write = gen.cache_write || 0;
     const tokens_used = (tokens_in + tokens_out) || null;
     if (reply && reply.trim()) {
       const esc = await escalateIfFlagged(reply, convId, "whatsapp", latestUserText(hist));
       reply = esc.reply;
       await sendWhatsApp(info.from, reply, info.lastMsgId);
-      await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out });
+      await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write });
     }
   }));
 }
