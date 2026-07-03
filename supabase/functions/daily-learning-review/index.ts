@@ -318,10 +318,16 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
     }
 
     // ── 2) CHAT (WhatsApp/Instagram) — mensagens 'agent' ainda nao revisadas ──
+    // EXCECAO UNICA (aprovada Pedro 03/07): mensagens de TEMPLATE automatico da
+    // Meta (menu de canais do primeiro contato) sao texto fixo de sistema, nao
+    // decisao de atendimento — o juiz NAO avalia. Marcador robusto: sao as
+    // unicas mensagens 'agent' com message_type='interactive'. O or() abaixo
+    // preserva as normais (message_type NULL) — um .neq puro descartaria NULL.
     const { data: agentMsgs } = await supabase.from('messages')
       .select('id, conversation_id, content, created_at, metadata, conversations!inner(channel)')
       .eq('sender', 'agent').gte('created_at', BACKLOG_FLOOR)
       .filter('metadata->>learning_reviewed', 'is', null)
+      .or('message_type.is.null,message_type.neq.interactive')
       .order('created_at', { ascending: true }).limit(CHAT_FETCH)
     for (const m of agentMsgs ?? []) {
       if (Date.now() - started > TIME_BUDGET_MS) { sum.leftover++; continue }
