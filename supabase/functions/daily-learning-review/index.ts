@@ -128,6 +128,106 @@ serve(async (req) => {
       return parseJudge(extractText(resp))
     }
 
+    // ══ MODO BACKFILL — revalida a BASE EXISTENTE de correcoes contra a cartilha ══
+    // GET ?mode=backfill&dry=1        -> so lista violadores (nenhuma escrita)
+    // GET ?mode=backfill&batch=8     -> reescreve ate N violadores nesta invocacao
+    // Politica: reescrita preserva a informacao; origem chat com violacao so de
+    // formato tende a virar escopo so_conversa (texto mantido). Toda reescrita
+    // passa pelo MESMO gate; falhou 2x -> se estava ativa (processed), sai de uso
+    // (volta pra auto_review). Antes/depois vai no retorno pra auditoria.
+    if (url.searchParams.get('mode') === 'backfill') {
+      const dry = url.searchParams.get('dry') === '1'
+      const batch = Math.min(Number(url.searchParams.get('batch')) || 8, 15)
+      // Anti-starvation: ids que ja falharam 2x em invocacoes anteriores chegam
+      // via ?skip=id1,id2 e sao pulados — senao insanaveis no topo da fila
+      // consumiriam o batch pra sempre e o driver nunca chegaria a remaining=0.
+      const skip = new Set((url.searchParams.get('skip') || '').split(',').map((s) => s.trim()).filter(Boolean))
+      const bf = {
+        scanned: 0, clean: 0, fixed: 0, rescoped: 0, demoted: 0, remaining: 0, skipped: 0,
+        giveup_ids: [] as string[],
+        changes: [] as any[], dry_violators: [] as any[], errors: [] as string[],
+      }
+      const { data: rows } = await supabase.from('response_corrections')
+        .select('id, original_question, recommended_response, status, origin_channel, scope, corrected_by')
+        .in('status', ['processed', 'auto_review', 'pending'])
+        .order('created_at', { ascending: true })
+
+      const BACKFILL_SYS = `Voce revisa a BASE DE APRENDIZADOS do atendimento da Ana (Budamix). Cada aprendizado e um par pergunta->resposta usado como MODELO em respostas futuras. Tarefa: deixar a resposta em conformidade com as regras PRESERVANDO a informacao e a intencao. Remova nomes proprios de clientes (o aprendizado e um modelo generico).
+
+${REGRAS_CORRECAO_ML}
+
+${REGRAS_CORRECAO_CHAT}
+${CATALOGO}
+
+ESCOLHA DO ESCOPO:
+- Pergunta que veio de CHAT (WhatsApp/Instagram) cuja resposta e adequada so pra chat (emoji, tom pessoal, comprimento) -> escopo "so_conversa" e pode MANTER o texto/emoji se ja obedecer as regras de chat.
+- Pergunta que veio de MARKETPLACE -> escopo "so_marketplace" com a resposta na regua de marketplace (sem emoji, max 350 caracteres, sem "estamos a disposicao").
+- So use "todos" se o MESMO texto obedecer a regua de marketplace.
+REGRA ESPECIAL: se a resposta orienta abrir reclamacao/disputa/devolucao, troque pela orientacao canonica: acolher em UMA frase e orientar acompanhar pela aba de MENSAGENS DO PEDIDO no proprio Mercado Livre ("Minhas Compras" -> o pedido). NUNCA mencione reclamacao/disputa.
+Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_marketplace"|"so_conversa"}`
+
+      async function backfillRewrite(r: any, curScope: string[], violations: string[]): Promise<{ rec: string; scope: string[] } | null> {
+        const baseMsg = `ORIGEM: ${r.origin_channel || 'desconhecida'}\nESCOPO ATUAL: ${curScope.join(',')}\nPERGUNTA: """${r.original_question}"""\nRESPOSTA ATUAL (viola: ${violations.join('; ')}): """${r.recommended_response}"""`
+        let lastViol: string[] = []
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const userMsg = attempt === 0 ? baseMsg : `${baseMsg}\n\nSUA TENTATIVA ANTERIOR AINDA VIOLAVA: ${lastViol.join('; ')}. Corrija obedecendo TODAS as regras.`
+          const resp = await callAnthropic({ model: cfg.model, systemPrompt: BACKFILL_SYS, messages: [{ role: 'user', content: userMsg }], maxTokens: 700, temperature: 0 })
+          const j = parseJudge(extractText(resp))
+          const rec = (j?.resposta_correta || '').trim()
+          if (!rec) continue
+          const scope = mapScope(j?.escopo, r.origin_channel || 'mercado_livre')
+          const v = correctionViolations(rec, scope)
+          if (v.length === 0) return { rec, scope }
+          lastViol = v
+        }
+        return null
+      }
+
+      let rewrites = 0
+      for (const r of rows ?? []) {
+        bf.scanned++
+        if (skip.has(String(r.id))) { bf.skipped++; continue }
+        const curScope = (r.scope && (r.scope as string[]).length ? (r.scope as string[]) : ['all'])
+        const viol = correctionViolations(r.recommended_response || '', curScope)
+        if (viol.length === 0) { bf.clean++; continue }
+        if (dry) { bf.dry_violators.push({ id: r.id, status: r.status, scope: curScope, violations: viol, texto: String(r.recommended_response || '').slice(0, 120) }); continue }
+        if (rewrites >= batch || Date.now() - started > 100_000) { bf.remaining++; continue }
+        rewrites++
+        try {
+          const fixed = await backfillRewrite(r, curScope, viol)
+          if (fixed) {
+            const recEmb = await generateEmbedding(`${r.original_question}\n${fixed.rec}`)
+            const { error } = await supabase.from('response_corrections').update({
+              recommended_response: fixed.rec, scope: fixed.scope, embedding: JSON.stringify(recEmb),
+            } as any).eq('id', r.id)
+            if (error) { bf.errors.push(`${r.id}: ${error.message}`); continue }
+            const soEscopo = fixed.rec === String(r.recommended_response || '').trim()
+            if (soEscopo) bf.rescoped++; else bf.fixed++
+            bf.changes.push({ id: r.id, status: r.status, violava: viol, antes: r.recommended_response, depois: fixed.rec, escopo_antes: curScope, escopo_depois: fixed.scope })
+          } else {
+            // Nao passou no gate 2x: sai de uso se estava ativa e entra na lista
+            // de desistidos (driver repassa via ?skip= nas proximas invocacoes).
+            if (r.status === 'processed') {
+              const { error } = await supabase.from('response_corrections').update({ status: 'auto_review' } as any).eq('id', r.id)
+              if (!error) bf.demoted++
+            }
+            bf.giveup_ids.push(String(r.id))
+            bf.errors.push(`${r.id}: reescrita nao passou no gate 2x (${viol.join('; ')}) — ${r.status === 'processed' ? 'DESATIVADA (auto_review)' : 'mantida na fila'}`)
+          }
+        } catch (e) { bf.errors.push(`${r.id}: ${String(e)}`) }
+      }
+
+      const elapsedBf = Date.now() - started
+      if (!dry) {
+        await supabase.from('learning_runs').insert({
+          channel: 'backfill', window_hours: 0, evaluated: bf.scanned, good: bf.clean,
+          bad: bf.fixed + bf.rescoped + bf.demoted, auto_applied: 0, queued: bf.remaining,
+          deduped: 0, errors: bf.errors, duration_ms: elapsedBf,
+        } as any).then(() => {}, () => {})
+      }
+      return jsonResponse({ success: true, mode: 'backfill', dry, ...bf, duration_ms: elapsedBf })
+    }
+
     // Julga e, se reprovou com correcao, valida a correcao contra a cartilha.
     // Violou -> UMA re-tentativa devolvendo os motivos ao juiz. Persistiu ->
     // devolve rejected (o chamador marca feedback mas NAO grava a correcao).
