@@ -33,8 +33,18 @@ import {
 
 const DEDUP_SIM = 0.93
 const DEFAULT_AUTO_APPLY = 0.85
-const ML_LIMIT = 8     // por rodada (cabe no limite de 150s do edge)
-const CHAT_LIMIT = 6
+
+// ── COBERTURA TOTAL (03/07/2026) — "continuar de onde parou" ──
+// A selecao NAO usa mais janela de ~26h: pega itens SEM carimbo (feedback /
+// learning_reviewed nulos) do mais antigo pro mais novo, a partir do FLOOR.
+// O carimbo por item e o cursor — nada expira sem ser analisado. Quando o
+// orcamento de tempo da invocacao acaba e sobra fila, a funcao DISPARA A SI
+// MESMA (?chain=n) ate drenar, com teto MAX_CHAIN pra nunca virar bola de neve.
+const BACKLOG_FLOOR = '2026-07-03T00:00:00.000Z' // inicio do regime; nao reprocessa historico antigo
+const ML_FETCH = 40    // candidatos buscados por invocacao (processa o que couber no tempo)
+const CHAT_FETCH = 40
+const TIME_BUDGET_MS = 95_000 // teto de processamento por invocacao (wall-clock edge ~150s)
+const MAX_CHAIN = 8    // teto de auto-reinvocacoes por dia (~9 invocacoes ≈ 120+ itens)
 
 const CATALOGO = `
 VERDADE DO CATALOGO (use para julgar precisao):
@@ -119,9 +129,8 @@ serve(async (req) => {
     const autoApply = parseFloat(fmap.get('learning_auto_apply_confidence') ?? '') || DEFAULT_AUTO_APPLY
 
     const url = new URL(req.url)
-    const hours = Math.min(Number(url.searchParams.get('hours')) || 26, 24 * 60)
-    const since = new Date(Date.now() - hours * 3600 * 1000).toISOString()
-    const sum = { evaluated: 0, good: 0, bad: 0, auto_applied: 0, queued: 0, deduped: 0, rejected: 0, errors: [] as string[] }
+    const chain = Math.max(0, Number(url.searchParams.get('chain')) || 0)
+    const sum = { evaluated: 0, good: 0, bad: 0, auto_applied: 0, queued: 0, deduped: 0, rejected: 0, leftover: 0, chain, chained: false, errors: [] as string[] }
 
     async function runJudge(rubrica: string, userMsg: string) {
       const resp = await callAnthropic({ model: cfg.model, systemPrompt: rubrica, messages: [{ role: 'user', content: userMsg }], maxTokens: 600, temperature: 0 })
@@ -284,13 +293,17 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
     }
 
     // ── 1) MARKETPLACE (perguntas publicas) ──
+    // Sem janela: itens sem carimbo (feedback null) desde o FLOOR, mais antigos
+    // primeiro. O que nao couber no tempo fica pro proximo elo da cadeia.
     const { data: mlRows } = await supabase.from('marketplace_questions')
       .select('id, platform_item_id, product_name, question_text, answer_text')
       .eq('platform', 'mercado_livre').in('answered_by', ['ai_agent', 'ai']).eq('status', 'answered')
       .is('feedback', null)
-      .or(`answered_at.gte.${since},external_created_at.gte.${since},created_at.gte.${since}`)
-      .limit(ML_LIMIT)
+      .or(`answered_at.gte.${BACKLOG_FLOOR},external_created_at.gte.${BACKLOG_FLOOR},created_at.gte.${BACKLOG_FLOOR}`)
+      .order('created_at', { ascending: true })
+      .limit(ML_FETCH)
     for (const q of mlRows ?? []) {
+      if (Date.now() - started > TIME_BUDGET_MS) { sum.leftover++; continue }
       try {
         const res = await judgeAndGate(RUBRICA_ML, `ANUNCIO/PRODUTO: ${q.product_name ?? q.platform_item_id}\nPERGUNTA: """${q.question_text}"""\nRESPOSTA DA ANA: """${q.answer_text}"""\n\n${SCHEMA_HINT}`, 'mercado_livre', String(q.id))
         if (!res) { sum.errors.push(`${q.id}: juiz sem JSON`); continue }
@@ -307,10 +320,11 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
     // ── 2) CHAT (WhatsApp/Instagram) — mensagens 'agent' ainda nao revisadas ──
     const { data: agentMsgs } = await supabase.from('messages')
       .select('id, conversation_id, content, created_at, metadata, conversations!inner(channel)')
-      .eq('sender', 'agent').gte('created_at', since)
+      .eq('sender', 'agent').gte('created_at', BACKLOG_FLOOR)
       .filter('metadata->>learning_reviewed', 'is', null)
-      .order('created_at', { ascending: false }).limit(CHAT_LIMIT)
+      .order('created_at', { ascending: true }).limit(CHAT_FETCH)
     for (const m of agentMsgs ?? []) {
+      if (Date.now() - started > TIME_BUDGET_MS) { sum.leftover++; continue }
       try {
         // contexto: ultima mensagem do cliente antes desta resposta
         const { data: prev } = await supabase.from('messages')
@@ -334,9 +348,28 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
       } catch (e) { sum.errors.push(`msg ${m.id}: ${String(e)}`) }
     }
 
+    // ── CADEIA: sobrou fila (tempo estourou ou fetch veio cheio)? Dispara a
+    // proxima invocacao ANTES de responder. Cada elo e um request independente
+    // (se este isolate morrer no teto de wall-clock, o proximo segue sozinho).
+    const maybeMore = sum.leftover > 0 ||
+      (mlRows?.length ?? 0) === ML_FETCH || (agentMsgs?.length ?? 0) === CHAT_FETCH
+    if (maybeMore && chain < MAX_CHAIN) {
+      try {
+        const selfUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/daily-learning-review?chain=${chain + 1}`
+        const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        const next = fetch(selfUrl, { method: 'POST', headers: { Authorization: `Bearer ${key}`, apikey: key } }).then(() => {}, () => {})
+        const er = (globalThis as any).EdgeRuntime
+        if (er?.waitUntil) er.waitUntil(next)
+        else await new Promise((r) => setTimeout(r, 1500)) // garante o request no ar antes do isolate encerrar
+        sum.chained = true
+      } catch (e) { sum.errors.push(`chain: ${String(e)}`) }
+    } else if (maybeMore && chain >= MAX_CHAIN) {
+      sum.errors.push(`chain: teto MAX_CHAIN=${MAX_CHAIN} atingido com fila restante — sobra fica pro cron seguinte (nada expira)`)
+    }
+
     const elapsed = Date.now() - started
     await supabase.from('learning_runs').insert({
-      channel: 'multi', window_hours: hours, evaluated: sum.evaluated, good: sum.good, bad: sum.bad,
+      channel: 'multi', window_hours: 0, evaluated: sum.evaluated, good: sum.good, bad: sum.bad,
       auto_applied: sum.auto_applied, queued: sum.queued, deduped: sum.deduped, errors: sum.errors, duration_ms: elapsed,
     } as any).then(() => {}, () => {})
 
