@@ -1,11 +1,29 @@
 // ML Response Validator — Post-processes AI responses for Mercado Livre
 // Strips emojis, links, platform mentions, enforces char limits
+//
+// As LISTAS de padrões proibidos vivem na CARTILHA ÚNICA (marketplace-rules.ts)
+// — compartilhadas com o prompt de geração, o juiz do daily-learning-review e
+// o gate de aprovação do painel. Aqui só se aplica o enforcement.
 
-const ML_QUESTION_FALLBACK = 'Ola! Vou conferir essa informacao e te retorno em breve.'
-const ML_MESSAGE_FALLBACK = 'Obrigado pela mensagem. Vou conferir e te retorno em breve.'
+import {
+  FORBIDDEN_CONTACT_PATTERNS,
+  FORBIDDEN_ADMIN_LEAK_PATTERNS,
+  detectForbiddenClaims,
+  EMOJI_PATTERN_SOURCE,
+  CLEAN_FALLBACK_ML,
+  CLEAN_FALLBACK_ML_MESSAGE,
+} from './marketplace-rules.ts'
+
+export { detectForbiddenClaims }
+
+// Fallbacks limpos da cartilha. O antigo "Vou conferir essa informacao e te
+// retorno em breve" violava as próprias regras do validador (promessa de
+// retorno em canal público) — corrigido 03/07/2026.
+const ML_QUESTION_FALLBACK = CLEAN_FALLBACK_ML
+const ML_MESSAGE_FALLBACK = CLEAN_FALLBACK_ML_MESSAGE
 
 // Patterns to remove
-const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu
+const EMOJI_REGEX = new RegExp(EMOJI_PATTERN_SOURCE, 'gu')
 const URL_REGEX = /https?:\/\/[^\s)]+/gi
 const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,3}\)?[-.\s]?\d{4,5}[-.\s]?\d{4}/g
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
@@ -13,7 +31,7 @@ const PLATFORM_MENTIONS = /\b(shopee|amazon|site\s+pr[oó]prio|whatsapp|wpp|inst
 const CHUNK_SEPARATOR = /\\\\/g
 
 // HARD BLOCKERS — phrases that violate ML policy or Budamix tone rules.
-// Two categories share the same downstream behavior (RAG substitution
+// Three categories share the same downstream behavior (RAG substitution
 // or technical fallback) but are tracked separately for telemetry.
 //
 //  1. CONTACT — asking the buyer to reach out off-platform. ML forbids
@@ -26,50 +44,16 @@ const CHUNK_SEPARATOR = /\\\\/g
 //     reaches for them when product context lacks a specific compat field,
 //     even though the prompt explicitly forbids them. Hard-blocking here
 //     enforces the rule even when LLM adherence drifts.
-const FORBIDDEN_CONTACT_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  { pattern: /\bentre[m]?\s+em\s+contato\b/i,                       reason: 'entre em contato' },
-  { pattern: /\bentrar\s+em\s+contato\b/i,                          reason: 'entrar em contato' },
-  { pattern: /\bfale[m]?\s+conosco\b/i,                             reason: 'fale conosco' },
-  { pattern: /\bnos\s+(?:contate|chame|procure|envie|mande)\b/i,    reason: 'nos contate/envie' },
-  { pattern: /\bme\s+(?:chame|envie|mande|contate)\b/i,             reason: 'me chame/envie' },
-  { pattern: /\bcontate(?:[- ]nos|\s+nosso)\b/i,                    reason: 'contate-nos / contate nosso' },
-  { pattern: /\bcontact(?:[- ]nos|\s+nosso)\b/i,                    reason: 'contact-nos' },
-  { pattern: /\b(?:envie|mande|manda)\s+(?:uma\s+)?(?:mensagem|email)\b/i, reason: 'envie mensagem' },
-  { pattern: /\b(?:estou|estamos|fico|ficamos|seguimos)\s+(?:a|à)\s+disposi[çc][aã]o\b/i, reason: 'estou/estamos à disposição' },
-  { pattern: /\bpara\s+(?:mais|maiores)\s+(?:detalhes|informa[çc][õo]es)\b[^.]*\b(?:contat|fal[ae]|chame)\b/i, reason: 'para mais detalhes contate' },
-]
-
-const FORBIDDEN_ADMIN_LEAK_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  { pattern: /\bn[ãa]o\s+(?:temos|consta|est[áa]\s+confirmad[ao])\s+(?:essa\s+)?(?:informa[çc][ãa]o)?\s*(?:no\s+)?cadastro\b/i, reason: 'não temos/consta no cadastro' },
-  { pattern: /\bn[ãa]o\s+(?:est[áa]|esta)\s+confirmad[ao]\s+no\s+cadastro\b/i, reason: 'não está confirmado no cadastro' },
-  { pattern: /\b(?:vamos|ir[ée]?mos|sera|ser[áa])\s+verificad[ao]?\s+internamente\b/i, reason: 'verificar internamente' },
-  { pattern: /\bverificar\s+(?:com\s+)?(?:nossa\s+)?(?:equipe|setor)\s+(?:t[ée]cnic[ao]|respons[áa]vel|de\s+separa[çc][ãa]o)\b/i, reason: 'verificar com equipe técnica' },
-  { pattern: /\b(?:vamos|ir[ée]?mos|sera|ser[áa])\s+atualizad[ao]?\s+(?:o\s+)?an[úu]ncio\b/i, reason: 'atualizar o anúncio' },
-  { pattern: /\batualizar(?:emos)?\s+(?:o\s+)?an[úu]ncio\b/i,        reason: 'atualizaremos o anúncio' },
-  { pattern: /\bpedimos\s+desculpas?\s+pela\s+diverg[êe]ncia\b/i,    reason: 'desculpas pela divergência' },
-  { pattern: /\blamentamos\s+a\s+inconsist[êe]ncia\b/i,              reason: 'lamentamos a inconsistência' },
-  { pattern: /\b(?:voc[êe]\s+pode|pode\s+solicitar)\s+a\s+devolu[çc][ãa]o\b/i, reason: 'pode solicitar devolução (proativo)' },
-  { pattern: /\bfazer\s+a\s+devolu[çc][ãa]o\b/i,                    reason: 'fazer a devolução (proativo)' },
-  // Added 2026-06-19 — real variants that escaped the patterns above.
-  // The phrasing drifts ("não está DETALHADA", "Vou verificar", "não TENHO",
-  // "confirmada sobre X" without the "cadastro" anchor), so broaden coverage.
-  { pattern: /\bn[ãa]o\s+(?:est[áa]|esta)\s+detalhad[ao]\s+no\s+cadastro\b/i, reason: 'não está detalhada no cadastro' },
-  { pattern: /\bn[ãa]o\s+(?:tenho|temos)\s+(?:essa\s+)?informa[çc][ãa]o\s+confirmad[ao]\b/i, reason: 'não tenho/temos informação confirmada' },
-  { pattern: /\b(?:verificar|conferir|checar|consultar)\s+internamente\b/i, reason: 'verificar internamente (qualquer conjugação)' },
-  { pattern: /\batualizar(?:emos)?\s+por\s+aqui\b/i,                reason: 'atualizar por aqui' },
-  { pattern: /\bdevolu[çc][ãa]o\s+gratuita\s+em\s+at[ée]\b/i,       reason: 'promessa proativa de devolução gratuita em X dias' },
-  // "vou conferir/verificar essa informação e te retorno em breve" — slipped through (no "internamente").
-  // Was literally the old hardcoded fallback / prompt rule 10. Audit 2026-06-24.
-  { pattern: /\b(?:vou|vamos|irei|iremos)\s+(?:conferir|verificar|checar|consultar)\b[^.!?]*\b(?:retorn|aviso|informo)\w*\b/i, reason: 'vou conferir e te retorno (promessa de verificação)' },
-  { pattern: /\b(?:te|lhe)\s+retorno\b/i,                            reason: 'te retorno (promessa de retorno)' },
-  { pattern: /\bretorn(?:o|amos|arei)\s+(?:em\s+breve|assim\s+que|o\s+mais\s+r[áa]pido)\b/i, reason: 'retorno em breve / assim que possível' },
-]
+//
+//  3. CLAIM (added 2026-07-03) — any mention of reclamação/disputa/mediação.
+//     Orienting the buyer to open a claim tanks the account reputation.
+//     Pattern lists live in marketplace-rules.ts (single source of truth).
 
 export interface MLValidationResult {
   text: string
   warnings: string[]
   charCount: number
-  /** True when ANY hard-block pattern matched (contact OR admin leak).
+  /** True when ANY hard-block pattern matched (contact, admin leak OR claim).
    *  Field name kept for backwards compat with existing callers; the
    *  semantic is "response was rejected as a whole and must be substituted".
    *  When true, `text` is empty — the caller must substitute it. */
@@ -79,6 +63,9 @@ export interface MLValidationResult {
   /** Granular flag for telemetry: true when admin-leak phrases matched
    *  (e.g. "não temos no cadastro", "atualizaremos o anúncio"). */
   forbiddenAdminLeakDetected?: boolean
+  /** Granular flag for telemetry: true when claim-mention phrases matched
+   *  (reclamação/disputa/mediação — proibido absoluto em marketplace). */
+  forbiddenClaimDetected?: boolean
 }
 
 /**
@@ -137,22 +124,25 @@ function validateMLResponse(
   // or a technical fallback. We do NOT try to "fix" the LLM output here
   // because contextually-correct rewrites need product info we don't have.
   //
-  // Two pattern families are checked. They share the same outcome (block +
+  // Three pattern families are checked. They share the same outcome (block +
   // substitute) but are reported separately for telemetry.
   const contactReasons = detectForbiddenContactRequest(text)
   const adminLeakReasons = detectForbiddenAdminLeak(text)
-  const allReasons = [...contactReasons, ...adminLeakReasons]
+  const claimReasons = detectForbiddenClaims(text)
+  const allReasons = [...contactReasons, ...adminLeakReasons, ...claimReasons]
   if (allReasons.length > 0) {
     return {
       text: '', // empty signals the caller to substitute
       warnings: [
         ...contactReasons.map(r => `forbidden_contact:${r}`),
         ...adminLeakReasons.map(r => `forbidden_admin_leak:${r}`),
+        ...claimReasons.map(r => `forbidden_claim:${r}`),
       ],
       charCount: 0,
       forbiddenContactDetected: true, // back-compat: callers use this to branch
       forbiddenContactReasons: allReasons,
       forbiddenAdminLeakDetected: adminLeakReasons.length > 0,
+      forbiddenClaimDetected: claimReasons.length > 0,
     }
   }
 

@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { MarketplaceQuestion, MarketplaceChat, MarketplaceChatMessage } from '@/types/database';
+// CARTILHA ÚNICA — mesmas regras da geração/juiz/validador (edge functions).
+import { validateCorrectionText } from '../../supabase/functions/_shared/marketplace-rules';
 
 /** Realtime hook — call once at module level (e.g. in Marketplaces page) */
 export function useMarketplaceRealtime() {
@@ -398,14 +400,30 @@ export function useLearningQueueCount() {
   });
 }
 
-/** Aprova uma correção (vira ativa). Se editar o texto, regenera o embedding. */
+/** Aprova uma correção (vira ativa). Se editar o texto, regenera o embedding.
+ *  GATE DA CARTILHA: antes de ativar, o texto passa pelas mesmas regras da
+ *  geração (reclamação/disputa, contato externo, emoji/limite em marketplace).
+ *  Violou → a aprovação é BLOQUEADA com os motivos (ninguém ativa por engano). */
 export function useApproveCorrection() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, recommendedResponse }: { id: string; recommendedResponse?: string }) => {
       const edited = recommendedResponse !== undefined && recommendedResponse.trim().length > 0;
+
+      const { data: row, error: rowError } = await supabase
+        .from('response_corrections' as any)
+        .select('recommended_response, scope')
+        .eq('id', id)
+        .single();
+      if (rowError) throw rowError;
+      const finalText = edited ? recommendedResponse!.trim() : String((row as any)?.recommended_response ?? '');
+      const gate = validateCorrectionText(finalText, (row as any)?.scope ?? null);
+      if (!gate.ok) {
+        throw new Error(`Correção viola regras invioláveis — corrija antes de aprovar: ${gate.violations.join('; ')}`);
+      }
+
       const patch: Record<string, unknown> = edited
-        ? { recommended_response: recommendedResponse!.trim(), status: 'pending', embedding: null }
+        ? { recommended_response: finalText, status: 'pending', embedding: null }
         : { status: 'processed', processed_at: new Date().toISOString() };
       const { error } = await supabase.from('response_corrections' as any).update(patch as any).eq('id', id);
       if (error) throw error;
@@ -489,13 +507,29 @@ export function useLearnings(opts: { channel?: string; statuses?: string[] } = {
   });
 }
 
-/** Curadoria genérica: editar texto, ajustar escopo/categoria, arquivar. */
+/** Curadoria genérica: editar texto, ajustar escopo/categoria, arquivar.
+ *  Texto editado passa pelo GATE DA CARTILHA (vira ativo após o embedding). */
 export function useCurateLearning() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (patch: { id: string; recommended_response?: string; scope?: string[]; category?: string; status?: string }) => {
       const { id, ...fields } = patch;
       const body: Record<string, unknown> = { ...fields };
+      if (fields.recommended_response !== undefined) {
+        let scope = fields.scope ?? null;
+        if (!scope) {
+          const { data: row } = await supabase
+            .from('response_corrections' as any)
+            .select('scope')
+            .eq('id', id)
+            .single();
+          scope = (row as any)?.scope ?? null;
+        }
+        const gate = validateCorrectionText(fields.recommended_response, scope);
+        if (!gate.ok) {
+          throw new Error(`Correção viola regras invioláveis — ajuste o texto: ${gate.violations.join('; ')}`);
+        }
+      }
       // Se editou o texto e a correção já está ativa, regenera embedding (volta p/ pending->processed)
       if (fields.recommended_response !== undefined) { body.status = 'pending'; body.embedding = null; }
       const { error } = await supabase.from('response_corrections' as any).update(body as any).eq('id', id);

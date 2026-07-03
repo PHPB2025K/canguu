@@ -1,6 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateMLQuestionResponse } from "../_shared/ml-response-validator.ts";
 import { searchCorrections } from "../_shared/embeddings.ts";
+import {
+  REGRA_CETICA_ML_PROMPT,
+  REGRA_PROBLEMA_PEDIDO_ML_PROMPT,
+  pickMLFallback,
+} from "../_shared/marketplace-rules.ts";
 
 /* ───────────────────── helpers ───────────────────── */
 
@@ -277,15 +282,10 @@ REGRAS PARA PERGUNTAS DO MERCADO LIVRE:
 6. Comece com "Olá!" (saudação breve, sem o nome do comprador).
 7. Responda EXATAMENTE o que foi perguntado, usando o que se sabe no CONTEXTO DO PRODUTO abaixo.
 8. NUNCA invente informação que não esteja no contexto do produto.
-9. REGRA 17 (cética mas gentil) — PROIBIDO ABSOLUTO, mesmo quando faltar um dado:
-   - NÃO admita falha de cadastro: nunca diga "não está detalhada/confirmada no cadastro", "não temos/tenho essa informação confirmada", "não consta no cadastro".
-   - NÃO exponha processo interno: nunca diga "vou/vamos verificar internamente", "verificar com a equipe", "vamos atualizar o anúncio", "atualizar por aqui".
-   - NÃO use frases de telemarketing: "estou/estamos à disposição", "entre em contato", "fale conosco", "nossa equipe técnica", "mande mensagem".
-   - NÃO prometa proativamente devolução, reembolso, prazo de entrega ou estoque.
-   Quando faltar um dado específico, responda com o que você SABE do produto. É uma resposta PÚBLICA, sem follow-up privado: NUNCA diga "vou conferir e te retorno" nem prometa retornar depois. Se realmente não souber aquele detalhe, seja transparente e objetivo, orientando pelo que consta na descrição do anúncio (ex.: "Olá! Esse detalhe está na descrição do anúncio; sobre o produto posso te ajudar com o que precisar.") — sem expor cadastro/processo interno e sem prometer retorno.
+9. ${REGRA_CETICA_ML_PROMPT}
 10. Se a pergunta for sobre pagamento/checkout/Pix/QR Code, oriente o passo útil (copiar o código Pix e colar no banco, trocar de navegador/dispositivo, ou o suporte do próprio Mercado Livre) — NÃO trate como rastreamento de pedido já realizado.
 11. Sobre ESTOQUE / DISPONIBILIDADE: o CONTEXTO DO PRODUTO abaixo traz "Disponibilidade" quando disponível — você PODE confirmar se o produto está disponível com base nela, mas NUNCA cite número de unidades. Para COR/variante específica (ex.: "tem na vermelha?"), a disponibilidade por cor aparece no anúncio ao selecionar a variação — oriente por aí, sem afirmar a cor específica.
-12. PROBLEMA DE PEDIDO (ex.: "paguei 3 e enviaram 2", "vai vir incompleto", "não recebi"): reconheça brevemente e oriente, de forma pública e impessoal, a acompanhar pela aba de MENSAGENS DO PEDIDO no próprio Mercado Livre ("Minhas Compras" → o pedido) — onde a equipe dá sequência. NUNCA peça nº do pedido/CPF na resposta pública, NUNCA sugira reclamação/mediação.
+12. ${REGRA_PROBLEMA_PEDIDO_ML_PROMPT}
 13. ESCALONAMENTO: se a pergunta for uma reclamação séria que exija ação humana (ameaça de Procon/processo/advogado, exige reembolso/troca imediata, ou algo que você não pode resolver com segurança nem orientar pela aba de mensagens do pedido), responda APENAS com o marcador [[ESCALAR: motivo curto]] e NADA MAIS — um humano assume. Use com parcimônia: dúvida normal de produto NÃO escalona.
 
 CONTEXTO DO PRODUTO:
@@ -592,8 +592,11 @@ async function handleQuestion(resource: string, userId: number) {
   // for questions semantically similar to this one, and inject them into the
   // prompt so the AI reuses the answer a human already verified. Without this
   // the system kept repeating mistakes that had already been corrected.
-  // Fallback de canal PÚBLICO: nunca promete retorno (não há follow-up privado numa pergunta de anúncio).
-  const CLEAN_FALLBACK = "Olá! Os detalhes deste produto estão na descrição do anúncio. Se tiver outra dúvida sobre ele, pode perguntar por aqui.";
+  // Fallback de canal PÚBLICO: nunca promete retorno (não há follow-up privado
+  // numa pergunta de anúncio). Ciente de reclamação: se a pergunta é problema
+  // de pedido (produto errado/faltando/não chegou), acolhe e orienta pela aba
+  // de mensagens do pedido em vez do genérico "veja a descrição do anúncio".
+  const CLEAN_FALLBACK = pickMLFallback(question.text);
   let correctionContext = "";
   try {
     const hits = await searchCorrections(question.text, 0.65, 3);
@@ -670,6 +673,14 @@ async function handleQuestion(resource: string, userId: number) {
       aiResult.answer = reval.forbiddenContactDetected ? CLEAN_FALLBACK : reval.text;
     } else {
       aiResult.answer = validation.text;
+      // O fallback interno do validador (resposta vazia/curta demais) não
+      // conhece a pergunta — troca pelo fallback ciente de reclamação.
+      if (
+        validation.warnings.includes("empty_response") ||
+        validation.warnings.includes("too_short_after_cleaning")
+      ) {
+        aiResult.answer = CLEAN_FALLBACK;
+      }
     }
 
     log("ai_answer_generated", {

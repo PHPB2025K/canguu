@@ -128,13 +128,19 @@ function LearningCard({ c, curation }: { c: Learning; curation: boolean }) {
       <div className="flex items-center gap-2 flex-wrap">
         {isQueued && (
           <Button size="sm" disabled={approve.isPending} style={{ backgroundColor: '#004D4D', color: 'white' }}
-            onClick={() => approve.mutate({ id: c.id, recommendedResponse: dirty ? text : undefined }, { onSuccess: () => toast({ title: '✅ Aprovado', description: 'A Ana já vai usar como referência.' }) })}>
+            onClick={() => approve.mutate({ id: c.id, recommendedResponse: dirty ? text : undefined }, {
+              onSuccess: () => toast({ title: '✅ Aprovado', description: 'A Ana já vai usar como referência.' }),
+              onError: (e) => toast({ title: '🚫 Aprovação bloqueada', description: e instanceof Error ? e.message : String(e), variant: 'destructive' }),
+            })}>
             <Check className="h-4 w-4 mr-1" />{dirty ? 'Salvar e aprovar' : 'Aprovar'}
           </Button>
         )}
         {!isQueued && editing && dirty && (
           <Button size="sm" disabled={curate.isPending} style={{ backgroundColor: '#004D4D', color: 'white' }}
-            onClick={() => curate.mutate({ id: c.id, recommended_response: text }, { onSuccess: () => { toast({ title: 'Texto atualizado' }); setEditing(false); } })}>
+            onClick={() => curate.mutate({ id: c.id, recommended_response: text }, {
+              onSuccess: () => { toast({ title: 'Texto atualizado' }); setEditing(false); },
+              onError: (e) => toast({ title: '🚫 Alteração bloqueada', description: e instanceof Error ? e.message : String(e), variant: 'destructive' }),
+            })}>
             <CheckCircle2 className="h-4 w-4 mr-1" /> Salvar alteração
           </Button>
         )}
