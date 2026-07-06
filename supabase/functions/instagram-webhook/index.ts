@@ -92,9 +92,21 @@ async function getOrCreateCustomer(igsid, name) {
   return cr[0].id;
 }
 async function getOrCreateConversation(customerId, channel = "instagram") {
-  const r = await db("conversations?customer_id=eq." + customerId + "&status=eq.active&channel=eq." + encodeURIComponent(channel) + "&order=started_at.desc&limit=1&select=id");
+  // Conversa ÚNICA por cliente/canal: reusa sempre a mais recente, independente
+  // do status. Escalada/assumida por humano -> reusa como está (handoff guard).
+  // Resolvida/fechada com a Ana -> reabre a mesma conversa (status active).
+  const r = await db("conversations?customer_id=eq." + customerId + "&channel=eq." + encodeURIComponent(channel) + "&order=started_at.desc&limit=1&select=id,status,assigned_to");
   const rows = await r.json();
-  if (Array.isArray(rows) && rows.length) return rows[0].id;
+  if (Array.isArray(rows) && rows.length) {
+    const conv = rows[0];
+    if ((conv.assigned_to || "agent") === "agent" && conv.status !== "active") {
+      await db("conversations?id=eq." + conv.id, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "active" })
+      });
+    }
+    return conv.id;
+  }
   const c = await db("conversations", {
     method: "POST",
     headers: {

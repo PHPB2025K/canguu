@@ -88,11 +88,16 @@ escopo: "todos" = vale em qualquer canal (politica, prazo de entrega, fato de pr
 ATENCAO: escopo "todos" exige resposta_correta que sirva TAMBEM em marketplace (sem emoji, max 350 caracteres). Se a correcao precisa de emoji/tom de chat, use "so_conversa".`
 
 // escopo sugerido pelo juiz -> array de canais ({all} eh canonico para "todos")
+// WhatsApp e Instagram sao tipos de atendimento DIFERENTES (quem chama num nao
+// chama no outro): aprendizado de chat fica no canal onde aconteceu. Alargar
+// para os dois e decisao de curadoria humana (ScopeEditor no painel).
 function mapScope(escopo: unknown, originChannel: string): string[] {
+  const oc = String(originChannel || '').toLowerCase()
+  const chatOrigin = oc === 'whatsapp' || oc === 'instagram'
   switch (String(escopo || '').toLowerCase()) {
     case 'todos': return ['all']
     case 'so_marketplace': return ['mercado_livre']
-    case 'so_conversa': return ['whatsapp', 'instagram']
+    case 'so_conversa': return chatOrigin ? [oc] : ['whatsapp', 'instagram']
     case 'so_este_canal': return [originChannel]
     default: return ['all']
   }

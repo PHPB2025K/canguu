@@ -26,9 +26,9 @@ jobs:
       # ver DIAGNOSTICO_ANA.md. Adicionar uma function aqui = ela passa
       # a depender de INTERNAL_DISPATCH_TOKEN. Não esquece de validar
       # o header no STEP 0 do handler dela.
-      # instagram-webhook e ml-webhook recebem do Meta (sem JWT Supabase) → --no-verify-jwt;
+      # instagram-webhook, whatsapp-cloud-webhook e ml-webhook recebem do Meta (sem JWT Supabase) → --no-verify-jwt;
       # protegem-se por hub.verify_token (GET) + assinatura HMAC do Meta, não por INTERNAL_DISPATCH_TOKEN.
-      NO_JWT_FUNCTIONS: "process-message escalate ml-webhook instagram-webhook instagram-token-refresh instagram-ad-comments-poll escalate-notify"
+      NO_JWT_FUNCTIONS: "process-message escalate ml-webhook instagram-webhook instagram-token-refresh instagram-ad-comments-poll escalate-notify whatsapp-cloud-webhook"
     steps:
       - uses: actions/checkout@v4
         with:

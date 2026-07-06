@@ -108,15 +108,27 @@ export function useResolveEscalation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("escalations")
         .update({ status: "resolved", notes, resolved_at: new Date().toISOString() })
-        .eq("id", id);
+        .eq("id", id)
+        .select("conversation_id")
+        .single();
       if (error) throw error;
+      // Devolve a conversa pra Ana: sem isso o status fica 'escalated' pra sempre
+      // e a Ana permanece muda com esse cliente (a conversa é única por cliente).
+      if (data?.conversation_id) {
+        const { error: convError } = await supabase
+          .from("conversations")
+          .update({ status: "active", assigned_to: "agent" })
+          .eq("id", data.conversation_id);
+        if (convError) throw convError;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["escalations"] });
       qc.invalidateQueries({ queryKey: ["escalation-counts"] });
+      qc.invalidateQueries({ queryKey: ["conversations"] });
     },
   });
 }

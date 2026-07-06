@@ -102,9 +102,22 @@ async function updateCustomerSource(customerId, source) {
   } catch (_e) {}
 }
 async function getOrCreateConversation(customerId) {
-  const r = await db("conversations?customer_id=eq." + customerId + "&status=eq.active&order=started_at.desc&limit=1&select=id");
+  // Conversa ÚNICA por cliente/canal (como o histórico do próprio WhatsApp):
+  // reusa SEMPRE a mais recente, independente do status. Escalada/assumida por
+  // humano -> reusa como está (a guarda de handoff mantém a Ana quieta).
+  // Resolvida/fechada com a Ana -> REABRE a mesma conversa (status volta a active).
+  const r = await db("conversations?customer_id=eq." + customerId + "&channel=eq.whatsapp&order=started_at.desc&limit=1&select=id,status,assigned_to");
   const rows = await r.json();
-  if (Array.isArray(rows) && rows.length) return rows[0].id;
+  if (Array.isArray(rows) && rows.length) {
+    const conv = rows[0];
+    if ((conv.assigned_to || "agent") === "agent" && conv.status !== "active") {
+      await db("conversations?id=eq." + conv.id, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "active" })
+      });
+    }
+    return conv.id;
+  }
   const c = await db("conversations", {
     method: "POST",
     headers: {
