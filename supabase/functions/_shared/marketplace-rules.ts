@@ -155,6 +155,7 @@ export const REGRAS_CORRECAO_ML = `COMO ESCREVER resposta_correta (OBRIGATÓRIO 
 
 export const REGRAS_CORRECAO_CHAT = `COMO ESCREVER resposta_correta (chat WhatsApp/Instagram — correção que violar é descartada automaticamente):
 - Curta e humana (máximo ${CHAT_MAX_TOTAL_CHARS} caracteres). Emojis com moderação são ok.
+- FORMATO EM BLOCOS (obrigatório): a Ana envia a mensagem em bolhas separadas. Se a resposta tem mais de uma ideia/frase, separe em 2 a 4 blocos curtos usando EXATAMENTE \\\\ entre eles (ex.: "Que situação chata, sinto muito! 😔\\\\Ninguém merece receber o pedido assim.\\\\Me passa o número do pedido e seu nome completo? Assim a equipe agiliza tudo pra você! 💛"). NUNCA use quebra de linha para separar bolhas e NUNCA passe de 4 blocos. Só resposta de UMA frase curta pode ficar sem \\\\.
 - Em reclamação/problema: empatia primeiro + coletar dados (nº do pedido, foto) + encaminhar pra equipe. NUNCA prometer troca/reembolso/prazo/coleta (só a equipe humana promete) e NUNCA mencionar horário de atendimento.
 - Não inflar o texto nem introduzir informação que não se sabe.`
 
@@ -196,6 +197,15 @@ export function validateCorrectionText(
   } else {
     // Escopo só de chat: régua mais leve (formato); conteúdo é papel dos
     // detectores de chat (business-hours/overpromise) no daily-learning-review.
+    // Formato em blocos: a Ana separa bolhas com \\ (splitChunks nos webhooks,
+    // máx 4). Correção longa sem \\ vira uma bolha gigante; >4 blocos é truncado.
+    const blocks = t.split('\\\\')
+    if (t.length > 200 && blocks.length === 1) {
+      violations.push(`resposta com ${t.length} caracteres sem separador de blocos \\\\ (chat envia em bolhas de 2-4 blocos)`)
+    }
+    if (blocks.length > 4) {
+      violations.push(`${blocks.length} blocos (máximo 4 — o envio trunca o excedente)`)
+    }
     if (t.length > CHAT_MAX_TOTAL_CHARS) {
       violations.push(`${t.length} caracteres (máximo ${CHAT_MAX_TOTAL_CHARS} no chat)`)
     }
