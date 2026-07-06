@@ -576,12 +576,15 @@ async function loadIgToken() {
   }
 }
 // Escalonamento: a Ana sinaliza com [[ESCALAR: motivo]] quando o caso precisa de humano.
-const ESCALATION_NOTE = "## Escalonamento\nSe o cliente PEDIR explicitamente falar com um humano/atendente/pessoa, OU for uma reclamacao seria (produto quebrado/com defeito/faltando/errado, pedido de reembolso/estorno, pedido que nao chegou, cliente claramente irritado, ou mencao a Procon/processo/advogado), comece sua resposta EXATAMENTE com o marcador [[ESCALAR: motivo curto]] e depois escreva UMA frase curta avisando que vai transferir para um atendente humano. Caso contrario, responda normalmente, SEM marcador.";
+const ESCALATION_NOTE = "## Quando escalar (humano) vs resolver sozinha\nESCALE SOMENTE se: o cliente pedir explicitamente falar com humano/atendente DEPOIS de voce ja ter tentado ajudar; mencao a Procon/processo/advogado/disputa formal; cliente muito irritado/ofensivo; pagamento duplicado ou dinheiro que so a equipe pode mover; a compra foi no SITE Budamix (a equipe resolve direto — colete nº do pedido e foto antes de escalar); ou voce ja orientou o passo a passo e o cliente nao conseguiu / o problema persiste.\nNAO ESCALE de primeira: produto quebrado/com defeito/errado/faltando ou pedido que nao chegou em compra de MARKETPLACE. Nesses casos VOCE resolve guiando o cliente no AUTOATENDIMENTO do canal da compra: acolha em uma frase, pergunte onde comprou (se nao souber), peca nº do pedido e foto quando ajudar, e oriente passo a passo a abrir a solicitacao NO PROPRIO app/site onde comprou — Mercado Livre: Minhas compras > toca no pedido > 'Devolver ou reclamar'; Shopee: Minhas compras > toca no pedido > 'Pedido de Devolucao/Reembolso'; Amazon: Meus pedidos > toca no pedido > 'Devolver ou substituir itens'. Explique que a plataforma exige que a solicitacao seja aberta pelo proprio cliente, que e rapido e seguro, e que voce acompanha e tira duvidas em cada passo.\nFORMATO quando escalar: comece a resposta EXATAMENTE com o marcador [[ESCALAR: motivo curto]] e depois UMA frase curta avisando que vai transferir. O marcador e INTERNO: NUNCA pode aparecer no meio ou no fim do texto.";
 async function escalateIfFlagged(reply, convId, channel, preview) {
-  const m = reply.match(/^\s*\[\[\s*ESCALAR\s*:?\s*([^\]]*)\]\]\s*/i);
-  if (!m) return { escalated: false, reply };
+  // O marcador e instrucao interna: detecta em QUALQUER posicao (a IA as vezes
+  // erra e poe no fim) e remove todo [[...]] antes do envio — nunca vaza pro cliente.
+  const m = reply.match(/\[\[\s*ESCALAR\s*:?\s*([^\]]*)\]\]/i);
+  const stripped = reply.replace(/\s*\[\[[^\]]*\]\]\s*/gi, " ").replace(/ {2,}/g, " ").trim();
+  if (!m) return { escalated: false, reply: stripped };
   const reason = (m[1] || "").trim() || "Cliente precisa de atendimento humano";
-  const clean = reply.slice(m[0].length).trim() || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui 🙏";
+  const clean = stripped || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui 🙏";
   try {
     await fetch(SU + "/functions/v1/escalate-notify?key=" + encodeURIComponent(Deno.env.get("IG_VERIFY_TOKEN") || ""), {
       method: "POST",
