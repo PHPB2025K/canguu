@@ -28,7 +28,7 @@ jobs:
       # o header no STEP 0 do handler dela.
       # instagram-webhook, whatsapp-cloud-webhook e ml-webhook recebem do Meta (sem JWT Supabase) → --no-verify-jwt;
       # protegem-se por hub.verify_token (GET) + assinatura HMAC do Meta, não por INTERNAL_DISPATCH_TOKEN.
-      NO_JWT_FUNCTIONS: "process-message escalate ml-webhook instagram-webhook instagram-token-refresh instagram-ad-comments-poll escalate-notify whatsapp-cloud-webhook"
+      NO_JWT_FUNCTIONS: "process-message escalate ml-webhook instagram-webhook instagram-token-refresh instagram-ad-comments-poll escalate-notify whatsapp-cloud-webhook fx-rate-update classify-pending-sentiment sync-product-embedding"
     steps:
       - uses: actions/checkout@v4
         with:
