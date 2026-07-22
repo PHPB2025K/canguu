@@ -24,7 +24,8 @@ export function useConversationList(filters: ConversationFilters = {}) {
       let q = supabase
         .from("conversations")
         .select("*, customers(*)")
-        .order("updated_at", { ascending: false });
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: true }); // tiebreaker deterministico: sem isto, empates de updated_at reordenam a lista a cada refetch (flicker)
 
       if (filters.status) q = q.eq("status", filters.status);
       if (filters.category) q = q.eq("category", filters.category);
@@ -77,7 +78,7 @@ export function useConversationList(filters: ConversationFilters = {}) {
       return conversations.map((c) => ({ ...c, lastMessage: null }));
     },
     staleTime: 15_000,
-    refetchInterval: 15_000, // Polling fallback: refetch every 15s if Realtime fails
+    refetchInterval: 30_000, // Polling fallback a cada 30s (Realtime e o primario; 15s piscava o banner)
   });
 
   // Realtime subscription for conversation changes
