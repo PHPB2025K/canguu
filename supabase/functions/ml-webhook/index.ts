@@ -251,6 +251,50 @@ async function fetchItemTitle(itemId: string, token: string): Promise<string> {
   }
 }
 
+/* ───────────────────── Claude: corpo certo por modelo ───────────────────── */
+
+const MODELOS_SEM_TEMPERATURE = /claude-(opus-4-[7-9]|opus-[5-9]|sonnet-[5-9]|fable)/i;
+const MODELO_RESERVA_ML = "claude-opus-4-6";
+
+async function chamarClaudeML(
+  modelo: string,
+  systemPrompt: string,
+  userMsg: string,
+  temperature: number
+): Promise<{ answer: string; tokens: number }> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+  const body: Record<string, unknown> = {
+    model: modelo,
+    max_tokens: 500,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userMsg }],
+  };
+  if (MODELOS_SEM_TEMPERATURE.test(modelo)) {
+    body.max_tokens = 8000; // raciocinio + resposta cabem no teto
+    body.output_config = { effort: "high" };
+  } else {
+    body.temperature = temperature;
+  }
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) {
+    throw new Error("anthropic " + res.status + " " + JSON.stringify(data?.error || data).slice(0, 240));
+  }
+  const bloco = Array.isArray(data.content) ? data.content.find((c: { type?: string }) => c.type === "text") : null;
+  const answer = String(bloco?.text || "").trim();
+  const tokens = (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0);
+  return { answer, tokens };
+}
+
 /* ───────────────────── AI answer generation ───────────────────── */
 
 async function getAgentConfig(supabase: ReturnType<typeof createClient>) {
@@ -298,32 +342,33 @@ ${productContext}${correctionContext}`;
   let tokens = 0;
 
   if (model.startsWith("claude")) {
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: model === "claude-sonnet-4-6" ? "claude-sonnet-4-20250514" : model,
-        max_tokens: 500,
-        temperature,
-        system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: `Pergunta do comprador sobre "${productName}":\n\n"${questionText}"`,
-          },
-        ],
-      }),
-    });
-    const data = await res.json();
-    answer = data.content?.[0]?.text || "";
-    tokens = (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0);
+    // Claude 4.7+ (Opus 4.7/4.8, Opus 5.x, Sonnet 5.x, Fable) recusa temperature
+    // (HTTP 400 "temperature is deprecated") e pensa por padrao: o raciocinio conta
+    // no max_tokens. Em 30/09 a troca para claude-opus-5-5 derrubou esta chamada e
+    // o codigo publicava no anuncio a resposta generica. Agora: corpo certo por
+    // modelo, 1 tentativa de reserva num modelo antigo e, se as duas falharem,
+    // erro (a pergunta fica pendente e a equipe e avisada; nada generico e postado).
+    const userMsg = `Pergunta do comprador sobre "${productName}":\n\n"${questionText}"`;
+    const primeiro = model === "claude-sonnet-4-6" ? "claude-sonnet-4-20250514" : model;
+    const tentativas = [primeiro, ...[MODELO_RESERVA_ML].filter((m) => m !== primeiro)];
+    let ultimoErro = "";
+    for (const modelo of tentativas) {
+      try {
+        const r = await chamarClaudeML(modelo, systemPrompt, userMsg, temperature);
+        if (r.answer) {
+          answer = r.answer;
+          tokens = r.tokens;
+          if (modelo !== primeiro) log("ai_fallback_model_used", { primary: primeiro, used: modelo, error: ultimoErro });
+          break;
+        }
+        ultimoErro = "resposta_vazia";
+        log("ai_empty_answer", { model: modelo });
+      } catch (e) {
+        ultimoErro = String(e);
+        log("ai_call_failed", { model: modelo, error: ultimoErro.slice(0, 300) });
+      }
+    }
+    if (!answer) throw new Error("ia_sem_resposta: " + ultimoErro.slice(0, 200));
   } else if (model.startsWith("gpt") || model.startsWith("o")) {
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) throw new Error("OPENAI_API_KEY not set");
@@ -691,6 +736,7 @@ async function handleQuestion(resource: string, userId: number) {
     });
   } catch (e) {
     log("ai_generation_failed", { error: String(e) });
+    await notifyTelegramML(supabase, question.text, productName, "IA nao conseguiu responder (" + String(e).slice(0, 120) + "). Pergunta segue SEM resposta no ML.");
 
     await supabase.from("marketplace_questions").insert({
       platform: "mercado_livre",
@@ -782,6 +828,32 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // SONDA DE SAUDE (30/09): gera uma resposta de teste pelo MESMO caminho da Ana,
+  // sem postar no ML e sem gravar nada. Mede o efeito, nao a resposta HTTP:
+  // a troca de modelo de 30/09 quebrou a geracao e ninguem viu por horas.
+  // Uso: GET ?probe=1&key=<IG_VERIFY_TOKEN>[&q=pergunta]
+  const url = new URL(req.url);
+  if (url.searchParams.get("probe") === "1") {
+    const chave = Deno.env.get("IG_VERIFY_TOKEN") || "";
+    if (!chave || url.searchParams.get("key") !== chave) return json({ error: "forbidden" }, 403);
+    const supabase = getSupabase();
+    const cfg = await getAgentConfig(supabase);
+    const pergunta = (url.searchParams.get("q") || "Esse pote de vidro pode ir no micro-ondas?").slice(0, 300);
+    try {
+      const r = await generateAIAnswer(
+        pergunta,
+        "Conjunto 5 Potes de Vidro Hermeticos",
+        cfg,
+        "Produto: conjunto de 5 potes de vidro borossilicato com tampa. O vidro vai ao micro-ondas (sem a tampa), ao forno e ao freezer.",
+        ""
+      );
+      const v = validateMLQuestionResponse(r.answer);
+      return json({ ok: true, model: cfg.model, timeMs: r.timeMs, tokens: r.tokens, answer: v.text, warnings: v.warnings });
+    } catch (e) {
+      return json({ ok: false, model: cfg.model, error: String(e).slice(0, 400) }, 502);
+    }
+  }
+
   try {
     const body = await req.json();
     const { topic, resource, user_id, attempts } = body;
@@ -795,9 +867,12 @@ Deno.serve(async (req) => {
     switch (topic) {
       case "questions": {
         log("question_notification", { resource });
-        handleQuestion(resource, user_id).catch((e) =>
+        const tarefa = handleQuestion(resource, user_id).catch((e) =>
           log("question_handler_error", { error: String(e) })
         );
+        // Sem waitUntil o runtime pode encerrar a funcao antes de a Ana responder.
+        // deno-lint-ignore no-explicit-any
+        (globalThis as any).EdgeRuntime?.waitUntil?.(tarefa);
         break;
       }
 
