@@ -51,6 +51,44 @@ const TETO_RESPOSTAS_HORA = 25;
 // Rede de seguranca: so vale quando o Gemini nao conseguiu assistir (video
 // grande demais, chave fora do ar). O caminho normal e a Ana VER o video.
 const AVISO_VIDEO = "[O cliente enviou um VIDEO que nao foi possivel ler desta vez. Peca uma FOTO do problema ou que ele descreva em texto.]";
+// ─── v38 (30/09/2026, auditoria de 30 dias da Ana) ──────────────────────────────
+// Modelo: a Ana segue agent_config.model (pedido do Pedro em 30/09: claude-opus-5-5,
+// esforco high). Claude 4.7+ recusa temperature e pensa antes de responder; o
+// raciocinio conta no max_tokens. Se o principal falhar, 1 tentativa na reserva.
+const MODELO_PADRAO = "claude-sonnet-4-6";
+const MODELO_RESERVA = "claude-sonnet-4-6";
+const MODELOS_COM_RACIOCINIO = /claude-(opus-4-[7-9]|opus-[5-9]|sonnet-[5-9]|fable)/i;
+// "unsupported" = o WhatsApp entregou a mensagem sem conteudo legivel. A Ana ficava
+// muda e 3 clientes novos ficaram sem resposta em set/2026. Agora ela pede o texto,
+// no maximo 1 vez a cada 12 h por conversa (anti-loop com robos).
+const RESPOSTA_SEM_FORMATO = "Oi! Aqui é a Ana, da Budamix." + CHUNK_SEP + "Sua mensagem chegou num formato que eu não consigo abrir por aqui. Pode me escrever em texto o que você precisa?";
+const JANELA_AVISO_FORMATO_MS = 12 * 3600 * 1000;
+// Pedido do SITE: a Ana usa a MESMA consulta publica da pagina "Rastrear pedido" do
+// budamix.com.br (numero do pedido + e-mail da compra). Nenhum acesso novo ao banco do site.
+const SITE_API = Deno.env.get("SITE_SUPABASE_URL") || "https://ioujfkrqvporfbvdqyus.supabase.co";
+const SITE_ANON = Deno.env.get("SITE_ANON_KEY") || "";
+const STATUS_SITE = {
+  pending_payment: "aguardando pagamento",
+  paid: "pago, em preparação",
+  processing: "em separação",
+  shipped: "enviado",
+  delivered: "entregue",
+  cancelled: "cancelado",
+  refunded: "reembolsado"
+};
+const NOME_CANAL = {
+  site: "Site Budamix",
+  mercado_livre: "Mercado Livre",
+  shopee: "Shopee",
+  amazon: "Amazon"
+};
+const REGRAS_CANAL = "## REGRAS DESTE CANAL (WhatsApp) — valem mais que qualquer instrucao anterior\n" +
+  "- Tudo o que voce escrever chega direto no cliente. NAO existe nota interna, metadata ou campo escondido: nunca escreva \"nota interna\", resumo para a equipe ou observacao entre parenteses. Para chamar a equipe use SOMENTE o marcador [[ESCALAR: motivo]] no inicio.\n" +
+  "- Voce nao consegue verificar nada depois nem voltar a falar sozinha mais tarde. PROIBIDO prometer retorno: \"vou verificar e ja te retorno\", \"ja te retorno\", \"so um momento\", \"aguarde\", \"assim que eu souber te aviso\". Responda agora com o que voce tem. Se faltar algo que so a equipe resolve, escale com [[ESCALAR: motivo]] e diga que a equipe responde por aqui mesmo.\n" +
+  "- Links: envie SOMENTE link que aparece escrito no contexto acima e que seja do produto certo. Nunca monte, adivinhe ou complete um link. Sem link no contexto, diga o nome do produto e onde encontrar (site ou loja do canal).\n" +
+  "- Estoque: produto marcado SEM ESTOQUE nao pode ser oferecido nem ter link enviado: diga que esta indisponivel agora e ofereca uma alternativa que tenha estoque.\n" +
+  "- Pos-venda de compra feita em marketplace segue o bloco \"Quando escalar\" acima; as fichas de trilha falam de VENDA NOVA.\n" +
+  "- Responda a mensagem atual do cliente sem repetir o que voce ja disse antes.";
 const sleep = (ms)=>new Promise((r)=>setTimeout(r, ms));
 function db(path, init = {}) {
   const h = {
@@ -153,15 +191,42 @@ async function getOrCreateConversation(customerId) {
   return cr[0].id;
 }
 async function saveMessage(conversationId, sender, content, extra = {}) {
-  await db("messages", {
-    method: "POST",
-    body: JSON.stringify({
-      conversation_id: conversationId,
-      sender,
-      content,
-      ...extra
-    })
-  });
+  // Devolve o id da linha: a mensagem do cliente com midia e gravada ANTES da leitura
+  // (Gemini/Groq) e completada depois com patchMessage.
+  try {
+    const r = await db("messages", {
+      method: "POST",
+      headers: {
+        "Prefer": "return=representation"
+      },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        sender,
+        content,
+        ...extra
+      })
+    });
+    const j = await r.json().catch(()=>null);
+    if (!r.ok) {
+      console.log("saveMessage http " + r.status, JSON.stringify(j).slice(0, 200));
+      return null;
+    }
+    return Array.isArray(j) && j[0] ? j[0].id : null;
+  } catch (e) {
+    console.log("saveMessage exc", String(e));
+    return null;
+  }
+}
+async function patchMessage(id, patch) {
+  if (!id) return;
+  try {
+    await db("messages?id=eq." + id, {
+      method: "PATCH",
+      body: JSON.stringify(patch)
+    });
+  } catch (e) {
+    console.log("patchMessage exc", String(e));
+  }
 }
 async function wasPickerSent(conversationId) {
   try {
@@ -197,6 +262,302 @@ async function getConversationAssignee(conversationId) {
   const r = await db("conversations?id=eq." + conversationId + "&select=assigned_to");
   const rows = await r.json();
   return Array.isArray(rows) && rows[0] ? rows[0].assigned_to ?? null : null;
+}
+// Deduplicacao: a Meta as vezes reentrega o mesmo evento (set/2026: 1 caso abriu 2
+// conversas e 2 respostas para a mesma mensagem).
+async function jaGravada(waMsgId) {
+  if (!waMsgId) return false;
+  try {
+    const r = await db("messages?whatsapp_message_id=eq." + encodeURIComponent(waMsgId) + "&select=id&limit=1");
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_e) {
+    return false;
+  }
+}
+// Ultima mensagem do cliente de QUALQUER tipo (menos reacao): usada pelo aviso de formato.
+async function getLatestCustomerAnyId(conversationId) {
+  const r = await db("messages?conversation_id=eq." + conversationId + "&sender=eq.customer&message_type=neq.reaction&order=created_at.desc&limit=1&select=whatsapp_message_id");
+  const rows = await r.json();
+  return Array.isArray(rows) && rows[0] ? rows[0].whatsapp_message_id ?? null : null;
+}
+async function anaFalouDesde(conversationId, ms) {
+  try {
+    const r = await db("messages?conversation_id=eq." + conversationId + "&sender=eq.agent&created_at=gte." + new Date(Date.now() - ms).toISOString() + "&select=id&limit=1");
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_e) {
+    return true; // na duvida, fica quieta (anti-loop)
+  }
+}
+let MODELO_CACHE = {
+  v: "",
+  t: 0
+};
+async function getAgentModel() {
+  if (MODELO_CACHE.v && Date.now() - MODELO_CACHE.t < 60000) return MODELO_CACHE.v;
+  let v = "";
+  try {
+    const r = await db("agent_config?config_key=eq.model&select=config_value");
+    const rows = await r.json();
+    v = Array.isArray(rows) && rows[0]?.config_value ? String(rows[0].config_value).trim() : "";
+  } catch (_e) {}
+  MODELO_CACHE = {
+    v: v.startsWith("claude") ? v : MODELO_PADRAO,
+    t: Date.now()
+  };
+  return MODELO_CACHE.v;
+}
+// ─── Travas de saida (deterministicas, rodam depois da IA) ──────────────────────
+// 1) Nota interna: o manual antigo mandava "incluir internamente um resumo" e isso
+//    chegou ao cliente ("--- Nota interna: pedido #C55255B1 — canal site").
+function limparNotasInternas(t) {
+  let s = String(t || "");
+  s = s.replace(/\n?[ \t]*-{2,}[ \t]*\*?[ \t]*\(?[ \t]*nota\s+interna[\s\S]*$/i, "");
+  s = s.replace(/>?[ \t]*\*?[ \t]*\(\s*nota\s+interna[^)]*\)[ \t]*\*?/gi, "");
+  s = s.replace(/\*?[ \t]*nota\s+interna\s*[:\-–][^\n\\]*/gi, "");
+  return s.replace(/[ \t]{2,}/g, " ").trim();
+}
+// 2) Promessa de retorno: a Ana nao volta a falar sozinha. Se ela prometer, a conversa
+//    vai para a equipe, para a promessa ser cumprida por alguem.
+const PROMESSA_RE = /(j[aá]|logo|em breve)\s+te\s+(retorno|respondo|aviso|chamo)|te\s+(retorno|respondo|aviso)\s+(j[aá]|logo|em breve|assim que)|vou\s+(verificar|confirmar|checar|consultar|conferir)\s+(isso\s+|aqui\s+)?e\s+(j[aá]\s+)?te\b|assim que (eu )?(tiver|souber|conseguir|verificar)|aguarde\s+(s[oó]\s+)?(um|uns)\s+(instante|momento|minuto|pouquinho)|s[oó]\s+um\s+(instante|momento|minutinho)/i;
+function detectarPromessa(t) {
+  const m = String(t || "").match(PROMESSA_RE);
+  return m ? m[0] : null;
+}
+// 3) Links: so sai link que existe no catalogo (ou no contexto desta resposta).
+//    Em set/2026 a Ana mandou link de canequinha como se fosse de pote e inventou
+//    um link do site que nao abria.
+function normUrl(u) {
+  return String(u || "").trim().replace(/[.,;:!?*_)\]]+$/, "").replace(/\/+$/, "").toLowerCase();
+}
+let LINKS_CACHE = {
+  set: null,
+  t: 0
+};
+async function linksDoCatalogo() {
+  if (LINKS_CACHE.set && Date.now() - LINKS_CACHE.t < 600000) return LINKS_CACHE.set;
+  const set = new Set();
+  try {
+    const r = await db("products?is_active=eq.true&select=site_link,marketplace_links");
+    const rows = await r.json();
+    if (Array.isArray(rows)) {
+      for (const p of rows){
+        if (p.site_link) set.add(normUrl(p.site_link));
+        const ml = jsonObj(p.marketplace_links);
+        if (ml) for (const v of Object.values(ml))if (v && !/seller\./i.test(String(v))) set.add(normUrl(v));
+      }
+    }
+  } catch (_e) {}
+  LINKS_CACHE = {
+    set,
+    t: Date.now()
+  };
+  return set;
+}
+const RAIZ_LOJA = {
+  "budamix.com.br": "https://budamix.com.br",
+  "www.budamix.com.br": "https://budamix.com.br",
+  "klapporcelana.com.br": "https://klapporcelana.com.br",
+  "www.klapporcelana.com.br": "https://klapporcelana.com.br"
+};
+async function protegerLinks(reply, ctx) {
+  const achados = String(reply || "").match(/https?:\/\/[^\s<>"']+/g);
+  if (!achados) return reply;
+  const ok = new Set(await linksDoCatalogo());
+  for (const u of String(ctx || "").match(/https?:\/\/[^\s<>"'|]+/g) || [])ok.add(normUrl(u));
+  const digitosCtx = String(ctx || "").replace(/\D/g, "");
+  return String(reply).replace(/https?:\/\/[^\s<>"']+/g, (bruto)=>{
+    const url = bruto.replace(/[.,;:!?*_)\]]+$/, "");
+    const resto = bruto.slice(url.length);
+    const n = normUrl(url);
+    if (ok.has(n)) return bruto;
+    let host = "";
+    try {
+      host = new URL(url).hostname.toLowerCase();
+    } catch (_e) {}
+    if (RAIZ_LOJA[host] && n === normUrl(RAIZ_LOJA[host])) return bruto;
+    if (host === "wa.me" || host.endsWith("whatsapp.com")) {
+      const d = url.replace(/\D/g, "").slice(-11);
+      if (d.length >= 10 && digitosCtx.includes(d)) return bruto;
+    }
+    console.log("link fora do catalogo bloqueado:", url);
+    if (RAIZ_LOJA[host]) return RAIZ_LOJA[host] + resto;
+    if (host.includes("shopee")) return "(é só buscar Budamix na Shopee)" + resto;
+    if (host.includes("mercadoli") || host.includes("mercadolibre")) return "(é só buscar Budamix no Mercado Livre)" + resto;
+    if (host.includes("amazon")) return "(é só buscar Budamix na Amazon)" + resto;
+    return resto;
+  });
+}
+// ─── Pedidos: o canal sai do FORMATO do codigo (disjunto entre as 4 plataformas) ──
+//   site    #379A1BE5            8 hex (prefixo do id do pedido no site)
+//   ml      2000016645926064     16 digitos
+//   shopee  260528JKV25P22       6 digitos + 8 alfanumericos
+//   amazon  701-0027529-4365846  3-7-7
+const PADROES_PEDIDO = [
+  {
+    canal: "amazon",
+    re: /\b\d{3}-\d{7}-\d{7}\b/g
+  },
+  {
+    canal: "shopee",
+    re: /\b\d{6}[A-Z0-9]{8}\b/gi
+  },
+  {
+    canal: "mercado_livre",
+    re: /\b\d{16}\b/g
+  },
+  {
+    canal: "site",
+    re: /#?\b[0-9A-F]{8}\b/gi
+  }
+];
+function detectarPedidos(texto) {
+  if (!texto || String(texto).length < 8) return [];
+  let work = String(texto);
+  const out = [];
+  const vistos = new Set();
+  for (const { canal, re } of PADROES_PEDIDO){
+    for (const m of work.match(re) || []){
+      // 8 hex sozinho e facil de acertar por acaso (CEP, valor). Sem '#', so vale
+      // quando mistura letra e numero, como o numero de pedido do site.
+      if (canal === "site" && !m.startsWith("#") && !(/[0-9]/.test(m) && /[A-F]/i.test(m))) continue;
+      const codigo = m.replace(/^#/, "").toUpperCase();
+      if (vistos.has(codigo)) continue;
+      vistos.add(codigo);
+      out.push({
+        codigo,
+        canal
+      });
+      work = work.replace(m, " ".repeat(m.length));
+    }
+  }
+  return out.slice(0, 2);
+}
+function dataBr(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
+async function consultarPedidoSite(codigo, email) {
+  if (!SITE_ANON) return {
+    erro: "consulta do site nao configurada"
+  };
+  const ctrl = new AbortController();
+  const tm = setTimeout(()=>ctrl.abort(), 12000);
+  try {
+    const r = await fetch(SITE_API + "/functions/v1/get-order-by-token", {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SITE_ANON,
+        Authorization: "Bearer " + SITE_ANON
+      },
+      body: JSON.stringify({
+        orderId: codigo,
+        email
+      })
+    });
+    const j = await r.json().catch(()=>({}));
+    if (r.status === 404) return {
+      naoEncontrado: true
+    };
+    if (!r.ok || j.error) return {
+      erro: String(j.error || "http " + r.status)
+    };
+    return {
+      pedido: j
+    };
+  } catch (e) {
+    return {
+      erro: String(e).slice(0, 120)
+    };
+  } finally{
+    clearTimeout(tm);
+  }
+}
+function ultimoEvento(eventos) {
+  if (!Array.isArray(eventos) || !eventos.length) return null;
+  let melhor = eventos[0];
+  let tMelhor = Date.parse(melhor && melhor.date || "") || 0;
+  for (const e of eventos){
+    const t = Date.parse(e && e.date || "") || 0;
+    if (t > tMelhor) {
+      melhor = e;
+      tMelhor = t;
+    }
+  }
+  return melhor;
+}
+async function blocoPedido(hist) {
+  const doCliente = (hist || []).filter((m)=>m.sender === "customer" && m.content).slice(-12).reverse();
+  let refs = [];
+  for (const m of doCliente){
+    refs = detectarPedidos(m.content);
+    if (refs.length) break;
+  }
+  if (!refs.length) return "";
+  let email = "";
+  for (const m of doCliente){
+    const e = String(m.content).match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+    if (e) {
+      email = e[0].toLowerCase();
+      break;
+    }
+  }
+  const linhas = [];
+  for (const ref of refs){
+    if (ref.canal !== "site") {
+      linhas.push("- Codigo " + ref.codigo + ": pedido do " + NOME_CANAL[ref.canal] + " (identificado pelo formato do codigo). O assunto e desse canal: oriente pelo app dele.");
+      continue;
+    }
+    if (!email) {
+      linhas.push("- Codigo #" + ref.codigo + ": pedido do SITE Budamix. Para consultar a situacao voce precisa do E-MAIL usado na compra: peca o e-mail ao cliente (uma vez so), sem prometer retorno.");
+      continue;
+    }
+    const res = await consultarPedidoSite(ref.codigo, email);
+    if (res.pedido) {
+      const p = res.pedido;
+      const itens = Array.isArray(p.items) ? p.items.map((i)=>(i.quantity || 1) + "x " + i.product_name).join("; ") : "";
+      const ev = ultimoEvento(p.tracking_events);
+      linhas.push([
+        "- Pedido #" + ref.codigo + " (SITE Budamix) — consultado AGORA no sistema do site",
+        "  Situacao no site: " + (STATUS_SITE[p.status] || p.status),
+        "  Feito em: " + (dataBr(p.created_at) || "?") + (itens ? " · Itens: " + itens : ""),
+        p.tracking_code ? "  Codigo de rastreio: " + p.tracking_code : "  Rastreio: ainda sem codigo (nao postado)",
+        p.tracking_status ? "  Situacao na transportadora: " + (p.tracking_status === "delivered" ? "ENTREGUE" : p.tracking_status) : "",
+        ev ? "  Ultimo evento do rastreio: " + (dataBr(ev.date) || "") + " " + ev.description : "",
+        p.refund_label ? "  Reembolso: " + p.refund_label : "",
+        "  Acompanhar online: https://budamix.com.br/rastrear (numero do pedido + e-mail da compra)"
+      ].filter(Boolean).join("\n"));
+    } else if (res.naoEncontrado) {
+      linhas.push("- Codigo #" + ref.codigo + " com o e-mail informado: NAO localizei no site. Peca para o cliente conferir o numero do pedido e o e-mail da compra. Nao invente situacao.");
+    } else {
+      linhas.push("- Codigo #" + ref.codigo + ": pedido do SITE, mas a consulta falhou agora (" + res.erro + "). Nao invente situacao e nao prometa retorno: se o cliente precisar da situacao, escale com [[ESCALAR: consulta de pedido do site falhou]].");
+    }
+  }
+  return "## Pedido em Questao\n" + linhas.join("\n") + "\n\nREGRAS DESTE BLOCO: o canal acima vem do FORMATO do codigo e vence o historico. Use SO estes dados; nunca invente status, data ou rastreio. NUNCA repita endereco nem dados pessoais. Pedido do site com situacao/rastreio aqui: responda voce mesma, na hora. Escale apenas se o cliente pedir cancelamento, reembolso ou troca, relatar defeito, disser que nao recebeu um pedido que consta como ENTREGUE, ou se estiver enviado ha mais de 10 dias sem entrega.";
+}
+// Cumprimento puro ("oi", "boa tarde"): o menu de canais basta. Com assunto, a Ana responde.
+const CUMPRIMENTOS = new Set([
+  "oi", "oii", "oiii", "oie", "ola", "opa", "e", "ai", "eai", "eae", "bom", "boa", "dia", "tarde", "noite",
+  "tudo", "bem", "td", "blz", "beleza", "como", "vai", "voce", "vc", "ana", "budamix", "hello", "hi", "alo", "ok"
+]);
+function soCumprimento(texto) {
+  const t = String(texto || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z\s]/g, " ").trim();
+  if (!t) return true;
+  const palavras = t.split(/\s+/).filter(Boolean);
+  return palavras.length <= 6 && palavras.every((p)=>CUMPRIMENTOS.has(p));
+}
+function semMenu(hist) {
+  return (hist || []).filter((x)=>!(x.sender === "agent" && String(x.content || "").startsWith(PICKER_BODY)));
 }
 async function generateEmbedding(text) {
   const key = Deno.env.get("OPENAI_API_KEY");
@@ -257,24 +618,27 @@ function fmtProduct(p) {
     }
   }
   if (priceParts.length) lines.push("  Preco: " + priceParts.join(" | "));
-  const est = ((p.stock_status || "") + (p.stock_quantity != null ? " (" + p.stock_quantity + " un)" : "")).trim();
+  const st = String(p.stock_status || "");
+  const est = st === "out_of_stock" ? "SEM ESTOQUE agora (nao oferecer nem mandar link)" : st === "low_stock" ? "estoque baixo" : st === "in_stock" ? "em estoque" : st;
   if (est) lines.push("  Estoque: " + est);
   if (p.differentials) lines.push("  Diferenciais: " + String(p.differentials).replace(/\s+/g, " ").slice(0, 200));
   if (p.usage_suggestions) lines.push("  Uso: " + String(p.usage_suggestions).replace(/\s+/g, " ").slice(0, 160));
   if (p.site_link) lines.push("  Link site: " + p.site_link);
   const links = jsonObj(p.marketplace_links);
   if (links) {
-    const lp = Object.entries(links).filter(([_, v])=>v).map(([k, v])=>k + ": " + v);
+    const lp = Object.entries(links).filter(([_, v])=>v && !/seller\./i.test(String(v))).map(([k, v])=>k + ": " + v);
     if (lp.length) lines.push("  Links marketplace: " + lp.join(" | "));
   }
   return lines.join("\n");
 }
 async function getPolicies() {
   try {
-    const r = await db("policies?is_active=eq.true&select=title,category,marketplace,summary&order=priority.desc&limit=6");
+    const r = await db("policies?is_active=eq.true&select=title,category,marketplace,summary,content&order=priority.desc&limit=6");
     const rows = await r.json();
     if (!Array.isArray(rows) || !rows.length) return "";
-    return rows.map((p)=>"- [" + (p.category || "geral") + (p.marketplace ? "/" + p.marketplace : "") + "] " + p.title + (p.summary ? ": " + p.summary : "")).join("\n");
+    // Atacado vai com o texto inteiro: e ali que esta o contato do Marcus. So com o
+    // resumo, a Ana dizia "passo o WhatsApp do Marcus" sem ter o numero.
+    return rows.map((p)=>"- [" + (p.category || "geral") + (p.marketplace ? "/" + p.marketplace : "") + "] " + p.title + (p.summary ? ": " + p.summary : "") + (p.category === "atacado" && p.content ? "\n" + String(p.content).trim() : "")).join("\n");
   } catch (_e) {
     return "";
   }
@@ -326,7 +690,7 @@ async function buildGrounding(queryText) {
   if (pol) sections.push("## Politicas Relevantes\n" + pol);
   if (faqs) sections.push("## Perguntas Frequentes\n" + faqs);
   if (!sections.length) return "";
-  return "=== CONTEXTO DE ATENDIMENTO (dados REAIS da Budamix) ===\nUse SOMENTE as informacoes abaixo para falar de produtos, precos, estoque, links, prazos e politicas. Se a info NAO estiver aqui, diga que vai verificar — NUNCA invente produto, preco, estoque ou link.\n\n" + sections.join("\n\n");
+  return "=== CONTEXTO DE ATENDIMENTO (dados REAIS da Budamix) ===\nUse SOMENTE as informacoes abaixo para falar de produtos, precos, estoque, links, prazos e politicas. Se a info NAO estiver aqui, diga com honestidade que nao tem esse dado agora (sem prometer retorno) — NUNCA invente produto, preco, estoque ou link.\n\n" + sections.join("\n\n");
 }
 async function anaReply(systemPrompt, history, contextBlock) {
   const raw = history.filter((m)=>m.content && m.content.trim()).map((m)=>({
@@ -346,13 +710,15 @@ async function anaReply(systemPrompt, history, contextBlock) {
   // ("does not support assistant message prefill") — e a recusa era MUDA:
   // nada era enviado e nada era gravado. Acontecia em rajada e em loop.
   while(merged.length && merged[merged.length - 1].role !== "user")merged.pop();
-  if (!merged.length) return {
+  const vazio = {
     text: "",
     tokens_in: 0,
     tokens_out: 0,
     cache_read: 0,
-    cache_write: 0
+    cache_write: 0,
+    model: ""
   };
+  if (!merged.length) return vazio;
   if (contextBlock && contextBlock.trim()) {
     for(let i = merged.length - 1; i >= 0; i--){
       if (merged[i].role === "user") {
@@ -361,15 +727,16 @@ async function anaReply(systemPrompt, history, contextBlock) {
       }
     }
   }
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": Deno.env.get("ANTHROPIC_API_KEY"),
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+  const principal = await getAgentModel();
+  const fila = [
+    principal,
+    ...[
+      MODELO_RESERVA
+    ].filter((m)=>m !== principal)
+  ];
+  for (const modelo of fila){
+    const body = {
+      model: modelo,
       max_tokens: 800,
       system: [
         {
@@ -381,31 +748,50 @@ async function anaReply(systemPrompt, history, contextBlock) {
         }
       ],
       messages: merged
-    })
-  });
-  const j = await res.json();
-  if (j.error) {
-    console.log("anthropic err", JSON.stringify(j.error));
-    return {
-      text: "",
-      tokens_in: 0,
-      tokens_out: 0,
-      cache_read: 0,
-      cache_write: 0
     };
+    if (MODELOS_COM_RACIOCINIO.test(modelo)) {
+      body.max_tokens = 8000;
+      body.output_config = {
+        effort: "high"
+      };
+    }
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": Deno.env.get("ANTHROPIC_API_KEY"),
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok || j.error) {
+        console.log("anthropic err " + modelo + " http " + res.status, JSON.stringify(j.error || j).slice(0, 300));
+        continue;
+      }
+      // Modelos que pensam devolvem primeiro o bloco de raciocinio: o texto e o bloco "text".
+      const bloco = Array.isArray(j.content) ? j.content.find((c)=>c && c.type === "text" && c.text) : null;
+      const text = bloco ? bloco.text : "";
+      if (!text.trim()) {
+        console.log("anthropic sem texto " + modelo, String(j.stop_reason || ""));
+        continue;
+      }
+      if (modelo !== principal) console.log("modelo de reserva usado: " + principal + " -> " + modelo);
+      const u = j.usage || {};
+      return {
+        text,
+        tokens_in: u.input_tokens || 0,
+        tokens_out: u.output_tokens || 0,
+        cache_read: u.cache_read_input_tokens || 0,
+        cache_write: u.cache_creation_input_tokens || 0,
+        model: modelo
+      };
+    } catch (e) {
+      console.log("anthropic exc " + modelo, String(e));
+    }
   }
-  const text = j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
-  const tokens_in = j.usage ? j.usage.input_tokens || 0 : 0;
-  const tokens_out = j.usage ? j.usage.output_tokens || 0 : 0;
-  const cache_read = j.usage ? j.usage.cache_read_input_tokens || 0 : 0;
-  const cache_write = j.usage ? j.usage.cache_creation_input_tokens || 0 : 0;
-  return {
-    text,
-    tokens_in,
-    tokens_out,
-    cache_read,
-    cache_write
-  };
+  return vazio;
 }
 function splitChunks(text) {
   let chunks = text.split(CHUNK_SEP).map((c)=>c.trim()).filter((c)=>c.length > 0);
@@ -797,47 +1183,84 @@ async function handleValue(value) {
   const contacts = value && value.contacts || [];
   const name = contacts[0] && contacts[0].profile && contacts[0].profile.name || "";
   const touched = new Map();
+  const PREVIA_MIDIA = {
+    image: "[Foto recebida]",
+    audio: "[Audio recebido]",
+    video: "[Video recebido]"
+  };
+  const FALHA_MIDIA = {
+    image: "[Foto recebida, mas nao foi possivel ver desta vez. Peca para o cliente descrever ou reenviar.]",
+    audio: "[Audio recebido, mas nao foi possivel ouvir desta vez. Peca para o cliente escrever.]",
+    video: AVISO_VIDEO
+  };
   for (const m of msgs){
     const from = m.from;
     if (!from) continue;
+    if (await jaGravada(m.id)) {
+      console.log("dedup: mensagem ja gravada", m.id);
+      continue;
+    }
     const { text, pickedSource } = parseInbound(m);
     const customerId = await getOrCreateCustomer(from, name);
     const convId = await getOrCreateConversation(customerId);
-    let finalText = text;
-    let mediaMeta = {};
-    if (m.type === "image" || m.type === "audio" || m.type === "video") {
-      const r = await processMedia(m, convId);
-      if (r) {
-        if (r.text && r.text.trim()) finalText = r.text;
-        mediaMeta = r.meta || {};
-      }
-    }
-    await saveMessage(convId, "customer", finalText, {
+    const temMidia = m.type === "image" || m.type === "audio" || m.type === "video";
+    // Grava ANTES de ler a midia (Gemini/Groq levam 5-20 s). Sem isso a mensagem
+    // anterior do cliente era respondida sozinha e a Ana respondia de novo depois:
+    // 18% das respostas de set/2026 sairam em dobro.
+    const legenda = temMidia && m[m.type] && m[m.type].caption ? String(m[m.type].caption).trim() : "";
+    const rowId = await saveMessage(convId, "customer", temMidia ? (legenda ? legenda + "\n" : "") + PREVIA_MIDIA[m.type] : text, {
       message_type: m.type,
-      whatsapp_message_id: m.id,
-      metadata: Object.keys(mediaMeta).length ? mediaMeta : undefined
+      whatsapp_message_id: m.id
     });
+    if (temMidia) {
+      const r = await processMedia(m, convId);
+      const patch = {};
+      if (r && r.text && r.text.trim()) patch.content = r.text;
+      else patch.content = (legenda ? legenda + "\n" : "") + FALHA_MIDIA[m.type];
+      if (r && r.meta && Object.keys(r.meta).length) patch.metadata = r.meta;
+      await patchMessage(rowId, patch);
+    }
     if (pickedSource) await updateCustomerSource(customerId, pickedSource);
     // TRAVA 1: atendimento automatico de empresa — grava e nao responde.
     if (NUMEROS_SERVICO.has(String(from))) {
       console.log("anti-loop: numero de servico, grava e nao responde", from);
       continue;
     }
-    // TRAVA 2: placeholder sem conteudo — grava e nao responde.
-    if (TIPOS_SEM_CONTEUDO.has(m.type)) {
-      console.log("anti-loop: tipo sem conteudo, grava e nao responde", m.type, from);
+    // TRAVA 2: reacao (emoji numa mensagem) nao pede resposta — grava e segue quieta.
+    if (m.type === "reaction") {
+      console.log("reacao: grava e nao responde", from);
       continue;
     }
+    // "unsupported" entra no turno com a marca soFormato: se a rajada for so isso,
+    // a Ana pede o texto (1x a cada 12 h), em vez de ficar muda.
+    const prev = touched.get(convId);
+    const soFormato = TIPOS_SEM_CONTEUDO.has(m.type) && (!prev || prev.soFormato);
     touched.set(convId, {
       from,
       lastMsgId: m.id,
-      customerId
+      customerId,
+      soFormato
     });
   }
   await Promise.all([
     ...touched.entries()
   ].map(async ([convId, info])=>{
     await sleep(DEBOUNCE_MS);
+    if (info.soFormato) {
+      const ultima = await getLatestCustomerAnyId(convId);
+      if (ultima && ultima !== info.lastMsgId) return;
+      const dono = await getConversationAssignee(convId);
+      if (dono && dono !== "agent") return;
+      if (await anaFalouDesde(convId, JANELA_AVISO_FORMATO_MS)) {
+        console.log("formato sem conteudo: a Ana ja falou nas ultimas 12 h, fica quieta", convId);
+        return;
+      }
+      await sendWhatsApp(info.from, RESPOSTA_SEM_FORMATO, info.lastMsgId);
+      await saveMessage(convId, "agent", RESPOSTA_SEM_FORMATO, {
+        message_type: "text"
+      });
+      return;
+    }
     const latestId = await getLatestCustomerMsgId(convId);
     if (latestId && latestId !== info.lastMsgId) return; // chegou msg mais nova -> ela responde a rajada
     const assignee = await getConversationAssignee(convId);
@@ -875,22 +1298,29 @@ async function handleValue(value) {
     }
     const src = await getCustomerSource(info.customerId);
     const known = !!src && src !== "whatsapp";
-    const pickerSent = await wasPickerSent(convId);
+    let pickerSent = await wasPickerSent(convId);
     if (!known && !pickerSent) {
+      const textoAtual = latestUserText(semMenu(await getRecentMessages(convId)));
       await sendChannelPicker(info.from);
       await saveMessage(convId, "agent", PICKER_MARK, {
         message_type: "interactive"
       });
-      return;
+      pickerSent = true;
+      // So cumprimento: o menu basta. Se o cliente ja trouxe o assunto (pergunta, foto,
+      // reclamacao), a Ana responde logo, sem esperar o clique no menu.
+      if (soCumprimento(textoAtual)) return;
     }
     const sys = await getSystemPrompt();
     if (info.lastMsgId) await sendTyping(info.lastMsgId);
     const hist = await getRecentMessages(convId);
+    const consulta = latestUserText(semMenu(hist));
     const t0 = Date.now();
-    let ctx = await buildGrounding(latestUserText(hist));
+    let ctx = await buildGrounding(consulta);
+    const pedido = await blocoPedido(hist);
+    if (pedido) ctx = ctx ? ctx + "\n\n" + pedido : "=== CONTEXTO DE ATENDIMENTO ===\n" + pedido;
     const originNote = known ? "## Cliente\nOrigem do cliente: " + src + ". NAO pergunte por onde nos encontrou (ja sabemos). Para link de compra, prefira o do canal " + src + "." : pickerSent ? "## Cliente\nO menu de canais ja foi enviado ao cliente. NAO pergunte a origem em texto; apenas ajude. Se precisar mandar link, use o do site." : "";
     if (originNote) ctx = ctx ? ctx + "\n\n" + originNote : "=== CONTEXTO DE ATENDIMENTO ===\n" + originNote;
-    ctx = ctx ? ctx + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + ESCALATION_NOTE;
+    ctx = (ctx ? ctx + "\n\n" : "=== CONTEXTO DE ATENDIMENTO ===\n") + ESCALATION_NOTE + "\n\n" + REGRAS_CANAL;
     const gen = await anaReply(sys, hist, ctx);
     let reply = gen.text;
     const response_time_ms = Date.now() - t0;
@@ -899,23 +1329,45 @@ async function handleValue(value) {
     const tokens_cache_read = gen.cache_read || 0;
     const tokens_cache_write = gen.cache_write || 0;
     const tokens_used = tokens_in + tokens_out || null;
-    if (reply && reply.trim()) {
-      const esc = await escalateIfFlagged(reply, convId, "whatsapp", latestUserText(hist));
-      reply = enforceRareEmojiPolicy(esc.reply, latestUserText(hist));
-      await sendWhatsApp(info.from, reply, info.lastMsgId);
-      await saveMessage(convId, "agent", reply, {
-        response_time_ms,
-        tokens_used,
-        tokens_in,
-        tokens_out,
-        tokens_cache_read,
-        tokens_cache_write
-      });
+    if (!reply || !reply.trim()) {
+      console.log("Ana sem resposta: a IA falhou no modelo principal e na reserva", convId);
+      return;
     }
+    // A rajada continuou enquanto a Ana pensava: descarta esta resposta. O turno da
+    // mensagem mais nova responde tudo de uma vez (fim das respostas em dobro).
+    const latestDepois = await getLatestCustomerMsgId(convId);
+    if (latestDepois && latestDepois !== info.lastMsgId) {
+      console.log("resposta descartada: chegou mensagem nova durante a geracao", convId);
+      return;
+    }
+    const donoDepois = await getConversationAssignee(convId);
+    if (donoDepois && donoDepois !== "agent") return;
+    reply = limparNotasInternas(reply);
+    reply = await protegerLinks(reply, ctx);
+    const promessa = detectarPromessa(reply);
+    if (promessa && !/\[\[\s*ESCALAR/i.test(reply)) {
+      console.log("promessa de retorno detectada, conversa vai para a equipe:", promessa);
+      reply = "[[ESCALAR: a Ana prometeu retorno ao cliente (\"" + promessa + "\") e alguem precisa responder]] " + reply;
+    }
+    const esc = await escalateIfFlagged(reply, convId, "whatsapp", consulta);
+    reply = enforceRareEmojiPolicy(esc.reply, consulta);
+    if (!reply || !reply.trim()) return;
+    await sendWhatsApp(info.from, reply, info.lastMsgId);
+    await saveMessage(convId, "agent", reply, {
+      response_time_ms,
+      tokens_used,
+      tokens_in,
+      tokens_out,
+      tokens_cache_read,
+      tokens_cache_write,
+      metadata: {
+        model: gen.model,
+        escalated: esc.escalated || undefined
+      }
+    });
   }));
 }
-// Escalonamento: a Ana sinaliza com [[ESCALAR: motivo]] quando o caso precisa de humano.
-const ESCALATION_NOTE = "## Quando escalar (humano) vs resolver sozinha\nESCALE SOMENTE se: o cliente pedir explicitamente falar com humano/atendente DEPOIS de voce ja ter tentado ajudar; mencao a Procon/processo/advogado/disputa formal; cliente muito irritado/ofensivo; pagamento duplicado ou dinheiro que so a equipe pode mover; a compra foi no SITE Budamix (a equipe resolve direto — colete nº do pedido e foto antes de escalar); ou voce ja orientou o passo a passo e o cliente nao conseguiu / o problema persiste.\nNAO ESCALE de primeira: produto quebrado/com defeito/errado/faltando ou pedido que nao chegou em compra de MARKETPLACE. Nesses casos VOCE resolve guiando o cliente no AUTOATENDIMENTO do canal da compra: acolha em uma frase, pergunte onde comprou (se nao souber), peca nº do pedido e foto quando ajudar, e oriente passo a passo a abrir a solicitacao NO PROPRIO app/site onde comprou — Mercado Livre: Minhas compras > toca no pedido > 'Devolver ou reclamar'; Shopee: Minhas compras > toca no pedido > 'Pedido de Devolucao/Reembolso'; Amazon: Meus pedidos > toca no pedido > 'Devolver ou substituir itens'. Explique que a plataforma exige que a solicitacao seja aberta pelo proprio cliente, que e rapido e seguro, e que voce acompanha e tira duvidas em cada passo.\nFORMATO quando escalar: comece a resposta EXATAMENTE com o marcador [[ESCALAR: motivo curto]] e depois UMA frase curta avisando que vai transferir. O marcador e INTERNO: NUNCA pode aparecer no meio ou no fim do texto.";
+const ESCALATION_NOTE = "## Quando escalar (humano) vs resolver sozinha\nESCALE SOMENTE se: o cliente pedir explicitamente falar com humano/atendente DEPOIS de voce ja ter tentado ajudar; mencao a Procon/processo/advogado/disputa formal; cliente muito irritado/ofensivo; pagamento duplicado ou dinheiro que so a equipe pode mover; a compra foi no SITE Budamix e o cliente quer cancelamento, reembolso ou troca, relata defeito, ou diz que nao recebeu um pedido que consta como entregue (situacao e rastreio de pedido do site voce mesma responde pelo bloco 'Pedido em Questao'; sem ele, peca o numero do pedido e o e-mail da compra); ou voce ja orientou o passo a passo e o cliente nao conseguiu / o problema persiste.\nNAO ESCALE de primeira: produto quebrado/com defeito/errado/faltando ou pedido que nao chegou em compra de MARKETPLACE. Nesses casos VOCE resolve guiando o cliente no AUTOATENDIMENTO do canal da compra: acolha em uma frase, pergunte onde comprou (se nao souber), peca nº do pedido e foto quando ajudar, e oriente passo a passo a abrir a solicitacao NO PROPRIO app/site onde comprou — Mercado Livre: Minhas compras > toca no pedido > 'Devolver ou reclamar'; Shopee: Minhas compras > toca no pedido > 'Pedido de Devolucao/Reembolso'; Amazon: Meus pedidos > toca no pedido > 'Devolver ou substituir itens'. Explique que a plataforma exige que a solicitacao seja aberta pelo proprio cliente, que e rapido e seguro, e que voce acompanha e tira duvidas em cada passo.\nFORMATO quando escalar: comece a resposta EXATAMENTE com o marcador [[ESCALAR: motivo curto]] e depois UMA frase curta dizendo que a equipe vai responder por aqui mesmo, sem prometer prazo. O marcador e INTERNO: NUNCA pode aparecer no meio ou no fim do texto.";
 async function escalateIfFlagged(reply, convId, channel, preview) {
   // O marcador e instrucao interna: detecta em QUALQUER posicao (a IA as vezes
   // erra e poe no fim) e remove todo [[...]] antes do envio — nunca vaza pro cliente.
@@ -951,6 +1403,50 @@ async function escalateIfFlagged(reply, convId, channel, preview) {
 Deno.serve(async (req)=>{
   if (req.method === "GET") {
     const u = new URL(req.url);
+    // SONDA DE SAUDE (30/09): gera a resposta pelo MESMO caminho da Ana (contexto,
+    // pedido, modelo e travas de saida), sem enviar e sem gravar nada.
+    // Uso: GET ?probe=1&key=<IG_VERIFY_TOKEN>[&q=mensagem do cliente]
+    if (u.searchParams.get("probe") === "1") {
+      const chave = Deno.env.get("IG_VERIFY_TOKEN") || "";
+      if (!chave || u.searchParams.get("key") !== chave) return new Response("Forbidden", {
+        status: 403
+      });
+      const pergunta = (u.searchParams.get("q") || "Oi! O pote de vidro pode ir no micro-ondas?").slice(0, 600);
+      const hist = [
+        {
+          sender: "customer",
+          content: pergunta
+        }
+      ];
+      const t0 = Date.now();
+      let ctx = await buildGrounding(pergunta);
+      const pedido = await blocoPedido(hist);
+      if (pedido) ctx = ctx ? ctx + "\n\n" + pedido : "=== CONTEXTO DE ATENDIMENTO ===\n" + pedido;
+      ctx = (ctx ? ctx + "\n\n" : "=== CONTEXTO DE ATENDIMENTO ===\n") + ESCALATION_NOTE + "\n\n" + REGRAS_CANAL;
+      const gen = await anaReply(await getSystemPrompt(), hist, ctx);
+      let r = limparNotasInternas(gen.text || "");
+      r = await protegerLinks(r, ctx);
+      const promessa = detectarPromessa(r);
+      const escalaria = /\[\[\s*ESCALAR/i.test(r) || !!promessa;
+      r = enforceRareEmojiPolicy(r.replace(/\s*\[\[[^\]]*\]\]\s*/gi, " ").trim(), pergunta);
+      return new Response(JSON.stringify({
+        ok: !!gen.text,
+        modelo: gen.model,
+        ms: Date.now() - t0,
+        tokens_in: gen.tokens_in,
+        tokens_out: gen.tokens_out,
+        cache_read: gen.cache_read,
+        pedido_consultado: !!pedido,
+        escalaria,
+        promessa,
+        resposta: r
+      }), {
+        status: gen.text ? 200 : 502,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+    }
     if (u.searchParams.get("hub.mode") === "subscribe" && u.searchParams.get("hub.verify_token") === Deno.env.get("WA_VERIFY_TOKEN")) {
       return new Response(u.searchParams.get("hub.challenge") || "", {
         status: 200
