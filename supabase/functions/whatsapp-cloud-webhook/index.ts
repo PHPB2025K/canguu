@@ -276,6 +276,23 @@ async function jaGravada(waMsgId) {
   }
 }
 // Ultima mensagem do cliente de QUALQUER tipo (menos reacao): usada pelo aviso de formato.
+// A Meta pode reentregar o MESMO evento em paralelo: as duas copias passam pela
+// checagem de cima ao mesmo tempo. Depois de gravar, so segue a copia mais antiga;
+// a outra apaga a propria linha e sai.
+async function copiaRepetida(waMsgId, rowId) {
+  if (!waMsgId || !rowId) return false;
+  try {
+    const r = await db("messages?whatsapp_message_id=eq." + encodeURIComponent(waMsgId) + "&select=id&order=created_at.asc,id.asc");
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length > 1 && rows[0].id !== rowId) {
+      await db("messages?id=eq." + rowId, {
+        method: "DELETE"
+      });
+      return true;
+    }
+  } catch (_e) {}
+  return false;
+}
 async function getLatestCustomerAnyId(conversationId) {
   const r = await db("messages?conversation_id=eq." + conversationId + "&sender=eq.customer&message_type=neq.reaction&order=created_at.desc&limit=1&select=whatsapp_message_id");
   const rows = await r.json();
@@ -362,12 +379,14 @@ const RAIZ_LOJA = {
   "www.klapporcelana.com.br": "https://klapporcelana.com.br"
 };
 async function protegerLinks(reply, ctx) {
-  const achados = String(reply || "").match(/https?:\/\/[^\s<>"']+/g);
+  // O separador de baloes (\\) costuma vir colado no fim do link: ele nao faz parte da URL.
+  const URL_RE = /https?:\/\/[^\s<>"'\\]+/g;
+  const achados = String(reply || "").match(URL_RE);
   if (!achados) return reply;
   const ok = new Set(await linksDoCatalogo());
-  for (const u of String(ctx || "").match(/https?:\/\/[^\s<>"'|]+/g) || [])ok.add(normUrl(u));
+  for (const u of String(ctx || "").match(/https?:\/\/[^\s<>"'|\\]+/g) || [])ok.add(normUrl(u));
   const digitosCtx = String(ctx || "").replace(/\D/g, "");
-  return String(reply).replace(/https?:\/\/[^\s<>"']+/g, (bruto)=>{
+  return String(reply).replace(URL_RE, (bruto)=>{
     const url = bruto.replace(/[.,;:!?*_)\]]+$/, "");
     const resto = bruto.slice(url.length);
     const n = normUrl(url);
@@ -1212,6 +1231,10 @@ async function handleValue(value) {
       message_type: m.type,
       whatsapp_message_id: m.id
     });
+    if (await copiaRepetida(m.id, rowId)) {
+      console.log("dedup: copia simultanea descartada", m.id);
+      continue;
+    }
     if (temMidia) {
       const r = await processMedia(m, convId);
       const patch = {};
