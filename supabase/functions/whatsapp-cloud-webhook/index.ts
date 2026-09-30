@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { enforceRareEmojiPolicy } from "../_shared/chat-style.ts";
 const GRAPH = "https://graph.facebook.com/v25.0";
 const SU = Deno.env.get("SUPABASE_URL");
 const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -32,8 +33,24 @@ const CHANNELS = [
     title: "Outro / Nao lembro"
   }
 ];
-const PICKER_BODY = "Oi! 😊 Eu sou a Ana, da Budamix. Pra te atender certinho, me conta: por onde voce nos encontrou?";
+const PICKER_BODY = "Oi! Eu sou a Ana, da Budamix. Pra te atender certinho, me conta: por onde voce nos encontrou?";
 const PICKER_MARK = PICKER_BODY + " [menu de canais enviado: Site, Mercado Livre, Shopee, Amazon, Outro]";
+// Numeros de ATENDIMENTO AUTOMATICO de empresas. A Ana grava a mensagem mas NUNCA responde.
+// Sem isso, robo conversa com robo ate a Meta banir a conta (incidentes 18/07 e 20/08/2026).
+const NUMEROS_SERVICO = new Set([
+  "5511999910621" // atendimento Claro — operadora do proprio chip da Ana
+]);
+// Tipos que nao carregam conteudo nenhum: grava para o historico, mas nao aciona a Ana.
+const TIPOS_SEM_CONTEUDO = new Set([
+  "unsupported",
+  "reaction"
+]);
+// Disjuntor anti-loop: teto de respostas da Ana por conversa por hora.
+// Pico HUMANO real medido no banco: 22/h (Andre Juliane 07/08). O loop da Claro bateu 65/h.
+const TETO_RESPOSTAS_HORA = 25;
+// Rede de seguranca: so vale quando o Gemini nao conseguiu assistir (video
+// grande demais, chave fora do ar). O caminho normal e a Ana VER o video.
+const AVISO_VIDEO = "[O cliente enviou um VIDEO que nao foi possivel ler desta vez. Peca uma FOTO do problema ou que ele descreva em texto.]";
 const sleep = (ms)=>new Promise((r)=>setTimeout(r, ms));
 function db(path, init = {}) {
   const h = {
@@ -113,7 +130,9 @@ async function getOrCreateConversation(customerId) {
     if ((conv.assigned_to || "agent") === "agent" && conv.status !== "active") {
       await db("conversations?id=eq." + conv.id, {
         method: "PATCH",
-        body: JSON.stringify({ status: "active" })
+        body: JSON.stringify({
+          status: "active"
+        })
       });
     }
     return conv.id;
@@ -168,7 +187,9 @@ async function getRecentMessages(conversationId) {
   return rows.reverse();
 }
 async function getLatestCustomerMsgId(conversationId) {
-  const r = await db("messages?conversation_id=eq." + conversationId + "&sender=eq.customer&order=created_at.desc&limit=1&select=whatsapp_message_id");
+  // Ignora reaction/unsupported: eles sao gravados mas nao contam como "mensagem nova",
+  // senao uma figurinha depois da pergunta faria a Ana engolir a pergunta.
+  const r = await db("messages?conversation_id=eq." + conversationId + "&sender=eq.customer&message_type=not.in.(unsupported,reaction)&order=created_at.desc&limit=1&select=whatsapp_message_id");
   const rows = await r.json();
   return Array.isArray(rows) && rows[0] ? rows[0].whatsapp_message_id ?? null : null;
 }
@@ -274,7 +295,8 @@ function latestUserText(history) {
     if (history[i].sender === "customer") parts.unshift(history[i].content);
     else break;
   }
-  return parts.join(" ").trim();
+  // Tira os fosseis sinteticos: eles envenenavam a busca no catalogo.
+  return parts.filter((t)=>!/^\[Cliente selecionou canal:/.test(String(t || ""))).join(" ").replace(/\[(unsupported|reaction|video|sticker|document|location|contacts|interactive)[^\]]*\]/gi, " ").replace(/\s{2,}/g, " ").trim();
 }
 async function buildGrounding(queryText) {
   if (!queryText || queryText.trim().length < 2) return "";
@@ -320,7 +342,17 @@ async function anaReply(systemPrompt, history, contextBlock) {
     });
   }
   while(merged.length && merged[0].role !== "user")merged.shift();
-  if (!merged.length) return { text: "", tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0 };
+  // A API da Anthropic recusa historico que termina em 'assistant'
+  // ("does not support assistant message prefill") — e a recusa era MUDA:
+  // nada era enviado e nada era gravado. Acontecia em rajada e em loop.
+  while(merged.length && merged[merged.length - 1].role !== "user")merged.pop();
+  if (!merged.length) return {
+    text: "",
+    tokens_in: 0,
+    tokens_out: 0,
+    cache_read: 0,
+    cache_write: 0
+  };
   if (contextBlock && contextBlock.trim()) {
     for(let i = merged.length - 1; i >= 0; i--){
       if (merged[i].role === "user") {
@@ -339,21 +371,41 @@ async function anaReply(systemPrompt, history, contextBlock) {
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 800,
-      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: {
+            type: "ephemeral"
+          }
+        }
+      ],
       messages: merged
     })
   });
   const j = await res.json();
   if (j.error) {
     console.log("anthropic err", JSON.stringify(j.error));
-    return { text: "", tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0 };
+    return {
+      text: "",
+      tokens_in: 0,
+      tokens_out: 0,
+      cache_read: 0,
+      cache_write: 0
+    };
   }
   const text = j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
-  const tokens_in = j.usage ? (j.usage.input_tokens || 0) : 0;
-  const tokens_out = j.usage ? (j.usage.output_tokens || 0) : 0;
-  const cache_read = j.usage ? (j.usage.cache_read_input_tokens || 0) : 0;
-  const cache_write = j.usage ? (j.usage.cache_creation_input_tokens || 0) : 0;
-  return { text, tokens_in, tokens_out, cache_read, cache_write };
+  const tokens_in = j.usage ? j.usage.input_tokens || 0 : 0;
+  const tokens_out = j.usage ? j.usage.output_tokens || 0 : 0;
+  const cache_read = j.usage ? j.usage.cache_read_input_tokens || 0 : 0;
+  const cache_write = j.usage ? j.usage.cache_creation_input_tokens || 0 : 0;
+  return {
+    text,
+    tokens_in,
+    tokens_out,
+    cache_read,
+    cache_write
+  };
 }
 function splitChunks(text) {
   let chunks = text.split(CHUNK_SEP).map((c)=>c.trim()).filter((c)=>c.length > 0);
@@ -483,21 +535,45 @@ async function sendChannelPicker(to) {
 // ─── MIDIA: baixar da Meta (Graph) + ver imagem (Gemini) / ouvir audio (Groq) ───
 async function downloadWaMedia(mediaId) {
   const meta = await fetch(GRAPH + "/" + mediaId, {
-    headers: { Authorization: "Bearer " + WA_TOKEN }
+    headers: {
+      Authorization: "Bearer " + WA_TOKEN
+    }
   }).then((r)=>r.json());
   if (!meta || !meta.url) throw new Error("media url indisponivel");
-  const res = await fetch(meta.url, { headers: { Authorization: "Bearer " + WA_TOKEN } });
+  const res = await fetch(meta.url, {
+    headers: {
+      Authorization: "Bearer " + WA_TOKEN
+    }
+  });
   const buf = new Uint8Array(await res.arrayBuffer());
   let bin = "";
-  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-  return { base64: btoa(bin), bytes: buf, mime: meta.mime_type || "application/octet-stream" };
+  for(let i = 0; i < buf.length; i += 0x8000)bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return {
+    base64: btoa(bin),
+    bytes: buf,
+    mime: meta.mime_type || "application/octet-stream"
+  };
 }
 function extFor(mime) {
   const mm = (mime || "").split(";")[0].trim().toLowerCase();
-  const map = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/amr": "amr", "audio/wav": "wav", "video/mp4": "mp4" };
+  const map = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "audio/ogg": "ogg",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/aac": "aac",
+    "audio/amr": "amr",
+    "audio/wav": "wav",
+    "video/mp4": "mp4"
+  };
   if (map[mm]) return map[mm];
   if (mm.startsWith("image/")) return "jpg";
   if (mm.startsWith("audio/")) return "ogg";
+  if (mm.startsWith("video/")) return "mp4";
   return "bin";
 }
 async function uploadToStorage(kind, convId, msgId, bytes, mime) {
@@ -506,7 +582,13 @@ async function uploadToStorage(kind, convId, msgId, bytes, mime) {
   const ct = (mime || "").split(";")[0].trim() || "application/octet-stream";
   const r = await fetch(SU + "/storage/v1/object/chat-attachments/" + path, {
     method: "POST",
-    headers: { Authorization: "Bearer " + SR, apikey: SR, "Content-Type": ct, "x-upsert": "true", "Cache-Control": "3600" },
+    headers: {
+      Authorization: "Bearer " + SR,
+      apikey: SR,
+      "Content-Type": ct,
+      "x-upsert": "true",
+      "Cache-Control": "3600"
+    },
     body: bytes
   });
   if (!r.ok) throw new Error("storage " + r.status + " " + (await r.text()).slice(0, 140));
@@ -516,30 +598,104 @@ async function transcribeAudio(base64, mime) {
   if (!GROQ_KEY) return null;
   const bytes = Uint8Array.from(atob(base64), (c)=>c.charCodeAt(0));
   const fd = new FormData();
-  fd.append("file", new Blob([bytes], { type: mime || "audio/ogg" }), "audio.ogg");
+  fd.append("file", new Blob([
+    bytes
+  ], {
+    type: mime || "audio/ogg"
+  }), "audio.ogg");
   fd.append("model", "whisper-large-v3");
   fd.append("language", "pt");
   const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
     method: "POST",
-    headers: { Authorization: "Bearer " + GROQ_KEY },
+    headers: {
+      Authorization: "Bearer " + GROQ_KEY
+    },
     body: fd
   });
   const j = await r.json();
   return j && j.text ? j.text : null;
 }
-async function describeImage(base64, mime) {
+// 🔴 O NOME DO MODELO ENVELHECE, e por isso aqui e uma CADEIA e nao um nome fixo.
+// Em 19/08/2026 o gemini-2.5-flash passou a devolver 404 "no longer available to
+// new users" para chave NOVA — mas esta chave e antiga e continua tendo acesso.
+// Medido em 25/08 com um video real: o 2.5 respondeu na hora, o 3.6 devolveu
+// "high demand" (erro transitorio, nao permanente).
+// Ordem: o que funciona HOJE primeiro, para nao pagar ida e volta perdida em
+// toda foto; o sucessor logo atras, para o dia em que o Google desligar o 2.5.
+const GEMINI_MODELOS = [
+  "gemini-2.5-flash",
+  "gemini-3.6-flash"
+];
+let GEMINI_MODELO_BOM = null; // memoriza o que respondeu, p/ nao gastar 2 chamadas sempre
+async function geminiGerar(parts) {
   if (!GEMINI_KEY) return null;
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_KEY;
-  const payload = {
-    contents: [{ parts: [
-      { text: "Descreva objetivamente esta imagem enviada por um cliente da Budamix (utilidades domesticas), focando no que importa para o atendimento: produto/objeto mostrado, cor, defeito ou dano, texto/etiqueta visivel, comprovante de pagamento. Seja conciso (1-3 frases), em portugues." },
-      { inline_data: { mime_type: mime || "image/jpeg", data: base64 } }
-    ] }]
-  };
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  const j = await r.json();
-  const t = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text;
-  return t || null;
+  const fila = GEMINI_MODELO_BOM ? [
+    GEMINI_MODELO_BOM,
+    ...GEMINI_MODELOS.filter((m)=>m !== GEMINI_MODELO_BOM)
+  ] : GEMINI_MODELOS;
+  for (const modelo of fila){
+    try {
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/" + modelo + ":generateContent?key=" + GEMINI_KEY;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts
+            }
+          ]
+        })
+      });
+      const j = await r.json();
+      const t = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text;
+      if (t) {
+        GEMINI_MODELO_BOM = modelo;
+        return t;
+      }
+      console.log("gemini " + modelo + " sem texto", JSON.stringify(j.error || j).slice(0, 200));
+    } catch (e) {
+      console.log("gemini exc " + modelo, String(e));
+    }
+  }
+  return null;
+}
+async function describeImage(base64, mime) {
+  return await geminiGerar([
+    {
+      text: "Descreva objetivamente esta imagem enviada por um cliente da Budamix (utilidades domesticas), focando no que importa para o atendimento: produto/objeto mostrado, cor, defeito ou dano, texto/etiqueta visivel, comprovante de pagamento. Seja conciso (1-3 frases), em portugues."
+    },
+    {
+      inline_data: {
+        mime_type: mime || "image/jpeg",
+        data: base64
+      }
+    }
+  ]);
+}
+// Video vai inline, igual a imagem. O WhatsApp limita o arquivo a 16 MB, mas o
+// base64 infla ~33% e o teto de requisicao do Gemini e 20 MB — dai o corte em
+// 12 MB de arquivo bruto. Acima disso a Ana assume que nao viu, em vez de
+// estourar a chamada em silencio.
+const VIDEO_MAX_BYTES = 12 * 1024 * 1024;
+async function describeVideo(base64, mime, bytesLen) {
+  if (bytesLen > VIDEO_MAX_BYTES) {
+    console.log("video grande demais para inline", bytesLen);
+    return null;
+  }
+  return await geminiGerar([
+    {
+      text: "Um cliente da Budamix (utilidades domesticas: potes de vidro, canecas, porcelana) enviou este video no atendimento. Descreva objetivamente o que da para ver, focando no que importa para resolver o caso: qual produto aparece, cor, se ha defeito, trinca, quebra, vazamento ou peca faltando, o que a pessoa demonstra ou aponta, e qualquer etiqueta, nota ou embalagem visivel. Se o video mostrar a abertura de uma encomenda, diga o estado em que a mercadoria chegou. Seja concreto e conciso (2-4 frases), em portugues, sem especular alem do que aparece."
+    },
+    {
+      inline_data: {
+        mime_type: mime || "video/mp4",
+        data: base64
+      }
+    }
+  ]);
 }
 async function processMedia(m, convId) {
   try {
@@ -558,7 +714,30 @@ async function processMedia(m, convId) {
       if (desc) meta.ai_description = desc;
       const caption = (m.image.caption || "").trim();
       const text = desc ? (caption ? caption + "\n" : "") + "[Foto enviada pelo cliente] " + desc : caption || "[Foto recebida]";
-      return { text, meta };
+      return {
+        text,
+        meta
+      };
+    }
+    if (m.type === "video" && m.video && m.video.id) {
+      const md = await downloadWaMedia(m.video.id);
+      const meta = {};
+      // 1) sobe o arquivo -> a tela do Canggu ganha o player (independe da IA)
+      try {
+        meta.video_url = await uploadToStorage("video", convId, m.id, md.bytes, md.mime);
+        meta.video_mimetype = md.mime;
+      } catch (e) {
+        console.log("video upload err", String(e));
+      }
+      // 2) Gemini ASSISTE p/ a Ana entender
+      const desc = await describeVideo(md.base64, md.mime, md.bytes.length);
+      if (desc) meta.ai_description = desc;
+      const caption = (m.video.caption || "").trim();
+      const text = desc ? (caption ? caption + "\n" : "") + "[Video enviado pelo cliente] " + desc : (caption ? caption + "\n" : "") + AVISO_VIDEO;
+      return {
+        text,
+        meta
+      };
     }
     if (m.type === "audio" && m.audio && m.audio.id) {
       const md = await downloadWaMedia(m.audio.id);
@@ -574,7 +753,10 @@ async function processMedia(m, convId) {
       const txt = await transcribeAudio(md.base64, md.mime);
       meta.transcribed = !!(txt && txt.trim());
       const text = txt && txt.trim() ? txt.trim() : "[Audio recebido]";
-      return { text, meta };
+      return {
+        text,
+        meta
+      };
     }
   } catch (e) {
     console.log("media err", String(e));
@@ -596,7 +778,14 @@ function parseInbound(m) {
       text = "[Cliente selecionou canal: " + rtitle + "]";
     } else text = rtitle ? "[" + rtitle + "]" : "[interactive]";
   } else {
-    text = "[" + m.type + "]";
+    const AVISO = {
+      video: AVISO_VIDEO,
+      document: "[O cliente enviou um DOCUMENTO/PDF. Voce NAO consegue abrir. Peca o numero do pedido ou uma foto.]",
+      sticker: "[O cliente enviou uma figurinha. Nao ha conteudo — apenas siga a conversa, sem inventar assunto.]",
+      location: "[O cliente enviou uma LOCALIZACAO. Se for sobre entrega, peca o CEP em texto.]",
+      contacts: "[O cliente enviou um CONTATO. Se precisar falar com outra pessoa, peca o telefone em texto.]"
+    };
+    text = AVISO[m.type] || "[" + m.type + " — formato que voce nao consegue ler. Peca para o cliente escrever em texto.]";
   }
   return {
     text,
@@ -616,7 +805,7 @@ async function handleValue(value) {
     const convId = await getOrCreateConversation(customerId);
     let finalText = text;
     let mediaMeta = {};
-    if (m.type === "image" || m.type === "audio") {
+    if (m.type === "image" || m.type === "audio" || m.type === "video") {
       const r = await processMedia(m, convId);
       if (r) {
         if (r.text && r.text.trim()) finalText = r.text;
@@ -629,6 +818,16 @@ async function handleValue(value) {
       metadata: Object.keys(mediaMeta).length ? mediaMeta : undefined
     });
     if (pickedSource) await updateCustomerSource(customerId, pickedSource);
+    // TRAVA 1: atendimento automatico de empresa — grava e nao responde.
+    if (NUMEROS_SERVICO.has(String(from))) {
+      console.log("anti-loop: numero de servico, grava e nao responde", from);
+      continue;
+    }
+    // TRAVA 2: placeholder sem conteudo — grava e nao responde.
+    if (TIPOS_SEM_CONTEUDO.has(m.type)) {
+      console.log("anti-loop: tipo sem conteudo, grava e nao responde", m.type, from);
+      continue;
+    }
     touched.set(convId, {
       from,
       lastMsgId: m.id,
@@ -643,6 +842,37 @@ async function handleValue(value) {
     if (latestId && latestId !== info.lastMsgId) return; // chegou msg mais nova -> ela responde a rajada
     const assignee = await getConversationAssignee(convId);
     if (assignee && assignee !== "agent") return; // humano assumiu -> Ana fica quieta
+    // TRAVA 3: disjuntor anti-loop. Se a Ana ja respondeu demais nesta conversa na ultima
+    // hora, ela para e chama humano. Teto acima do pico humano real medido (22/h).
+    try {
+      const rh = await db("messages?conversation_id=eq." + convId + "&sender=eq.agent&created_at=gte." + new Date(Date.now() - 3600000).toISOString() + "&select=id");
+      const naUltimaHora = await rh.json();
+      if (Array.isArray(naUltimaHora) && naUltimaHora.length >= TETO_RESPOSTAS_HORA) {
+        console.log("anti-loop: disjuntor disparou com " + naUltimaHora.length + " respostas/hora", convId);
+        await db("conversations?id=eq." + convId, {
+          method: "PATCH",
+          body: JSON.stringify({
+            assigned_to: "pending_human",
+            status: "escalated"
+          })
+        });
+        await fetch((Deno.env.get("SUPABASE_URL") || "") + "/functions/v1/escalate-notify?key=" + encodeURIComponent(Deno.env.get("IG_VERIFY_TOKEN") || ""), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            conversation_id: convId,
+            reason: "disjuntor anti-loop: " + naUltimaHora.length + " respostas em 1 hora",
+            channel: "whatsapp",
+            preview: "Conversa pausada automaticamente. Devolver para a Ana = assigned_to voltar para agent."
+          })
+        }).catch((e)=>console.log("escalate-notify err", String(e)));
+        return;
+      }
+    } catch (e) {
+      console.log("disjuntor exc (segue normal)", String(e));
+    }
     const src = await getCustomerSource(info.customerId);
     const known = !!src && src !== "whatsapp";
     const pickerSent = await wasPickerSent(convId);
@@ -668,12 +898,19 @@ async function handleValue(value) {
     const tokens_out = gen.tokens_out || 0;
     const tokens_cache_read = gen.cache_read || 0;
     const tokens_cache_write = gen.cache_write || 0;
-    const tokens_used = (tokens_in + tokens_out) || null;
+    const tokens_used = tokens_in + tokens_out || null;
     if (reply && reply.trim()) {
       const esc = await escalateIfFlagged(reply, convId, "whatsapp", latestUserText(hist));
-      reply = esc.reply;
+      reply = enforceRareEmojiPolicy(esc.reply, latestUserText(hist));
       await sendWhatsApp(info.from, reply, info.lastMsgId);
-      await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write });
+      await saveMessage(convId, "agent", reply, {
+        response_time_ms,
+        tokens_used,
+        tokens_in,
+        tokens_out,
+        tokens_cache_read,
+        tokens_cache_write
+      });
     }
   }));
 }
@@ -684,17 +921,32 @@ async function escalateIfFlagged(reply, convId, channel, preview) {
   // erra e poe no fim) e remove todo [[...]] antes do envio — nunca vaza pro cliente.
   const m = reply.match(/\[\[\s*ESCALAR\s*:?\s*([^\]]*)\]\]/i);
   const stripped = reply.replace(/\s*\[\[[^\]]*\]\]\s*/gi, " ").replace(/ {2,}/g, " ").trim();
-  if (!m) return { escalated: false, reply: stripped };
+  if (!m) return {
+    escalated: false,
+    reply: stripped
+  };
   const reason = (m[1] || "").trim() || "Cliente precisa de atendimento humano";
-  const clean = stripped || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui 🙏";
+  const clean = stripped || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui.";
   try {
     await fetch((Deno.env.get("SUPABASE_URL") || "") + "/functions/v1/escalate-notify?key=" + encodeURIComponent(Deno.env.get("IG_VERIFY_TOKEN") || ""), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversation_id: convId, reason, channel, preview: (preview || "").slice(0, 180) })
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        conversation_id: convId,
+        reason,
+        channel,
+        preview: (preview || "").slice(0, 180)
+      })
     });
-  } catch (e) { console.log("escalate call err", String(e)); }
-  return { escalated: true, reply: clean };
+  } catch (e) {
+    console.log("escalate call err", String(e));
+  }
+  return {
+    escalated: true,
+    reply: clean
+  };
 }
 Deno.serve(async (req)=>{
   if (req.method === "GET") {
