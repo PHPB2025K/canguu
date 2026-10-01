@@ -67,7 +67,9 @@ VERDADE DO CATALOGO (use para julgar precisao):
 - Canequinhas 100ml com suporte de madeira: ALUMINIO esmaltado (metal), NAO porcelana. NAO vao ao micro-ondas. Lavar a mao; suporte so com pano seco.
 - VENDA AVULSA NAO EXISTE: nem tampa, nem caneca, canequinha ou quebra-cabeca avulso. Reprove resposta que mande comprar "avulso".
 - Jogos da memoria e quebra-cabecas em MDF: kits de composicao fixa; nao da para escolher os desenhos.
-- Medidas: use a FICHA DO PRODUTO quando vier no item; sem ficha, aproximado com ressalva; NUNCA inventar.`
+- Medidas: use a FICHA DO PRODUTO quando vier no item; sem ficha, aproximado com ressalva; NUNCA inventar.
+- O folheto antigo dentro da embalagem dos potes traz restricoes erradas (esta sendo corrigido): NAO explique nem justifique o folheto; informe so o uso correto.
+- NUNCA invente explicacao, causa ou dado que nao esteja nesta verdade, no manual ou na ficha.`
 
 const COMUM = `Quando reprovar, escreva resposta_correta com a info certa (oferecendo alternativa Budamix por NOME quando faltar a variacao) e uma licao curta generalizavel (o tipo de pergunta + a regra).
 ${CATALOGO}`
@@ -105,6 +107,8 @@ ${REGRAS_CORRECAO_CHAT}`
 const SCHEMA_HINT = `Responda SOMENTE um JSON valido:
 {"veredito":"adequada"|"inadequada","confianca":0.0-1.0,"motivo":"...","resposta_correta":"...","licao":"...","generalizavel":true|false,"escopo":"todos"|"so_marketplace"|"so_conversa"|"so_este_canal","categoria":"<tema curto: entrega|troca|compatibilidade|material|cor|pagamento|tom|outro>"}
 generalizavel: true SO se a resposta_correta serve, sem mudar nada, para OUTRO cliente que mande a mesma mensagem.
+generalizavel: false SEMPRE que a mensagem do cliente, sozinha, nao diz o assunto: "ok", "obrigada", "estarei aguardando", "sim", "pode ser", numero de pedido sozinho, foto sem texto, clique no menu.
+resposta_correta NUNCA leva marcador ([[ESCALAR]], [[BOTOES]] ou qualquer [[...]]): e so o texto para o cliente.
 Se adequada: resposta_correta/licao podem ser "".
 escopo: "todos" = vale em qualquer canal (politica, prazo de entrega, fato de produto); "so_marketplace" = so faz sentido em anuncio publico; "so_conversa" = so em chat (WhatsApp/Instagram Direct); "so_este_canal" = especifico do canal avaliado.
 ATENCAO: resposta_correta e aprendizado reutilizavel e deve ficar SEM emoji em qualquer escopo. Escopo "todos" exige texto que sirva TAMBEM em marketplace (max 350 caracteres).`
@@ -198,13 +202,19 @@ function dadosDoCaso(t: string, nomeCliente: string | null): string[] {
 // A licao e encontrada pela MENSAGEM DO CLIENTE. Mensagem que so faz sentido no
 // contexto ("ok", "Caneca", "[Foto recebida]", clique no menu) traria a licao para
 // conversas que nao tem nada a ver.
+const SO_RECONHECIMENTO = /^(ok|okay|okk|t[aá]|ta bom|t[aá] bom|beleza|blz|certo|sim|n[aã]o|obrigad[oa]|obg|valeu|perfeito|combinado|pode ser|aguardo|estarei aguardando|vou aguardar|aguardando|entendi|show|top|maravilha|tudo bem|tudo certo|bom dia|boa tarde|boa noite)\b/i
 function perguntaAutoexplicativa(t: string): boolean {
+  if (dadosDoCaso(String(t || ''), null).length) return false // chave com pedido, e-mail ou telefone e de um caso so
   const limpo = String(t || '')
     .replace(/\[Cliente selecionou canal:[^\]]*\]/gi, ' ')
     .replace(/\[(?:unsupported|reaction|interactive|Foto recebida|Audio recebido|Video recebido)[^\]]*\]/gi, ' ')
     .replace(/\s+/g, ' ').trim()
   if (limpo.length < 15) return false
-  return limpo.split(' ').length >= 3
+  const palavras = limpo.split(' ')
+  if (palavras.length < 3) return false
+  // "Ok. Estarei aguardando." e parecidos: so reconhecimento, sem assunto
+  if (SO_RECONHECIMENTO.test(limpo.replace(/[^\p{L}\s]/gu, ' ').trim()) && palavras.length < 7) return false
+  return true
 }
 function horaBr(iso: string): string {
   const d = new Date(iso)
@@ -413,6 +423,7 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
     }
 
     async function record(question: string, aiResp: string | null, sku: string | null, recommended: string, conf: number, originChannel: string, scope: string[], category: string | null, nomeCliente: string | null = null) {
+      if (/\[\[/.test(recommended)) { sum.rejected++; sum.errors.push('licao com marcador [[...]] descartada'); return }
       const dados = dadosDoCaso(recommended, nomeCliente)
       if (dados.length) { sum.rejected++; sum.errors.push(`licao com dado do caso descartada (${dados.join(', ')})`); return }
       if (dry) { detalhes.push({ gravaria: true, pergunta: question.slice(0, 200), resposta_correta: recommended, escopo: scope }); return }
