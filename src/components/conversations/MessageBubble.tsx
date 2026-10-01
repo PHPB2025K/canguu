@@ -155,6 +155,22 @@ function AttachmentTitle({ att }: { att: Attachment }) {
   return <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{att.title}</p>;
 }
 
+// Nome do produto / legenda do reels e link do conteúdo compartilhado (Instagram)
+function AttachmentFooter({ att }: { att: Attachment }) {
+  if (!att.note && !att.link) return null;
+  return (
+    <div className="space-y-0.5">
+      {att.note && <p className="line-clamp-2 text-xs text-muted-foreground">{att.note}</p>}
+      {att.link && (
+        <a href={att.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+          <Link2 className="h-3 w-3" />
+          Abrir link
+        </a>
+      )}
+    </div>
+  );
+}
+
 function AttachmentPreview({
   att,
   onOpen,
@@ -219,6 +235,7 @@ function AttachmentPreview({
             className="max-h-72 w-full cursor-zoom-in object-cover transition hover:opacity-90"
           />
         </button>
+        <AttachmentFooter att={att} />
       </div>
     );
   }
@@ -240,6 +257,7 @@ function AttachmentPreview({
             </div>
           </div>
         </button>
+        <AttachmentFooter att={att} />
       </div>
     );
   }

@@ -114,3 +114,14 @@ describe("motivo do arquivo não guardado", () => {
     expect(ig).toMatchObject({ kind: "video", missing: true, reason: "too_big" });
   });
 });
+
+describe("conteúdo compartilhado do Instagram", () => {
+  it("guarda legenda e link do card", () => {
+    const [card] = getAttachments({
+      ...base,
+      message_type: "template",
+      metadata: { attachments: [{ kind: "image", url: `${ST}/image/c/m4.jpg`, title: "Conteúdo compartilhado", caption: "Kit 5 potes", link: "https://budamix.com.br/produto/kit" }] },
+    });
+    expect(card).toMatchObject({ kind: "image", title: "Conteúdo compartilhado", note: "Kit 5 potes", link: "https://budamix.com.br/produto/kit", missing: false });
+  });
+});

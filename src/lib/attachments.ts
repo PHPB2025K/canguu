@@ -33,6 +33,8 @@ export interface Attachment {
   filename: string | null;
   size: number | null;
   title: string | null;
+  /** Texto que veio com o conteúdo compartilhado (legenda do reels, nome do produto no card) */
+  note: string | null;
   link: string | null;
   animated: boolean;
   location: LocationInfo | null;
@@ -121,7 +123,7 @@ function parseContacts(v: unknown): ContactInfo[] {
 }
 
 function blank(kind: AttachmentKind): Attachment {
-  return { kind, url: null, mime: null, filename: null, size: null, title: null, link: null, animated: false, location: null, contacts: [], missing: false, reason: null };
+  return { kind, url: null, mime: null, filename: null, size: null, title: null, note: null, link: null, animated: false, location: null, contacts: [], missing: false, reason: null };
 }
 
 // `upload_error` gravado pelo webhook -> motivo que a equipe entende
@@ -163,6 +165,7 @@ export function getAttachments(message: Pick<Message, "metadata" | "message_type
         filename: str(r.filename),
         size: num(r.size),
         title: str(r.title),
+        note: str(r.caption),
         link: str(r.link),
         animated: r.animated === true,
         missing: !url && !(kind === "link" && str(r.link)),
