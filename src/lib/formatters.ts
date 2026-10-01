@@ -67,15 +67,33 @@ const MEDIA_PREVIEW_LABEL: Record<string, string> = {
   audio: "🎤 Áudio",
   video: "🎬 Vídeo",
   document: "📄 Documento",
+  file: "📄 Arquivo",
   sticker: "💟 Figurinha",
+  location: "📍 Localização",
+  contacts: "👤 Contato",
+  unsupported: "Mensagem que o WhatsApp não repassa",
+  share: "🔗 Publicação compartilhada",
+  ig_post: "🔗 Publicação compartilhada",
+  story_mention: "📣 Mencionou a Budamix no story",
+  story_reply: "💬 Respondeu a um story",
+  ig_reel: "🎬 Reels compartilhado",
+  reel: "🎬 Reels compartilhado",
+  template: "🔗 Conteúdo compartilhado",
+  fallback: "🔗 Link compartilhado",
 };
 
 export function lastMessagePreview(
-  msg: { content: string; message_type?: string | null } | null | undefined,
+  msg: { content: string; message_type?: string | null; sender?: string | null } | null | undefined,
   maxLength = 60
 ): string {
   if (!msg) return "Sem mensagens";
-  const label = msg.message_type ? MEDIA_PREVIEW_LABEL[msg.message_type] : null;
+  const type = msg.message_type ?? "";
+  if (type === "reaction") {
+    const emoji = /^\[reaction:\s*([^\]\s]+)/i.exec(msg.content ?? "")?.[1];
+    return emoji ? `Reagiu com ${emoji}` : "Reagiu a uma mensagem";
+  }
+  // "template" do lado da Ana é o modelo de mensagem do WhatsApp: mostra o texto
+  const label = type && !(type === "template" && msg.sender && msg.sender !== "customer") ? MEDIA_PREVIEW_LABEL[type] : null;
   return label ?? truncateText(msg.content, maxLength);
 }
 

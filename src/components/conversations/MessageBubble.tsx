@@ -1,9 +1,37 @@
 import { useState } from "react";
-import { User, Bot, UserCheck, Mic, Image, FileText, Video, Play, MoreVertical, Languages } from "lucide-react";
+import {
+  User,
+  Bot,
+  UserCheck,
+  Mic,
+  Image,
+  FileText,
+  Video,
+  Play,
+  MoreVertical,
+  Languages,
+  MapPin,
+  UserRound,
+  Link2,
+  Maximize2,
+  Info,
+  Sticker,
+} from "lucide-react";
 import { format } from "date-fns";
 import type { Message } from "@/types/database";
 import { cn } from "@/lib/utils";
 import { MediaLightbox } from "./MediaLightbox";
+import {
+  type Attachment,
+  type Notice,
+  getAttachments,
+  getNotice,
+  customerCaption,
+  viewerMode,
+  displayFilename,
+  fileTypeLabel,
+  formatBytes,
+} from "@/lib/attachments";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,33 +67,18 @@ const senderConfig: Record<string, { label: string; icon: typeof User; bubbleCla
   },
 };
 
-// `content` é o texto que a IA (Ana) lê nos bastidores — pra imagem ele carrega
-// a descrição automática do Gemini ("[Foto enviada pelo cliente] ..."), pra áudio
-// a transcrição do Groq. Na tela do Canggu quem olha é uma PESSOA: ela vê a mídia
-// com os próprios olhos, então NUNCA mostramos a descrição/transcrição da IA por
-// padrão — só a legenda REAL que o cliente digitou (se houver).
-//
-// Descrição automática da imagem (Gemini) — corta do marcador até o fim do texto:
-const AI_IMAGE_DESC_RE = /\[(Foto|Imagem) enviada pelo cliente\][\s\S]*$/i;
-// Placeholder de foto sem legenda:
-const FOTO_RECEBIDA_RE = /^\[Foto recebida\]\s*/i;
+// `content` é o texto que a IA (Ana) lê nos bastidores: pra imagem e vídeo ele
+// carrega a descrição automática do Gemini, pra áudio a transcrição do Groq, pra
+// documento/figurinha uma instrução interna. Na tela do Canggu quem olha é uma
+// PESSOA: ela vê o arquivo com os próprios olhos, então NUNCA mostramos o texto
+// da IA por padrão, só a legenda REAL que o cliente digitou (customerCaption).
+
 // Conteúdo de áudio que é só placeholder (sem transcrição de fato):
 const AUDIO_PLACEHOLDER_RE = /^\[[ÁA]udio recebido[^\]]*\]$/i;
-// Strip the leading '[Imagem recebida]' / '[Vídeo recebido]' marker so the
-// caption from the customer (if any) shows below the media without the prefix.
-const MEDIA_PLACEHOLDER_RE = /^\[(Imagem recebida|V[ií]deo recebido|Sticker recebido|Documento recebido|\u00c1udio recebido[^\]]*)\]\s*/i;
-
-function extractCaption(content: string): string {
-  return content
-    .replace(AI_IMAGE_DESC_RE, "")
-    .replace(MEDIA_PLACEHOLDER_RE, "")
-    .replace(FOTO_RECEBIDA_RE, "")
-    .trim();
-}
 
 // Transcrição do áudio para o botão opcional "Transcrever". Prioriza um campo
 // explícito em metadata (caso o backend venha a salvar) e cai pro `content`
-// (formato atual). Retorna null quando é só placeholder — aí nem oferecemos.
+// (formato atual). Retorna null quando é só placeholder: aí nem oferecemos.
 function getAudioTranscription(message: Message): string | null {
   const meta =
     message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
@@ -100,49 +113,278 @@ function AudioTranscribeMenu({ open, onToggle }: { open: boolean; onToggle: () =
   );
 }
 
-function getMediaUrls(metadata: Message["metadata"]): { imageUrl: string | null; videoUrl: string | null; audioUrl: string | null } {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return { imageUrl: null, videoUrl: null, audioUrl: null };
-  }
-  const meta = metadata as Record<string, unknown>;
-  const imageUrl = typeof meta.image_url === "string" ? meta.image_url : null;
-  const videoUrl = typeof meta.video_url === "string" ? meta.video_url : null;
-  const audioUrl = typeof meta.audio_url === "string" ? meta.audio_url : null;
-  return { imageUrl, videoUrl, audioUrl };
+const cardButton =
+  "flex w-full items-center gap-3 rounded-lg border border-border bg-background/70 px-3 py-2.5 text-left transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary";
+
+// Mídia que o cliente mandou mas não ficou guardada (mensagem antiga ou download que falhou)
+const MISSING_LABEL: Record<Attachment["kind"], { icon: typeof User; text: string }> = {
+  image: { icon: Image, text: "Foto recebida (arquivo não disponível)" },
+  sticker: { icon: Sticker, text: "Figurinha recebida (arquivo não disponível)" },
+  video: { icon: Video, text: "Vídeo recebido (arquivo não disponível)" },
+  audio: { icon: Mic, text: "Mensagem de áudio" },
+  document: { icon: FileText, text: "Documento recebido (arquivo não disponível)" },
+  location: { icon: MapPin, text: "Localização recebida (sem detalhes)" },
+  contact: { icon: UserRound, text: "Contato recebido (sem detalhes)" },
+  link: { icon: Link2, text: "Conteúdo compartilhado (não ficou guardado)" },
+};
+
+function MissingAttachment({ att }: { att: Attachment }) {
+  const { icon: Icon, text } = MISSING_LABEL[att.kind];
+  const label = att.kind === "document" && att.filename ? `${att.filename} (arquivo não disponível)` : att.kind === "link" && att.title ? `${att.title} (não ficou guardado)` : text;
+  return (
+    <div className="space-y-0.5">
+      <div className="flex items-center gap-2 text-sm italic text-foreground">
+        <Icon className="h-4 w-4 shrink-0" />
+        {label}
+      </div>
+      {att.kind !== "audio" && att.kind !== "location" && att.kind !== "contact" && (
+        <p className="text-xs text-muted-foreground">
+          {att.reason === "too_big"
+            ? "Maior que 25 MB, o painel não guarda. Peça para o cliente mandar por e-mail ou em partes."
+            : att.reason === "type_not_kept"
+              ? "Tipo de arquivo que o painel ainda não guarda. Peça para o cliente reenviar em PDF ou foto."
+              : "Se precisar ver, peça para o cliente reenviar."}
+        </p>
+      )}
+    </div>
+  );
 }
 
-function getNonRenderableTypeLabel(type: string | null) {
-  if (type === "document") return { icon: FileText, text: "Documento enviado" };
-  return null;
+function AttachmentTitle({ att }: { att: Attachment }) {
+  if (!att.title) return null;
+  return <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{att.title}</p>;
+}
+
+function AttachmentPreview({
+  att,
+  onOpen,
+  transcription,
+}: {
+  att: Attachment;
+  onOpen: () => void;
+  transcription: string | null;
+}) {
+  const [showTranscript, setShowTranscript] = useState(false);
+
+  if (att.missing || (!att.url && att.kind !== "location" && att.kind !== "contact" && !(att.kind === "link" && att.link))) {
+    if (att.kind === "audio") {
+      // Sem arquivo de áudio: rótulo + transcrição opcional sob demanda
+      return (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm italic text-foreground">
+              <Mic className="h-4 w-4" />
+              Mensagem de áudio
+            </div>
+            {transcription && <AudioTranscribeMenu open={showTranscript} onToggle={() => setShowTranscript((v) => !v)} />}
+          </div>
+          {showTranscript && transcription && (
+            <p className="whitespace-pre-wrap break-words border-t border-border/50 pt-1.5 text-xs italic text-muted-foreground">{transcription}</p>
+          )}
+        </div>
+      );
+    }
+    return <MissingAttachment att={att} />;
+  }
+
+  const mode = viewerMode(att);
+
+  if (att.kind === "sticker") {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="block rounded-lg ring-offset-background transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+        aria-label="Abrir figurinha"
+      >
+        <img src={att.url ?? ""} alt="Figurinha" loading="lazy" className="h-32 w-32 cursor-zoom-in object-contain transition hover:opacity-90" />
+      </button>
+    );
+  }
+
+  if (mode === "image" && att.kind !== "document") {
+    return (
+      <div className="space-y-1">
+        <AttachmentTitle att={att} />
+        <button
+          type="button"
+          onClick={onOpen}
+          className="block w-full overflow-hidden rounded-lg ring-offset-background transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          aria-label="Abrir imagem em tamanho grande"
+        >
+          <img
+            src={att.url ?? ""}
+            alt="Imagem enviada pelo cliente"
+            loading="lazy"
+            className="max-h-72 w-full cursor-zoom-in object-cover transition hover:opacity-90"
+          />
+        </button>
+      </div>
+    );
+  }
+
+  if (mode === "video" && att.kind !== "document") {
+    return (
+      <div className="space-y-1">
+        <AttachmentTitle att={att} />
+        <button
+          type="button"
+          onClick={onOpen}
+          className="group relative block w-full overflow-hidden rounded-lg bg-black ring-offset-background transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          aria-label="Abrir vídeo em tamanho grande"
+        >
+          <video src={att.url ?? ""} preload="metadata" muted playsInline className="max-h-80 w-full" />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 transition group-hover:bg-black/30">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-lg transition group-hover:scale-105">
+              <Play className="h-6 w-6 fill-foreground text-foreground" />
+            </div>
+          </div>
+        </button>
+      </div>
+    );
+  }
+
+  if (att.kind === "audio") {
+    return (
+      <div className="space-y-1.5">
+        {/* Player na própria bolha (dá play e ouve) + botão que abre a janela flutuante */}
+        <div className="flex items-center gap-1">
+          {/* largura fixa: com w-full a bolha (que encolhe até o conteúdo) zerava o player */}
+          <audio src={att.url ?? ""} controls preload="metadata" className="block h-10 w-[260px] max-w-full" />
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label="Abrir áudio em janela"
+            title="Abrir em janela"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+          {transcription && <AudioTranscribeMenu open={showTranscript} onToggle={() => setShowTranscript((v) => !v)} />}
+        </div>
+        {/* Transcrição opcional: só quando a pessoa pede em "Transcrever" */}
+        {showTranscript && transcription && (
+          <p className="whitespace-pre-wrap break-words border-t border-border/50 pt-1.5 text-xs italic text-muted-foreground">
+            <Mic className="mr-1 inline-block h-3 w-3" />
+            {transcription}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (att.kind === "location" && att.location) {
+    const loc = att.location;
+    const coords = loc.latitude != null && loc.longitude != null ? `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}` : null;
+    return (
+      <button type="button" onClick={onOpen} className={cardButton} aria-label="Abrir localização no mapa">
+        <MapPin className="h-5 w-5 shrink-0 text-primary" />
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-foreground">{loc.name || "Localização"}</span>
+          <span className="block truncate text-xs text-muted-foreground">{loc.address || coords || "Ver no mapa"}</span>
+        </span>
+      </button>
+    );
+  }
+
+  if (att.kind === "contact" && att.contacts.length) {
+    const first = att.contacts[0];
+    const extra = att.contacts.length > 1 ? ` + ${att.contacts.length - 1}` : "";
+    return (
+      <button type="button" onClick={onOpen} className={cardButton} aria-label="Abrir contato">
+        <UserRound className="h-5 w-5 shrink-0 text-primary" />
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-foreground">
+            {first.name}
+            {extra}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">{first.phones[0] || first.emails[0] || "Contato"}</span>
+        </span>
+      </button>
+    );
+  }
+
+  if (att.kind === "link") {
+    return (
+      <button type="button" onClick={onOpen} className={cardButton} aria-label="Abrir conteúdo compartilhado">
+        <Link2 className="h-5 w-5 shrink-0 text-primary" />
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-foreground">{att.title || "Link compartilhado"}</span>
+          <span className="block truncate text-xs text-muted-foreground">{att.link}</span>
+        </span>
+      </button>
+    );
+  }
+
+  // Documento (PDF, planilha, texto, etc.) ou qualquer outro arquivo
+  const details = [fileTypeLabel(att), formatBytes(att.size)].filter(Boolean).join(" · ");
+  return (
+    <button type="button" onClick={onOpen} className={cardButton} aria-label={`Abrir ${displayFilename(att)}`}>
+      <FileText className="h-8 w-8 shrink-0 text-primary" />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium text-foreground">{displayFilename(att)}</span>
+        <span className="block truncate text-xs text-muted-foreground">{details}</span>
+      </span>
+    </button>
+  );
+}
+
+function NoticeView({ notice }: { notice: Notice }) {
+  if (notice.kind === "reaction") {
+    return (
+      <p className="text-sm text-foreground">
+        {notice.emoji ? (
+          <>
+            Reagiu com <span className="text-lg leading-none">{notice.emoji}</span> a uma mensagem
+          </>
+        ) : (
+          "Reagiu a uma mensagem"
+        )}
+      </p>
+    );
+  }
+  return (
+    <div className="flex items-start gap-2">
+      <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="space-y-0.5">
+        <p className="text-sm font-medium text-foreground">Mensagem que o WhatsApp não repassa ao painel</p>
+        <p className="text-xs text-muted-foreground">
+          {notice.label
+            ? `Tipo: ${notice.label}. `
+            : "Costuma ser enquete, foto de visualização única, evento ou mensagem editada. "}
+          Se for importante, peça para o cliente reenviar em texto ou foto.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const config = senderConfig[message.sender] ?? senderConfig.customer;
   const isCustomer = message.sender === "customer";
   const Icon = config.icon;
-  const { imageUrl, videoUrl, audioUrl } = getMediaUrls(message.metadata);
   const time = message.created_at ? format(new Date(message.created_at), "HH:mm") : "";
 
-  // Inline media renderable in the admin
-  const isImage = message.message_type === "image";
-  const isVideo = message.message_type === "video";
-  const isAudio = message.message_type === "audio";
-  const caption = isImage || isVideo ? extractCaption(message.content) : "";
-  // Transcrição fica ESCONDIDA por padrão; só aparece se a pessoa clicar em "Transcrever".
+  const attachments = getAttachments(message);
+  const notice = getNotice(message);
+  const hasAttachments = attachments.length > 0;
+  const isAudio = attachments.some((a) => a.kind === "audio");
+  // Áudio não tem legenda: o `content` dele é a transcrição (escondida por padrão)
+  const caption = hasAttachments && !isAudio ? customerCaption(message) : "";
   const audioTranscription = isAudio ? getAudioTranscription(message) : null;
 
-  // Lightbox open state — single bubble can host either an image or a video.
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const openMedia = () => setLightboxOpen(true);
-  // Transcrição do áudio (opcional, sob demanda)
-  const [showTranscript, setShowTranscript] = useState(false);
-
-  // Document still uses the legacy text label (no inline player)
-  const fallbackLabel = !isImage && !isVideo && !isAudio ? getNonRenderableTypeLabel(message.message_type) : null;
+  // Janela flutuante: guarda QUAL anexo está aberto (uma bolha pode ter vários no Instagram).
+  // O anexo continua guardado depois de fechar, para a animação de saída rodar inteira.
+  const [viewing, setViewing] = useState<Attachment | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const openViewer = (att: Attachment) => {
+    setViewing(att);
+    setViewerOpen(true);
+  };
 
   // Split agent messages by \\ marker into chunks
   const isAgent = message.sender === "agent";
-  const chunks = isAgent && !fallbackLabel && !isImage && !isVideo && !isAudio && message.content.includes("\\\\")
+  const chunks = isAgent && !hasAttachments && !notice && message.content.includes("\\\\")
     ? message.content.split("\\\\").map((c) => c.trim()).filter(Boolean)
     : null;
 
@@ -178,131 +420,31 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     );
   }
 
-  const lightbox = (isImage && imageUrl) || (isVideo && videoUrl) ? (
-    <MediaLightbox
-      open={lightboxOpen}
-      onOpenChange={setLightboxOpen}
-      kind={isImage ? "image" : "video"}
-      url={isImage ? imageUrl : videoUrl}
-      caption={caption || null}
-      senderLabel={config.label}
-    />
-  ) : null;
-
   return (
     <div className={cn("flex", isCustomer ? "justify-start" : "justify-end")}>
-      {lightbox}
+      <MediaLightbox
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        attachment={viewing}
+        caption={caption || null}
+        senderLabel={config.label}
+        transcription={audioTranscription}
+      />
       <div className={cn("max-w-[75%] p-3", config.bubbleClass)}>
         <div className="flex items-center gap-1.5 mb-1">
           <Icon className={cn("h-3.5 w-3.5", config.labelClass)} />
           <span className={cn("text-xs font-medium", config.labelClass)}>{config.label}</span>
         </div>
 
-        {isImage && imageUrl ? (
+        {hasAttachments ? (
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={openMedia}
-              className="block w-full overflow-hidden rounded-lg ring-offset-background transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              aria-label="Abrir imagem em tamanho grande"
-            >
-              <img
-                src={imageUrl}
-                alt={caption || "Imagem enviada pelo cliente"}
-                loading="lazy"
-                className="max-h-72 w-full cursor-zoom-in object-cover transition hover:opacity-90"
-              />
-            </button>
-            {caption && (
-              <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caption}</p>
-            )}
+            {attachments.map((att, i) => (
+              <AttachmentPreview key={(att.url ?? att.kind) + i} att={att} onOpen={() => openViewer(att)} transcription={audioTranscription} />
+            ))}
+            {caption && <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caption}</p>}
           </div>
-        ) : isImage ? (
-          <div className="flex items-center gap-2 text-sm text-foreground italic">
-            <Image className="h-4 w-4" />
-            Imagem enviada (indisponível)
-          </div>
-        ) : isVideo && videoUrl ? (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={openMedia}
-              className="group relative block w-full overflow-hidden rounded-lg bg-black ring-offset-background transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              aria-label="Abrir vídeo em tamanho grande"
-            >
-              <video
-                src={videoUrl}
-                preload="metadata"
-                muted
-                playsInline
-                className="max-h-80 w-full"
-              />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 transition group-hover:bg-black/30">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-lg transition group-hover:scale-105">
-                  <Play className="h-6 w-6 fill-foreground text-foreground" />
-                </div>
-              </div>
-            </button>
-            {caption && (
-              <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caption}</p>
-            )}
-          </div>
-        ) : isVideo ? (
-          <div className="flex items-center gap-2 text-sm text-foreground italic">
-            <Video className="h-4 w-4" />
-            Vídeo enviado (indisponível)
-          </div>
-        ) : isAudio && audioUrl ? (
-          <div className="space-y-1.5">
-            {/* Player só — a pessoa dá play e ouve. Sem transcrição na cara. */}
-            <div className="flex items-center gap-1">
-              <audio
-                src={audioUrl}
-                controls
-                preload="metadata"
-                className="block w-full max-w-[280px]"
-              />
-              {audioTranscription && (
-                <AudioTranscribeMenu
-                  open={showTranscript}
-                  onToggle={() => setShowTranscript((v) => !v)}
-                />
-              )}
-            </div>
-            {/* Transcrição opcional — só quando a pessoa pede em "Transcrever" */}
-            {showTranscript && audioTranscription && (
-              <p className="border-t border-border/50 pt-1.5 text-xs italic text-muted-foreground whitespace-pre-wrap break-words">
-                <Mic className="mr-1 inline-block h-3 w-3" />
-                {audioTranscription}
-              </p>
-            )}
-          </div>
-        ) : isAudio ? (
-          <div className="space-y-1.5">
-            {/* Sem arquivo de áudio: rótulo + transcrição opcional sob demanda */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm text-foreground italic">
-                <Mic className="h-4 w-4" />
-                Mensagem de áudio
-              </div>
-              {audioTranscription && (
-                <AudioTranscribeMenu
-                  open={showTranscript}
-                  onToggle={() => setShowTranscript((v) => !v)}
-                />
-              )}
-            </div>
-            {showTranscript && audioTranscription && (
-              <p className="border-t border-border/50 pt-1.5 text-xs italic text-muted-foreground whitespace-pre-wrap break-words">
-                {audioTranscription}
-              </p>
-            )}
-          </div>
-        ) : fallbackLabel ? (
-          <div className="flex items-center gap-2 text-sm text-foreground italic">
-            <fallbackLabel.icon className="h-4 w-4" />
-            {fallbackLabel.text}
-          </div>
+        ) : notice ? (
+          <NoticeView notice={notice} />
         ) : (
           <p className="text-sm text-foreground whitespace-pre-wrap break-words">{message.content}</p>
         )}
