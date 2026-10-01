@@ -10,6 +10,19 @@
 // GOVERNANCA: por padrao as correcoes vao para FILA DE REVISAO (status 'auto_review'),
 // NAO entram ativas sozinhas. Ligue auto-aplicacao com agent_config.learning_auto_apply='true'.
 //
+// JUIZ v26 (01/10/2026, pedido do Pedro: "ensinar o juiz a ler a conversa inteira" e
+// "rodar em Opus 5.5 high"):
+//   - chat: o juiz recebe a CONVERSA (ate 16 mensagens antes da resposta, com hora e
+//     autor), a origem do cliente, a reacao seguinte do cliente e o MANUAL da Ana.
+//     Antes via so a ultima mensagem do cliente: 70% das licoes saiam erradas
+//     (perguntavam o que o cliente ja tinha dito).
+//   - marketplace: recebe a FICHA do produto vinculado ao anuncio.
+//   - modelo FIXO claude-opus-5-5, esforco high, sem temperature (Claude 4.7+ recusa);
+//     reserva claude-opus-4-6. Em 01/10 as 06h a rodada inteira falhou por temperature.
+//   - licao so quando reutilizavel: sem nome, pedido, e-mail ou telefone do cliente, e
+//     so quando a mensagem do cliente faz sentido sozinha (nada de "ok", "Caneca", foto).
+//   - ?dry=1&limit=N julga sem gravar nada e devolve o que gravaria.
+//
 // CARTILHA UNICA (03/07/2026): as regras de escrita da correcao vem de
 // _shared/marketplace-rules.ts — as MESMAS regras do prompt de geracao e do
 // validador. Toda correcao passa pelo GATE (validateCorrectionText + detectores
@@ -50,9 +63,11 @@ const CATALOGO = `
 VERDADE DO CATALOGO (use para julgar precisao):
 - Potes de vidro hermetico BOROSSILICATO (Redondo; Retangular 640/1050/1520ml; Quadrado 320/520/800ml; kits Fit): micro-ondas SIM sem tampa; freezer SIM; lava-loucas SIM (potes; tampas a mao); forno: so o Quadrado 520ml (sem tampa), demais NAO; air fryer NAO (vedacao de silicone + choque termico).
 - Porcelana (Caneca Tulipa 250ml, Canelada 250ml, Xicara 170ml, Caneca Reta 200ml): micro-ondas SIM; lava-loucas SIM.
-- Canequinha 100ml com suporte: as canequinhas sao de PORCELANA (NAO aluminio); suporte de madeira (pano seco).
-- Kits coloridos: cores SORTIDAS conforme estoque; nao da pra escolher cor; alternativa = peca avulsa por nome.
-- Dimensoes/peso individuais geralmente NAO existem no cadastro -> dar aproximado com ressalva, NUNCA inventar.`
+- Canecas so em KIT: kit colorido (6 cores sortidas) ou kit de COR UNICA (as 6 na mesma cor) nas linhas Canelada 250ml, Tulipa Lisa 250ml e Reta Lisa 200ml; cores amarela, azul, branca, preta, rosa e verde (vermelho nao existe na porcelana). SEMPRE da para escolher a cor pelo kit de cor unica.
+- Canequinhas 100ml com suporte de madeira: ALUMINIO esmaltado (metal), NAO porcelana. NAO vao ao micro-ondas. Lavar a mao; suporte so com pano seco.
+- VENDA AVULSA NAO EXISTE: nem tampa, nem caneca, canequinha ou quebra-cabeca avulso. Reprove resposta que mande comprar "avulso".
+- Jogos da memoria e quebra-cabecas em MDF: kits de composicao fixa; nao da para escolher os desenhos.
+- Medidas: use a FICHA DO PRODUTO quando vier no item; sem ficha, aproximado com ressalva; NUNCA inventar.`
 
 const COMUM = `Quando reprovar, escreva resposta_correta com a info certa (oferecendo alternativa Budamix por NOME quando faltar a variacao) e uma licao curta generalizavel (o tipo de pergunta + a regra).
 ${CATALOGO}`
@@ -77,12 +92,19 @@ const RUBRICA_CHAT = `Voce e auditor do atendimento da "Ana" (Budamix) em CHAT (
 - Cliente pediu humano e a Ana tentou reter em vez de escalar.
 - Tom robotico/telemarketing ("prezado", "informo que", "estou a disposicao") ou frio com cliente frustrado.
 - Empurrar venda sem o cliente pedir, ou ignorar a pergunta.
+- Pedir de novo algo que o cliente JA informou na conversa (canal da compra, numero do pedido, foto) ou responder como se nao tivesse lido o que veio antes.
+- Prometer retorno que a Ana nao tem como cumprir ("vou verificar e ja te retorno", "so um momento") ou escrever nota interna para o cliente.
+
+JULGUE NO CONTEXTO: voce recebe a CONVERSA ate a resposta. Uma resposta curta pode estar certa porque o contexto ja estava claro; uma pergunta pode estar errada porque o cliente ja tinha respondido.
+POLITICA DE POS-VENDA (decisao do Pedro, nao reprove por segui-la): compra em MARKETPLACE (Mercado Livre, Shopee, Amazon) com produto quebrado/errado/faltando -> a Ana acolhe e orienta o AUTOATENDIMENTO no app da compra; isso e o CERTO. Compra no SITE -> pedir numero do pedido + e-mail da compra, consultar e escalar se precisar. Ferimento -> acolher e escalar.
+LICAO REUTILIZAVEL: resposta_correta vira MODELO para outros clientes. Proibido nome, numero de pedido, e-mail, telefone ou detalhe so deste caso. Se a falha so faz sentido neste caso, use "generalizavel": false (sem licao).
 ${COMUM}
 
 ${REGRAS_CORRECAO_CHAT}`
 
 const SCHEMA_HINT = `Responda SOMENTE um JSON valido:
-{"veredito":"adequada"|"inadequada","confianca":0.0-1.0,"motivo":"...","resposta_correta":"...","licao":"...","escopo":"todos"|"so_marketplace"|"so_conversa"|"so_este_canal","categoria":"<tema curto: entrega|troca|compatibilidade|material|cor|pagamento|tom|outro>"}
+{"veredito":"adequada"|"inadequada","confianca":0.0-1.0,"motivo":"...","resposta_correta":"...","licao":"...","generalizavel":true|false,"escopo":"todos"|"so_marketplace"|"so_conversa"|"so_este_canal","categoria":"<tema curto: entrega|troca|compatibilidade|material|cor|pagamento|tom|outro>"}
+generalizavel: true SO se a resposta_correta serve, sem mudar nada, para OUTRO cliente que mande a mesma mensagem.
 Se adequada: resposta_correta/licao podem ser "".
 escopo: "todos" = vale em qualquer canal (politica, prazo de entrega, fato de produto); "so_marketplace" = so faz sentido em anuncio publico; "so_conversa" = so em chat (WhatsApp/Instagram Direct); "so_este_canal" = especifico do canal avaliado.
 ATENCAO: resposta_correta e aprendizado reutilizavel e deve ficar SEM emoji em qualquer escopo. Escopo "todos" exige texto que sirva TAMBEM em marketplace (max 350 caracteres).`
@@ -121,6 +143,110 @@ function correctionViolations(rec: string, scope: string[]): string[] {
   return v
 }
 
+// ── Modelo do juiz: FIXO no Opus 5.5 com esforco high (pedido do Pedro, 01/10/2026) ──
+const JUIZ_MODELO = 'claude-opus-5-5'
+const JUIZ_ESFORCO = 'high'
+const JUIZ_RESERVA = 'claude-opus-4-6'
+async function chamarJuiz(system: string, userMsg: string): Promise<{ texto: string; modelo: string }> {
+  for (const modelo of [JUIZ_MODELO, JUIZ_RESERVA]) {
+    const body: Record<string, unknown> = {
+      model: modelo,
+      max_tokens: 1200,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: userMsg }],
+    }
+    if (/claude-(opus-4-[7-9]|opus-[5-9]|sonnet-[5-9]|fable)/i.test(modelo)) {
+      body.max_tokens = 12000 // raciocinio + JSON cabem no teto
+      body.output_config = { effort: JUIZ_ESFORCO }
+    } else {
+      body.temperature = 0
+    }
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || (j as any).error) { console.log('juiz err ' + modelo, JSON.stringify((j as any).error || j).slice(0, 240)); continue }
+      const bloco = Array.isArray((j as any).content) ? (j as any).content.find((c: any) => c?.type === 'text' && c.text) : null
+      if (bloco?.text) return { texto: bloco.text, modelo }
+    } catch (e) { console.log('juiz exc ' + modelo, String(e)) }
+  }
+  return { texto: '', modelo: '' }
+}
+
+let MANUAL_CACHE: string | null = null
+async function manualDaAna(): Promise<string> {
+  if (MANUAL_CACHE !== null) return MANUAL_CACHE
+  const { data } = await supabase.from('agent_config').select('config_value').eq('config_key', 'system_prompt').limit(1)
+  MANUAL_CACHE = String(data?.[0]?.config_value ?? '')
+  return MANUAL_CACHE
+}
+
+// Licao e MODELO para outros clientes: nada de dado deste caso.
+function dadosDoCaso(t: string, nomeCliente: string | null): string[] {
+  const v: string[] = []
+  if (/[\w.+-]+@[\w-]+\.\w{2,}/.test(t)) v.push('e-mail de cliente')
+  if (/\(?\b\d{2}\)?\s?9\d{4}-?\d{4}\b/.test(t)) v.push('telefone de cliente')
+  if (/#?\b[0-9A-F]{8}\b/i.test(t) && /[0-9]/.test(t.match(/#?\b[0-9A-F]{8}\b/i)?.[0] || '') && /[A-F]/i.test(t.match(/#?\b[0-9A-F]{8}\b/i)?.[0] || '')) v.push('numero de pedido do site')
+  if (/\b\d{16}\b|\b\d{6}[A-Z0-9]{8}\b|\b\d{3}-\d{7}-\d{7}\b/i.test(t)) v.push('numero de pedido de marketplace')
+  const primeiro = String(nomeCliente || '').trim().split(/\s+/)[0] || ''
+  if (primeiro.length >= 3 && /^[\p{L}]+$/u.test(primeiro) && new RegExp('\\b' + primeiro + '\\b', 'i').test(t)) v.push('nome do cliente')
+  return v
+}
+// A licao e encontrada pela MENSAGEM DO CLIENTE. Mensagem que so faz sentido no
+// contexto ("ok", "Caneca", "[Foto recebida]", clique no menu) traria a licao para
+// conversas que nao tem nada a ver.
+function perguntaAutoexplicativa(t: string): boolean {
+  const limpo = String(t || '')
+    .replace(/\[Cliente selecionou canal:[^\]]*\]/gi, ' ')
+    .replace(/\[(?:unsupported|reaction|interactive|Foto recebida|Audio recebido|Video recebido)[^\]]*\]/gi, ' ')
+    .replace(/\s+/g, ' ').trim()
+  if (limpo.length < 15) return false
+  return limpo.split(' ').length >= 3
+}
+function horaBr(iso: string): string {
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+async function contextoConversa(convId: string, ateIso: string, msgId: string): Promise<{ texto: string; nome: string | null; origem: string | null; reacao: string | null }> {
+  const { data: antes } = await supabase.from('messages')
+    .select('id, sender, content, created_at').eq('conversation_id', convId)
+    .lte('created_at', ateIso).order('created_at', { ascending: false }).limit(17)
+  const linhas = (antes ?? []).filter((x: any) => x.id !== msgId).reverse().slice(-16).map((x: any) => {
+    const quem = x.sender === 'customer' ? 'CLIENTE' : x.sender === 'agent' ? 'ANA' : 'EQUIPE'
+    return `[${horaBr(x.created_at)}] ${quem}: ${String(x.content || '').replace(/\s+/g, ' ').slice(0, 600)}`
+  })
+  const { data: depois } = await supabase.from('messages')
+    .select('content').eq('conversation_id', convId).eq('sender', 'customer')
+    .gt('created_at', ateIso).order('created_at', { ascending: true }).limit(1)
+  const { data: conv } = await supabase.from('conversations').select('customer_id').eq('id', convId).limit(1)
+  let nome: string | null = null, origem: string | null = null
+  if (conv?.[0]?.customer_id) {
+    const { data: cu } = await supabase.from('customers').select('name, source').eq('id', conv[0].customer_id).limit(1)
+    nome = cu?.[0]?.name ?? null
+    origem = cu?.[0]?.source ?? null
+  }
+  return { texto: linhas.join('\n'), nome, origem, reacao: depois?.[0]?.content ? String(depois[0].content).slice(0, 300) : null }
+}
+async function fichaProduto(itemId: string | null): Promise<string> {
+  if (!itemId) return ''
+  let pid: string | null = null
+  const { data: l } = await supabase.from('product_listings').select('product_id').eq('platform_item_id', itemId).limit(1)
+  pid = l?.[0]?.product_id ?? null
+  if (!pid) {
+    const { data: m } = await supabase.from('marketplace_product_mapping').select('product_id').eq('external_item_id', itemId).limit(1)
+    pid = m?.[0]?.product_id ?? null
+  }
+  if (!pid) return ''
+  const { data: p } = await supabase.from('products').select('name, sku, material, dimensions, short_description, stock_status').eq('id', pid).limit(1)
+  const x: any = p?.[0]
+  if (!x) return ''
+  const dim = typeof x.dimensions === 'object' && x.dimensions ? (x.dimensions.raw ?? JSON.stringify(x.dimensions)) : (x.dimensions ?? '')
+  return `FICHA DO PRODUTO VINCULADO (verdade): ${x.name} (SKU ${x.sku}) | material: ${x.material ?? '?'} | medidas: ${dim || '?'} | estoque: ${x.stock_status ?? '?'} | ${String(x.short_description ?? '').replace(/\s+/g, ' ').slice(0, 300)}`
+}
+
 serve(async (req) => {
   const cors = handleCors(req); if (cors) return cors
   const started = Date.now()
@@ -137,9 +263,14 @@ serve(async (req) => {
     const chain = Math.max(0, Number(url.searchParams.get('chain')) || 0)
     const sum = { evaluated: 0, good: 0, bad: 0, auto_applied: 0, queued: 0, deduped: 0, rejected: 0, leftover: 0, chain, chained: false, errors: [] as string[] }
 
+    const dry = url.searchParams.get('dry') === '1'
+    const detalhes: any[] = []
+    let modeloUsado = ''
     async function runJudge(rubrica: string, userMsg: string) {
-      const resp = await callAnthropic({ model: cfg.model, systemPrompt: rubrica, messages: [{ role: 'user', content: userMsg }], maxTokens: 600, temperature: 0 })
-      return parseJudge(extractText(resp))
+      const r = await chamarJuiz(rubrica, userMsg)
+      if (r.modelo && !modeloUsado) modeloUsado = r.modelo
+      if (r.modelo && r.modelo !== JUIZ_MODELO) sum.errors.push(`aviso: juiz no modelo de reserva (${r.modelo})`)
+      return r.texto ? parseJudge(r.texto) : null
     }
 
     // ══ MODO BACKFILL — revalida a BASE EXISTENTE de correcoes contra a cartilha ══
@@ -281,7 +412,10 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
       return { j, rec: '', scope, rejected: violations }
     }
 
-    async function record(question: string, aiResp: string | null, sku: string | null, recommended: string, conf: number, originChannel: string, scope: string[], category: string | null) {
+    async function record(question: string, aiResp: string | null, sku: string | null, recommended: string, conf: number, originChannel: string, scope: string[], category: string | null, nomeCliente: string | null = null) {
+      const dados = dadosDoCaso(recommended, nomeCliente)
+      if (dados.length) { sum.rejected++; sum.errors.push(`licao com dado do caso descartada (${dados.join(', ')})`); return }
+      if (dry) { detalhes.push({ gravaria: true, pergunta: question.slice(0, 200), resposta_correta: recommended, escopo: scope }); return }
       const qEmb = await generateEmbedding(question)
       const { data: dup } = await supabase.rpc('search_corrections', { query_embedding: JSON.stringify(qEmb), match_threshold: DEDUP_SIM, match_count: 1 })
       if (dup && dup.length > 0) { sum.deduped++; return }
@@ -289,7 +423,7 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
       const recEmb = await generateEmbedding(`${question}\n${recommended}`)
       const { error } = await supabase.from('response_corrections').insert({
         product_sku: sku, original_question: question, ai_response: aiResp,
-        recommended_response: recommended, corrected_by: 'daily_learning_ia',
+        recommended_response: recommended, corrected_by: `daily_learning_ia (${modeloUsado || JUIZ_MODELO} ${JUIZ_ESFORCO})`,
         status: willApply ? 'processed' : 'auto_review', embedding: JSON.stringify(recEmb),
         origin_channel: originChannel, scope, category: category || null,
       } as any)
@@ -300,25 +434,27 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
     // ── 1) MARKETPLACE (perguntas publicas) ──
     // Sem janela: itens sem carimbo (feedback null) desde o FLOOR, mais antigos
     // primeiro. O que nao couber no tempo fica pro proximo elo da cadeia.
-    const { data: mlRows } = await supabase.from('marketplace_questions')
+    const limiteDry = Math.min(Number(url.searchParams.get('limit')) || 3, 10)
+    let mlQuery: any = supabase.from('marketplace_questions')
       .select('id, platform_item_id, product_name, question_text, answer_text')
       .eq('platform', 'mercado_livre').in('answered_by', ['ai_agent', 'ai']).eq('status', 'answered')
-      .is('feedback', null)
       .or(`answered_at.gte.${BACKLOG_FLOOR},external_created_at.gte.${BACKLOG_FLOOR},created_at.gte.${BACKLOG_FLOOR}`)
-      .order('created_at', { ascending: true })
-      .limit(ML_FETCH)
+    mlQuery = dry ? mlQuery.order('created_at', { ascending: false }).limit(limiteDry) : mlQuery.is('feedback', null).order('created_at', { ascending: true }).limit(ML_FETCH)
+    const { data: mlRows } = await mlQuery
     for (const q of mlRows ?? []) {
       if (Date.now() - started > TIME_BUDGET_MS) { sum.leftover++; continue }
       try {
-        const res = await judgeAndGate(RUBRICA_ML, `ANUNCIO/PRODUTO: ${q.product_name ?? q.platform_item_id}\nPERGUNTA: """${q.question_text}"""\nRESPOSTA DA ANA: """${q.answer_text}"""\n\n${SCHEMA_HINT}`, 'mercado_livre', String(q.id))
+        const ficha = await fichaProduto(q.platform_item_id)
+        const res = await judgeAndGate(RUBRICA_ML, `ANUNCIO/PRODUTO: ${q.product_name ?? q.platform_item_id}\n${ficha || 'FICHA DO PRODUTO: nenhuma vinculada (julgue pelo titulo e pela verdade do catalogo)'}\nPERGUNTA: """${q.question_text}"""\nRESPOSTA DA ANA: """${q.answer_text}"""\n\n${SCHEMA_HINT}`, 'mercado_livre', String(q.id))
         if (!res) { sum.errors.push(`${q.id}: juiz sem JSON`); continue }
         const { j, rec, scope } = res
         sum.evaluated++
         const bad = String(j.veredito).toLowerCase().startsWith('inadequad')
-        await supabase.from('marketplace_questions').update({ feedback: bad ? 'bad' : 'good', feedback_at: new Date().toISOString() }).eq('id', q.id)
+        if (dry) detalhes.push({ tipo: 'ml', id: q.id, pergunta: String(q.question_text).slice(0, 200), veredito: j.veredito, motivo: j.motivo, generalizavel: j.generalizavel })
+        else await supabase.from('marketplace_questions').update({ feedback: bad ? 'bad' : 'good', feedback_at: new Date().toISOString() }).eq('id', q.id)
         if (!bad) { sum.good++; continue }
         sum.bad++
-        if (rec) await record(q.question_text, q.answer_text, q.platform_item_id, rec, Number(j.confianca) || 0, 'mercado_livre', scope, j.categoria)
+        if (rec && j.generalizavel !== false && perguntaAutoexplicativa(q.question_text)) await record(q.question_text, q.answer_text, q.platform_item_id, rec, Number(j.confianca) || 0, 'mercado_livre', scope, j.categoria)
       } catch (e) { sum.errors.push(`${q.id}: ${String(e)}`) }
     }
 
@@ -328,40 +464,46 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
     // decisao de atendimento — o juiz NAO avalia. Marcador robusto: sao as
     // unicas mensagens 'agent' com message_type='interactive'. O or() abaixo
     // preserva as normais (message_type NULL) — um .neq puro descartaria NULL.
-    const { data: agentMsgs } = await supabase.from('messages')
+    let chatQuery: any = supabase.from('messages')
       .select('id, conversation_id, content, created_at, metadata, conversations!inner(channel)')
       .eq('sender', 'agent').gte('created_at', BACKLOG_FLOOR)
-      .filter('metadata->>learning_reviewed', 'is', null)
       .or('message_type.is.null,message_type.neq.interactive')
-      .order('created_at', { ascending: true }).limit(CHAT_FETCH)
+    chatQuery = dry ? chatQuery.order('created_at', { ascending: false }).limit(limiteDry) : chatQuery.filter('metadata->>learning_reviewed', 'is', null).order('created_at', { ascending: true }).limit(CHAT_FETCH)
+    const { data: agentMsgs } = await chatQuery
     for (const m of agentMsgs ?? []) {
       if (Date.now() - started > TIME_BUDGET_MS) { sum.leftover++; continue }
       try {
-        // contexto: ultima mensagem do cliente antes desta resposta
+        // contexto: ultima mensagem do cliente antes desta resposta (chave da licao)
         const { data: prev } = await supabase.from('messages')
           .select('content').eq('conversation_id', m.conversation_id).eq('sender', 'customer')
           .lt('created_at', m.created_at).order('created_at', { ascending: false }).limit(1)
         const clientMsg = prev?.[0]?.content
         if (!clientMsg) { // sem pergunta de cliente clara -> marca revisado e pula
-          await supabase.from('messages').update({ metadata: { ...(m.metadata || {}), learning_reviewed: { verdict: 'skip_no_context', at: new Date().toISOString() } } } as any).eq('id', m.id)
+          if (!dry) await supabase.from('messages').update({ metadata: { ...(m.metadata || {}), learning_reviewed: { verdict: 'skip_no_context', at: new Date().toISOString() } } } as any).eq('id', m.id)
           continue
         }
         const canal = (m as any).conversations?.channel ?? 'whatsapp'
-        const res = await judgeAndGate(RUBRICA_CHAT, `CANAL: ${canal}\nMENSAGEM DO CLIENTE: """${clientMsg}"""\nRESPOSTA DA ANA: """${m.content}"""\n\n${SCHEMA_HINT}`, canal, `msg ${m.id}`)
+        // A CONVERSA inteira ate a resposta: o juiz antigo via so a ultima mensagem.
+        const ctx = await contextoConversa(m.conversation_id, m.created_at, m.id)
+        const manual = await manualDaAna()
+        const sistemaChat = RUBRICA_CHAT + (manual ? `\n\n=== MANUAL DA ANA (referencia: e o que ela recebe como instrucao; use para julgar se a resposta seguiu as regras e os fatos) ===\n${manual}` : '')
+        const res = await judgeAndGate(sistemaChat, `CANAL: ${canal}\nORIGEM DO CLIENTE (primeiro contato): ${ctx.origem || 'desconhecida'}\n\nCONVERSA ATE A RESPOSTA (mais antiga primeiro):\n${ctx.texto}\n\nRESPOSTA DA ANA SOB AVALIACAO: """${m.content}"""\n\nREACAO DO CLIENTE DEPOIS: ${ctx.reacao ? '"""' + ctx.reacao + '"""' : '(nenhuma ainda)'}\n\nA licao (se houver) sera achada pela mensagem do cliente: """${clientMsg}"""\n\n${SCHEMA_HINT}`, canal, `msg ${m.id}`)
         if (!res) { sum.errors.push(`msg ${m.id}: juiz sem JSON`); continue }
         const { j, rec, scope } = res
         sum.evaluated++
         const bad = String(j.veredito).toLowerCase().startsWith('inadequad')
-        await supabase.from('messages').update({ metadata: { ...(m.metadata || {}), learning_reviewed: { verdict: bad ? 'bad' : 'good', canal, at: new Date().toISOString() } } } as any).eq('id', m.id)
+        if (dry) detalhes.push({ tipo: 'chat', id: m.id, canal, cliente: String(clientMsg).slice(0, 160), ana: String(m.content).slice(0, 200), veredito: j.veredito, motivo: j.motivo, generalizavel: j.generalizavel })
+        else await supabase.from('messages').update({ metadata: { ...(m.metadata || {}), learning_reviewed: { verdict: bad ? 'bad' : 'good', canal, model: modeloUsado || JUIZ_MODELO, at: new Date().toISOString() } } } as any).eq('id', m.id)
         if (!bad) { sum.good++; continue }
         sum.bad++
-        if (rec) await record(clientMsg, m.content, null, rec, Number(j.confianca) || 0, canal, scope, j.categoria)
+        if (rec && j.generalizavel !== false && perguntaAutoexplicativa(clientMsg)) await record(clientMsg, m.content, null, rec, Number(j.confianca) || 0, canal, scope, j.categoria, ctx.nome)
       } catch (e) { sum.errors.push(`msg ${m.id}: ${String(e)}`) }
     }
 
     // ── CADEIA: sobrou fila (tempo estourou ou fetch veio cheio)? Dispara a
     // proxima invocacao ANTES de responder. Cada elo e um request independente
     // (se este isolate morrer no teto de wall-clock, o proximo segue sozinho).
+    if (dry) return jsonResponse({ success: true, dry: true, modelo: modeloUsado || JUIZ_MODELO, esforco: JUIZ_ESFORCO, ...sum, detalhes, duration_ms: Date.now() - started })
     const maybeMore = sum.leftover > 0 ||
       (mlRows?.length ?? 0) === ML_FETCH || (agentMsgs?.length ?? 0) === CHAT_FETCH
     if (maybeMore && chain < MAX_CHAIN) {
@@ -379,6 +521,7 @@ Responda SOMENTE JSON valido: {"resposta_correta":"...","escopo":"todos"|"so_mar
     }
 
     const elapsed = Date.now() - started
+    if (modeloUsado) sum.errors.push(`info: juiz rodou em ${modeloUsado} (${JUIZ_ESFORCO})`)
     await supabase.from('learning_runs').insert({
       channel: 'multi', window_hours: 0, evaluated: sum.evaluated, good: sum.good, bad: sum.bad,
       auto_applied: sum.auto_applied, queued: sum.queued, deduped: sum.deduped, errors: sum.errors, duration_ms: elapsed,

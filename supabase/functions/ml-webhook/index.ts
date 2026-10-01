@@ -844,7 +844,7 @@ Deno.serve(async (req) => {
         pergunta,
         "Conjunto 5 Potes de Vidro Hermeticos",
         cfg,
-        "Produto: conjunto de 5 potes de vidro borossilicato com tampa. O vidro vai ao micro-ondas (sem a tampa), ao forno e ao freezer.",
+        "Produto: conjunto de 5 potes de vidro borossilicato com tampa. O vidro vai ao micro-ondas (sem a tampa) e ao freezer; ao forno nao.",
         ""
       );
       const v = validateMLQuestionResponse(r.answer);
