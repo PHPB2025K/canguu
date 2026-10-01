@@ -1,4 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { enforceRareEmojiPolicy } from "../_shared/chat-style.ts";
+import {
+  attemptPrivateEgress,
+  canSendInstagramPrivateMessage,
+  isInstagramDirectEnabled,
+  planDirectState,
+  planInstagramWebhookWork,
+  publicCommentAcknowledgement,
+  publicCommentChannelNote,
+  publicCommentDisabledReply,
+  publicCommentPublicOnlySystemPrompt,
+} from "./instagram-direct-policy.ts";
 // ─────────────────────────────────────────────────────────────────────────────
 // INSTAGRAM-WEBHOOK — Ana atende o Direct do Instagram (@budamix.br)
 //
@@ -26,6 +38,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // Deploy SEM JWT (verify_jwt=false em config.toml + NO_JWT_FUNCTIONS): o Meta chama sem JWT
 // Supabase; a proteção é hub.verify_token (GET) + assinatura HMAC (POST), não o gateway.
 const GRAPH = "https://graph.instagram.com";
+// ─── Facebook: comentários na Página (orgânicos e de anúncio) ───
+// Não existe DM aqui — a Budamix não tem permissão de Messenger. A resposta é
+// SEMPRE pública, então ela precisa se bastar sozinha.
+const GRAPH_FB = "https://graph.facebook.com/v23.0";
+const FB_PAGE_ID = Deno.env.get("FB_PAGE_ID") || "106066888942641";
+let FB_TOKEN = null;
 const SU = Deno.env.get("SUPABASE_URL");
 const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 let IG_TOKEN = Deno.env.get("IG_PAGE_TOKEN"); // fallback inicial; loadIgToken() sobrescreve com o da tabela (renovado pelo cron)
@@ -36,6 +54,11 @@ const DEBOUNCE_MS = 8000;
 const CHUNK_SEP = "\\\\";
 const MAX_CHUNKS = 4;
 const IG_TEXT_LIMIT = 950; // Instagram corta texto em ~1000 chars; deixo folga
+// Botões (quick replies) do Direct. Limites da Meta: no máximo 13 botões e
+// título de até 20 caracteres. Título maior derruba a mensagem INTEIRA em
+// silêncio — por isso truncamos aqui em vez de confiar no modelo.
+const QR_MAX = 13;
+const QR_TITLE_MAX = 20;
 const sleep = (ms)=>new Promise((r)=>setTimeout(r, ms));
 
 function db(path, init = {}) {
@@ -71,8 +94,8 @@ async function callRpc(name, args) {
 function igPhone(igsid) {
   return "ig:" + igsid;
 }
-async function getOrCreateCustomer(igsid, name) {
-  const phone = igPhone(igsid);
+async function getOrCreateCustomer(igsid, name, prefix = "ig:") {
+  const phone = prefix + igsid;
   const r = await db("customers?phone=eq." + encodeURIComponent(phone) + "&select=id");
   const rows = await r.json();
   if (Array.isArray(rows) && rows.length) return rows[0].id;
@@ -84,11 +107,20 @@ async function getOrCreateCustomer(igsid, name) {
     body: JSON.stringify({
       phone,
       name: name || null,
-      source: "instagram",
+      source: prefix === "fb:" ? "facebook" : "instagram",
       marketplace_user_id: igsid
     })
   });
-  const cr = await c.json();
+  const bruto = await c.text();
+  let cr;
+  try { cr = JSON.parse(bruto); } catch (_e) { cr = null; }
+  // Falhar aqui em silêncio custa caro: o comentário some sem virar atendimento.
+  if (!Array.isArray(cr) || !cr[0] || !cr[0].id) {
+    // corrida: outro evento pode ter criado o mesmo cliente entre o select e o insert
+    const rr = await db("customers?phone=eq." + encodeURIComponent(phone) + "&select=id&limit=1");
+    if (rr.ok) { const rj = await rr.json(); if (Array.isArray(rj) && rj[0]) return rj[0].id; }
+    throw new Error("customers insert falhou (" + c.status + "): " + bruto.slice(0, 300));
+  }
   return cr[0].id;
 }
 async function getOrCreateConversation(customerId, channel = "instagram") {
@@ -140,6 +172,31 @@ async function getSystemPrompt() {
     if (Array.isArray(rows) && rows[0]?.config_value) return rows[0].config_value;
   } catch (_e) {}
   return "Voce e a Ana, atendente da Budamix (utilidades domesticas). Responda de forma natural, humana e prestativa, em portugues do Brasil, frases curtas.";
+}
+async function getInstagramDirectState() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  try {
+    const r = await db("agent_config?config_key=eq.instagram_direct_enabled&select=config_value", {
+      signal: controller.signal,
+    });
+    if (!r.ok) {
+      console.log("instagram direct config http", r.status);
+      return "unavailable";
+    }
+    const rows = await r.json();
+    return isInstagramDirectEnabled(Array.isArray(rows) ? rows[0]?.config_value : null)
+      ? "enabled"
+      : "disabled";
+  } catch (e) {
+    console.log("instagram direct config exc", String(e));
+    return "unavailable";
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+async function getInstagramDirectEnabled() {
+  return (await getInstagramDirectState()) === "enabled";
 }
 async function getRecentMessages(conversationId) {
   const r = await db("messages?conversation_id=eq." + conversationId + "&order=created_at.desc&limit=20&select=sender,content,created_at");
@@ -376,27 +433,66 @@ async function igAction(igsid, sender_action) {
     console.log("ig action exc", String(e));
   }
 }
-async function sendOne(igsid, body) {
+async function igPost(igsid, message) {
+  const r = await fetch(GRAPH + "/me/messages?access_token=" + IG_TOKEN, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipient: { id: igsid }, message })
+  });
+  return await r.json();
+}
+async function sendOne(igsid, body, quickReplies) {
   if (!IG_TOKEN) {
     console.log("IG_PAGE_TOKEN missing - skip send");
     return;
   }
-  const r = await fetch(GRAPH + "/me/messages?access_token=" + IG_TOKEN, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient: { id: igsid }, message: { text: body } })
-  });
-  const j = await r.json();
-  if (j.error) console.log("ig send err", JSON.stringify(j.error));
+  const message = { text: body };
+  if (quickReplies && quickReplies.length) message.quick_replies = quickReplies;
+  const j = await igPost(igsid, message);
+  if (!j.error) return;
+  console.log("ig send err", JSON.stringify(j.error));
+  // Botão recusado NUNCA pode calar a Ana: reenvia o mesmo texto sem os botões.
+  if (message.quick_replies) {
+    const j2 = await igPost(igsid, { text: body });
+    if (j2.error) console.log("ig send retry err", JSON.stringify(j2.error));
+    else console.log("ig send: botoes recusados, texto entregue sem eles");
+  }
 }
-async function sendInstagram(igsid, text) {
+async function privateEgressAllowed(acceptedEnabled = true) {
+  return await attemptPrivateEgress(
+    acceptedEnabled,
+    getInstagramDirectEnabled,
+    async () => true,
+  );
+}
+async function guardedIgAction(igsid, sender_action, acceptedEnabled = true) {
+  return await attemptPrivateEgress(
+    acceptedEnabled,
+    getInstagramDirectEnabled,
+    async () => { await igAction(igsid, sender_action); return true; },
+  );
+}
+async function guardedSendOne(igsid, body, acceptedEnabled = true, quickReplies) {
+  return await attemptPrivateEgress(
+    acceptedEnabled,
+    getInstagramDirectEnabled,
+    async () => { await sendOne(igsid, body, quickReplies); return true; },
+  );
+}
+async function sendInstagram(igsid, text, acceptedEnabled = true, quickReplies) {
   const chunks = splitChunks(text);
+  let sent = false;
   for(let i = 0; i < chunks.length; i++){
-    if (i > 0) await igAction(igsid, "typing_on");
+    if (i > 0 && !await guardedIgAction(igsid, "typing_on", acceptedEnabled)) return sent;
     const delay = Math.min(Math.max(chunks[i].length * 45, 1000), 3500);
     await sleep(delay);
-    await sendOne(igsid, chunks[i]);
+    // Os botões só existem colados no último balão — no meio da rajada eles
+    // sumiriam assim que o balão seguinte chegasse.
+    const qr = (i === chunks.length - 1) ? quickReplies : undefined;
+    if (!await guardedSendOne(igsid, chunks[i], acceptedEnabled, qr)) return sent;
+    sent = true;
   }
+  return sent;
 }
 // Busca nome/username do cliente (best-effort; depende da permissão de mensagens).
 async function fetchProfile(igsid) {
@@ -528,6 +624,13 @@ async function handleEvent(ev) {
   let text = (message.text || "").trim();
   let mediaMeta = {};
   let mtype = "text";
+  // Toque em botão: o Instagram manda o TÍTULO em message.text (que já é o
+  // sinal que a Ana lê) e o código interno em quick_reply.payload. Guardamos o
+  // payload só para conferência — o roteamento é pelo título mesmo.
+  if (message.quick_reply && message.quick_reply.payload) {
+    mediaMeta.quick_reply_payload = String(message.quick_reply.payload).slice(0, 120);
+    if (!text) text = mediaMeta.quick_reply_payload;
+  }
 
   const name = await fetchProfile(igsid);
   const customerId = await getOrCreateCustomer(igsid, name);
@@ -565,15 +668,78 @@ async function deleteMessageByMid(mid) {
 // Carrega o token IG da tabela integration_tokens (renovado pelo cron a cada 3 dias);
 // cai pro env IG_PAGE_TOKEN se a tabela ainda estiver vazia (1o boot, antes do 1o refresh).
 async function loadIgToken() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
   try {
-    const r = await db("integration_tokens?provider=eq.instagram&select=access_token&limit=1");
+    const r = await db("integration_tokens?provider=eq.instagram&select=access_token&limit=1", {
+      signal: controller.signal,
+    });
     if (r.ok) {
       const j = await r.json();
       if (j[0] && j[0].access_token) IG_TOKEN = j[0].access_token;
     }
   } catch (e) {
     console.log("loadIgToken exc", String(e));
+  } finally {
+    clearTimeout(timeout);
   }
+}
+// Botões: a Ana sinaliza com [[BOTOES: Opção A | Opção B]] no fim da resposta.
+// Precisa rodar ANTES de escalateIfFlagged, que apaga todo [[...]] do texto.
+function extractQuickReplies(reply) {
+  const m = reply.match(/\[\[\s*BOTOES\s*:?\s*([^\]]*)\]\]/i);
+  if (!m) return { quickReplies: [], reply };
+  const stripped = reply
+    .replace(/\s*\[\[\s*BOTOES\s*:?[^\]]*\]\]\s*/gi, " ")
+    .replace(/ {2,}/g, " ")
+    .trim();
+  const quickReplies = (m[1] || "")
+    .split("|")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .slice(0, QR_MAX)
+    .map((t) => {
+      // corta por ponto de código, não por unidade UTF-16: acento e emoji contam 1
+      const title = Array.from(t).slice(0, QR_TITLE_MAX).join("");
+      const payload = "QR_" + title.toUpperCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
+      return { content_type: "text", title, payload: payload || "QR" };
+    });
+  return { quickReplies, reply: stripped };
+}
+const BUTTONS_NOTE = "## Botoes (so no Direct do Instagram)\nVoce pode oferecer botoes tocaveis. Para isso termine a resposta com o marcador [[BOTOES: Texto A | Texto B]] — o marcador e INTERNO, some antes de chegar no cliente, e os botoes aparecem colados no ultimo balao.\nREGRAS: no maximo 13 botoes; cada texto com no maximo 20 caracteres; nunca use botao quando a resposta pedir texto livre (CEP, nome, numero do pedido, endereco).\nUSE NA TRIAGEM: ao perguntar se e revenda ou uso pessoal, termine com [[BOTOES: Atacado — CNPJ | Uso pessoal]].\nUse tambem quando a escolha for curta e fechada (ex.: cor: [[BOTOES: Tampa vermelha | Tampa cinza]]). Fora disso, responda em texto normal.";
+// Token da Página do Facebook: derivado do token de Ads via /me/accounts.
+// Assim não há segredo novo pra guardar nem pra renovar — se o de Ads vive, esse vive.
+async function loadFbPageToken() {
+  if (FB_TOKEN) return FB_TOKEN;
+  try {
+    const r = await db("integration_tokens?provider=eq.meta_ads&select=access_token&limit=1");
+    if (!r.ok) return null;
+    const j = await r.json();
+    const adsTok = j[0] && j[0].access_token;
+    if (!adsTok) return null;
+    const a = await fetch(GRAPH_FB + "/me/accounts?fields=id,access_token&access_token=" + adsTok);
+    const aj = await a.json();
+    if (aj.error) { console.log("fb page token err", JSON.stringify(aj.error)); return null; }
+    const page = (aj.data || []).find((p) => p.id === FB_PAGE_ID) || (aj.data || [])[0];
+    FB_TOKEN = (page && page.access_token) || null;
+  } catch (e) { console.log("loadFbPageToken exc", String(e)); }
+  return FB_TOKEN;
+}
+async function sendPublicFacebookReply(commentId, text) {
+  const tok = await loadFbPageToken();
+  if (!tok) { console.log("fb reply: sem token da pagina"); return false; }
+  try {
+    const r = await fetch(GRAPH_FB + "/" + commentId + "/comments?access_token=" + tok, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+    const j = await r.json();
+    if (j.error) { console.log("fb reply err", JSON.stringify(j.error)); return false; }
+    return true;
+  } catch (e) { console.log("fb reply exc", String(e)); return false; }
 }
 // Escalonamento: a Ana sinaliza com [[ESCALAR: motivo]] quando o caso precisa de humano.
 const ESCALATION_NOTE = "## Quando escalar (humano) vs resolver sozinha\nESCALE SOMENTE se: o cliente pedir explicitamente falar com humano/atendente DEPOIS de voce ja ter tentado ajudar; mencao a Procon/processo/advogado/disputa formal; cliente muito irritado/ofensivo; pagamento duplicado ou dinheiro que so a equipe pode mover; a compra foi no SITE Budamix (a equipe resolve direto — colete nº do pedido e foto antes de escalar); ou voce ja orientou o passo a passo e o cliente nao conseguiu / o problema persiste.\nNAO ESCALE de primeira: produto quebrado/com defeito/errado/faltando ou pedido que nao chegou em compra de MARKETPLACE. Nesses casos VOCE resolve guiando o cliente no AUTOATENDIMENTO do canal da compra: acolha em uma frase, pergunte onde comprou (se nao souber), peca nº do pedido e foto quando ajudar, e oriente passo a passo a abrir a solicitacao NO PROPRIO app/site onde comprou — Mercado Livre: Minhas compras > toca no pedido > 'Devolver ou reclamar'; Shopee: Minhas compras > toca no pedido > 'Pedido de Devolucao/Reembolso'; Amazon: Meus pedidos > toca no pedido > 'Devolver ou substituir itens'. Explique que a plataforma exige que a solicitacao seja aberta pelo proprio cliente, que e rapido e seguro, e que voce acompanha e tira duvidas em cada passo.\nFORMATO quando escalar: comece a resposta EXATAMENTE com o marcador [[ESCALAR: motivo curto]] e depois UMA frase curta avisando que vai transferir. O marcador e INTERNO: NUNCA pode aparecer no meio ou no fim do texto.";
@@ -584,7 +750,7 @@ async function escalateIfFlagged(reply, convId, channel, preview) {
   const stripped = reply.replace(/\s*\[\[[^\]]*\]\]\s*/gi, " ").replace(/ {2,}/g, " ").trim();
   if (!m) return { escalated: false, reply: stripped };
   const reason = (m[1] || "").trim() || "Cliente precisa de atendimento humano";
-  const clean = stripped || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui 🙏";
+  const clean = stripped || "Vou te transferir para um atendente humano, ja ja alguem te responde por aqui.";
   try {
     await fetch(SU + "/functions/v1/escalate-notify?key=" + encodeURIComponent(Deno.env.get("IG_VERIFY_TOKEN") || ""), {
       method: "POST",
@@ -595,21 +761,23 @@ async function escalateIfFlagged(reply, convId, channel, preview) {
   return { escalated: true, reply: clean };
 }
 // Depois de salvar a rajada, decide e responde (uma vez por conversa).
-async function replyConversation(convId, igsid, lastMsgId) {
+async function replyConversation(convId, igsid, lastMsgId, acceptedEnabled) {
   await sleep(DEBOUNCE_MS);
+  if (!await privateEgressAllowed(acceptedEnabled)) return;
   const latestId = await getLatestCustomerMsgId(convId);
   if (latestId && latestId !== lastMsgId) return; // chegou msg mais nova -> ela responde a rajada
   const assignee = await getConversationAssignee(convId);
   if (assignee && assignee !== "agent") return;    // humano assumiu -> Ana fica quieta
 
   const sys = await getSystemPrompt();
-  await igAction(igsid, "mark_seen");
-  await igAction(igsid, "typing_on");
+  if (!await guardedIgAction(igsid, "mark_seen", acceptedEnabled)) return;
+  if (!await guardedIgAction(igsid, "typing_on", acceptedEnabled)) return;
   const hist = await getRecentMessages(convId);
   const t0 = Date.now();
   let ctx = await buildGrounding(latestUserText(hist));
   const originNote = "## Cliente\nEste atendimento chegou pelo DIRECT DO INSTAGRAM (@budamix.br). NAO pergunte por onde o cliente nos encontrou. Para link de compra, prefira o do site da Budamix. Respostas curtas, no maximo ~2 paragrafos por balao.";
-  ctx = ctx ? ctx + "\n\n" + originNote + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + originNote + "\n\n" + ESCALATION_NOTE;
+  const notes = originNote + "\n\n" + BUTTONS_NOTE + "\n\n" + ESCALATION_NOTE;
+  ctx = ctx ? ctx + "\n\n" + notes : "=== CONTEXTO DE ATENDIMENTO ===\n" + notes;
   const gen = await anaReply(sys, hist, ctx);
   let reply = gen.text;
   const response_time_ms = Date.now() - t0;
@@ -619,20 +787,50 @@ async function replyConversation(convId, igsid, lastMsgId) {
   const tokens_cache_write = gen.cache_write || 0;
   const tokens_used = (tokens_in + tokens_out) || null;
   if (reply && reply.trim()) {
+    const qr = extractQuickReplies(reply);   // antes do escalateIfFlagged, que apaga [[...]]
+    reply = qr.reply;
     const esc = await escalateIfFlagged(reply, convId, "instagram", latestUserText(hist));
-    reply = esc.reply;
-    await sendInstagram(igsid, reply);
-    await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write });
+    reply = enforceRareEmojiPolicy(esc.reply, latestUserText(hist));
+    // Quem vai falar com humano não escolhe botão.
+    const buttons = esc.escalated ? [] : qr.quickReplies;
+    if (reply && reply.trim()) {
+      const sent = await sendInstagram(igsid, reply, acceptedEnabled, buttons);
+      if (sent) {
+        await saveMessage(convId, "agent", reply, {
+          response_time_ms, tokens_used, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write,
+          metadata: buttons.length ? { quick_replies: buttons.map((b) => b.title) } : undefined
+        });
+      }
+    }
   }
 }
 // ─── Comentários (posts + anúncios do Instagram) — modo híbrido: DM completo + reply público curto ───
+// Reclamação em comentário público é assunto de gente, não de robô: pedido não
+// entregue, acusação de golpe, produto com defeito, cobrança. A Ana registra e
+// chama a equipe — responder isso sozinha, em público, faz mais estrago que bem.
+function commentLooksLikeComplaint(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  const kw = [
+    "golpe", "fraude", "enganac", "enganaç", "picaret", "ladra", "ladrão", "ladrao", "roubo",
+    "não recebi", "nao recebi", "não recebo", "nao recebo", "não chegou", "nao chegou",
+    "não veio", "nao veio", "não entregue", "nao entregue", "nunca chegou", "recibi", "recibo",
+    "quebrad", "trincad", "rachad", "defeito", "estragad", "manchad", "riscad", "danificad",
+    "procon", "reclame aqui", "advogad", "processo", "denunc",
+    "estorno", "reembols", "devoluç", "devoluc", "cancelar o pedido", "meu dinheiro",
+    "não responde", "nao responde", "ninguém responde", "ninguem responde", "sem resposta",
+  ];
+  return kw.some((k) => t.includes(k));
+}
 function commentLooksAnswerable(text) {
   if (!text) return false;
   const t = text.toLowerCase().trim();
   if (t.includes("?")) return true;
   const letters = t.replace(/[^\p{L}]/gu, "");
   if (letters.length < 3) return false; // só emoji / curtida / @marcação / número solto
-  const kw = ["preç","preco","valor","quanto","custa","comprar","compr","onde","como","tem ","disponiv","disponí","estoque","entrega","frete","tamanho","medida","cor ","cores","link","vende","quero","interess","promo","desconto","parcel","pix","boleto","catalog","loja","site"];
+  const kw = ["preç","preco","valor","quanto","custa","comprar","compr","onde","como","tem ","disponiv","disponí","estoque","entrega","frete","tamanho","medida","cor ","cores","link","vende","quero","interess","promo","desconto","parcel","pix","boleto","catalog","loja","site",
+    // pergunta de USO costuma vir sem interrogação ("Pode pôr no microondas")
+    "microond","micro-ond","micro ond","freezer","congelad","lava-lou","lava lou","forno","air fry","material","garantia","vidro","plástic","plastic","litro","quantos","quantas","serve para","serve pra"];
   return kw.some((k)=>t.includes(k));
 }
 async function sendPublicCommentReply(commentId, text) {
@@ -646,10 +844,13 @@ async function sendPublicCommentReply(commentId, text) {
     if (j.error) console.log("cmt public reply err", JSON.stringify(j.error));
   } catch (e) { console.log("cmt public exc", String(e)); }
 }
-// Resposta privada ancorada no comentário (1o balão via comment_id; resto como DM normal). true se o DM saiu.
-async function sendPrivateReplyToComment(commentId, igsid, text) {
+// Resposta privada ancorada no comentário (1o balão via comment_id; resto como DM normal).
+// Retorna "complete", "partial" ou "none" para o comentário público nunca prometer mais do que saiu.
+async function sendPrivateReplyToComment(commentId, igsid, text, directEnabled) {
+  if (!canSendInstagramPrivateMessage(directEnabled)) return "none";
   const chunks = splitChunks(text);
-  if (!chunks.length) return false;
+  if (!chunks.length) return "none";
+  if (!await privateEgressAllowed(directEnabled)) return "none";
   try {
     const r = await fetch(GRAPH + "/me/messages?access_token=" + IG_TOKEN, {
       method: "POST",
@@ -657,44 +858,116 @@ async function sendPrivateReplyToComment(commentId, igsid, text) {
       body: JSON.stringify({ recipient: { comment_id: commentId }, message: { text: chunks[0] } })
     });
     const j = await r.json();
-    if (j.error) { console.log("cmt private reply err", JSON.stringify(j.error)); return false; }
-  } catch (e) { console.log("cmt private exc", String(e)); return false; }
+    if (j.error) { console.log("cmt private reply err", JSON.stringify(j.error)); return "none"; }
+  } catch (e) { console.log("cmt private exc", String(e)); return "none"; }
   for (let i = 1; i < chunks.length; i++){
     await sleep(Math.min(Math.max(chunks[i].length * 45, 800), 3000));
-    await sendOne(igsid, chunks[i]);
+    if (!await guardedSendOne(igsid, chunks[i], directEnabled)) return "partial";
   }
-  return true;
+  return "complete";
 }
-async function handleComment(value) {
+async function handleComment(value, directEnabled, platform = "instagram") {
+  const isFb = platform === "facebook";
   const commentId = value && value.id;
   const from = value && value.from;
   const text = ((value && value.text) || "").trim();
-  if (!commentId || !from || !from.id) return;
+  if (!commentId) return;
+  // No Facebook a Meta esconde a identidade de quem comenta a menos que a pessoa
+  // tenha autorizado o app — então `from` costuma vir vazio. Sem dono não dá pra
+  // mandar DM, mas dá pra responder em público, que é o que importa aqui.
+  if (!isFb && (!from || !from.id)) return;
   // anti-loop: ignora comentário/reply da própria conta
-  if (from.id === IG_BUSINESS_ID || ((from.username || "").toLowerCase() === "budamix.br")) return;
-  if (!commentLooksAnswerable(text)) { console.log("cmt skip (sem intencao):", text.slice(0, 60)); return; }
+  if (from && (from.id === IG_BUSINESS_ID || from.id === FB_PAGE_ID)) return;
+  if (from && (from.username || from.name || "").toLowerCase() === "budamix.br") return;
+  if (from && (from.name || "").toLowerCase() === "budamix") return;
+  // A guarda de reclamação vem ANTES do filtro de intenção: "Golpe" não tem
+  // interrogação nem palavra de compra e seria descartado em silêncio — justo o
+  // comentário que mais precisa chegar em alguém.
+  const ehReclamacao = commentLooksLikeComplaint(text);
+  if (!ehReclamacao && !commentLooksAnswerable(text)) { console.log("cmt skip (sem intencao):", text.slice(0, 60)); return "sem intencao"; }
+
+  const prefixo = isFb ? "fbcmt:" : "cmt:";
   // dedup: já respondemos esse comentário?
   try {
-    const seen = await db("messages?whatsapp_message_id=eq." + encodeURIComponent("cmt:" + commentId) + "&select=id&limit=1");
-    if (seen.ok) { const sj = await seen.json(); if (sj.length) return; }
+    const seen = await db("messages?whatsapp_message_id=eq." + encodeURIComponent(prefixo + commentId) + "&select=id&limit=1");
+    if (seen.ok) { const sj = await seen.json(); if (sj.length) return "ja tratado"; }
   } catch (_e) {}
 
-  const igsid = from.id;
-  const isAd = !!(value.media && value.media.media_product_type === "AD");
-  const customerId = await getOrCreateCustomer(igsid, from.username || "");
-  // conversa de COMENTÁRIO separada do Direct (channel='instagram_comment') → aba Comentários no Canggu
-  const convId = await getOrCreateConversation(customerId, "instagram_comment");
-  await saveMessage(convId, "customer", (isAd ? "[comentário · anúncio] " : "[comentário · post] ") + (text || "(sem texto)"), {
+  const igsid = (from && from.id) || ("anon_" + commentId);
+  const isAd = isFb
+    ? !!value.is_ad
+    : !!(value.media && value.media.media_product_type === "AD");
+  const customerId = await getOrCreateCustomer(
+    igsid,
+    (from && (from.username || from.name)) || "",
+    isFb ? "fb:" : "ig:",
+  );
+  // conversa de COMENTÁRIO separada do Direct → aba Comentários no Canggu
+  const canal = isFb ? "facebook_comment" : "instagram_comment";
+  const convId = await getOrCreateConversation(customerId, canal);
+  const rotulo = isFb
+    ? (isAd ? "[comentário Facebook · anúncio] " : "[comentário Facebook · post] ")
+    : (isAd ? "[comentário · anúncio] " : "[comentário · post] ");
+  await saveMessage(convId, "customer", rotulo + (text || "(sem texto)"), {
     message_type: "comment",
-    whatsapp_message_id: "cmt:" + commentId,
-    metadata: { comment_origin: isAd ? "ad" : "post", media_id: (value.media && value.media.id) || null }
+    whatsapp_message_id: prefixo + commentId,
+    metadata: { comment_origin: isAd ? "ad" : "post", platform, media_id: (value.media && value.media.id) || value.post_id || null }
   });
+
+  // Reclamação pública: registra, avisa a equipe e NÃO responde sozinha.
+  if (ehReclamacao) {
+    console.log("cmt reclamacao -> humano:", text.slice(0, 80));
+    try {
+      await fetch(SU + "/functions/v1/escalate-notify?key=" + encodeURIComponent(Deno.env.get("IG_VERIFY_TOKEN") || ""), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_id: convId,
+          reason: "Reclamação em comentário público (" + (isFb ? "Facebook" : "Instagram") + (isAd ? " · anúncio" : " · post") + ") — precisa de resposta humana",
+          channel: canal,
+          preview: text.slice(0, 180),
+        })
+      });
+    } catch (e) { console.log("escalate cmt err", String(e)); }
+    try {
+      await db("conversations?id=eq." + convId, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "escalated", assigned_to: "human" })
+      });
+    } catch (_e) {}
+    return "reclamacao -> humano";
+  }
+
+  // Facebook: SEMPRE só público. Sem Messenger, a resposta tem que se bastar.
+  if (isFb || !directEnabled) {
+    const safeSystem = publicCommentPublicOnlySystemPrompt();
+    const publicContext = await buildGrounding(text);
+    const publicHistory = [{ sender: "customer", content: text }];
+    const gen = await anaReply(safeSystem, publicHistory, publicContext);
+    const safeReply = enforceRareEmojiPolicy(gen.text || publicCommentDisabledReply(), text);
+    const pub = publicCommentAcknowledgement({
+      escalated: false,
+      privateReplySent: false,
+      directEnabled: false,
+      reply: safeReply,
+    });
+    if (isFb) await sendPublicFacebookReply(commentId, pub);
+    else await sendPublicCommentReply(commentId, pub);
+    await saveMessage(convId, "agent", pub, {
+      tokens_used: ((gen.tokens_in || 0) + (gen.tokens_out || 0)) || null,
+      tokens_in: gen.tokens_in || 0,
+      tokens_out: gen.tokens_out || 0,
+      tokens_cache_read: gen.cache_read || 0,
+      tokens_cache_write: gen.cache_write || 0,
+    });
+    return;
+  }
 
   const sys = await getSystemPrompt();
   const hist = await getRecentMessages(convId);
   const t0 = Date.now();
   let ctx = await buildGrounding(text);
-  const note = "## Canal\nIsto e um COMENTARIO PUBLICO num post/anuncio do Instagram (@budamix.br), visivel a qualquer pessoa. A resposta completa vai por DM (direct); o reply publico e so um aceno curto. Seja cordial e util. NUNCA peca dado pessoal em publico, NUNCA sugira reclamacao. Para link de compra, prefira o site da Budamix.";
+  const note = publicCommentChannelNote(directEnabled);
   ctx = ctx ? ctx + "\n\n" + note + "\n\n" + ESCALATION_NOTE : "=== CONTEXTO DE ATENDIMENTO ===\n" + note + "\n\n" + ESCALATION_NOTE;
   const gen = await anaReply(sys, hist, ctx);
   let reply = gen.text;
@@ -707,15 +980,20 @@ async function handleComment(value) {
   if (!reply || !reply.trim()) return;
 
   const escC = await escalateIfFlagged(reply, convId, "instagram_comment", text);
-  reply = escC.reply;
-  const okPriv = await sendPrivateReplyToComment(commentId, igsid, reply);
-  const pub = escC.escalated
-    ? "Oi! 😊 Já pedi pra nossa equipe te responder no seu direct 🙏"
-    : (okPriv
-      ? "Oi! 😊 Te respondi no seu direct com todos os detalhes 💬"
-      : ("Oi! 😊 " + reply.split(CHUNK_SEP).join(" ").slice(0, 200)));
+  reply = enforceRareEmojiPolicy(escC.reply, text);
+  const privateStatus = await sendPrivateReplyToComment(commentId, igsid, reply, directEnabled);
+  const privateComplete = privateStatus === "complete";
+  const privatePartial = privateStatus === "partial";
+  const pub = privatePartial
+    ? "Oi! Enviei uma parte no direct; nossa equipe continua te orientando por aqui."
+    : publicCommentAcknowledgement({
+      escalated: escC.escalated,
+      privateReplySent: privateComplete,
+      directEnabled: privateComplete,
+      reply,
+    });
   await sendPublicCommentReply(commentId, pub);
-  await saveMessage(convId, "agent", reply, { response_time_ms, tokens_used, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write });
+  await saveMessage(convId, "agent", privateComplete ? reply : pub, { response_time_ms, tokens_used, tokens_in, tokens_out, tokens_cache_read, tokens_cache_write });
 }
 // ─── Webhook ───
 Deno.serve(async (req)=>{
@@ -732,29 +1010,58 @@ Deno.serve(async (req)=>{
     try {
       body = await req.json();
     } catch (_e) {}
+    // Facebook: comentário na Página (orgânico ou de anúncio). Chega pelo webhook
+    // "page" ou pelo evento sintético do facebook-comments-poll. Trilha separada:
+    // resposta só pública, sem Direct, sem depender da chave do Instagram.
+    if (body && body.object === "page") {
+      // ?sync=1 processa na hora e devolve o resultado — é assim que dá pra
+      // testar sem depender de log. O poll normal usa o caminho assíncrono.
+      const sincrono = new URL(req.url).searchParams.get("sync") === "1";
+      const diag = [];
+      const trabalho = (async ()=>{
+        for (const entry of (Array.isArray(body.entry) ? body.entry : [])) {
+          for (const ch of (Array.isArray(entry.changes) ? entry.changes : [])) {
+            if (!ch || ch.field !== "feed") { diag.push("ignorado: campo=" + (ch && ch.field)); continue; }
+            const v = ch.value || {};
+            if (v.item !== "comment" || (v.verb && v.verb !== "add")) { diag.push("ignorado: item=" + v.item + " verb=" + v.verb); continue; }
+            try {
+              const r = await handleComment({
+                id: v.comment_id || v.id,
+                from: v.from || null,
+                text: v.message || v.text || "",
+                is_ad: !!v.is_ad,
+                post_id: v.post_id || null,
+              }, false, "facebook");
+              diag.push((v.comment_id || v.id) + " -> " + (r || "ok"));
+            } catch (e) {
+              console.log("fb comment err", String(e));
+              diag.push("ERRO " + (v.comment_id || v.id) + ": " + String(e && e.stack || e));
+            }
+          }
+        }
+      })();
+      if (sincrono) {
+        await trabalho;
+        return new Response(JSON.stringify({ ok: true, diag }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      globalThis.EdgeRuntime?.waitUntil(trabalho);
+      return new Response("EVENT_RECEIVED", { status: 200 });
+    }
     // Só tratamos o objeto "instagram"
     if (body && body.object !== "instagram") {
       return new Response("EVENT_RECEIVED", { status: 200 });
     }
-    const events = [];
-    const deletions = [];
-    const comments = [];
-    for (const e of body.entry || []){
-      for (const ev of e.messaging || []){
-        // ignora eco (mensagem que a própria conta enviou) e eventos sem mensagem real
-        if (ev.message && (ev.message.is_echo || (ev.sender && ev.sender.id === IG_BUSINESS_ID))) continue;
-        // cliente "desfez o envio" (unsend) no IG -> apagar a nossa copia
-        if (ev.message && ev.message.is_deleted) { if (ev.message.mid) deletions.push(ev.message.mid); continue; }
-        if (!ev.message) continue;                       // read/reaction/postback -> ignora (v1)
-        if (!ev.message.text && !(ev.message.attachments && ev.message.attachments.length)) continue;
-        events.push(ev);
-      }
-      for (const ch of e.changes || []){            // comentários (posts + anúncios no IG)
-        if (ch.field === "comments" && ch.value) comments.push(ch.value);
-      }
-    }
     globalThis.EdgeRuntime?.waitUntil((async ()=>{
-      await loadIgToken();              // usa o token renovado da tabela (cron a cada 3 dias)
+      const [, directState] = await Promise.all([
+        loadIgToken(),              // usa o token renovado da tabela (cron a cada 3 dias)
+        getInstagramDirectState(),
+      ]);
+      const directPlan = planDirectState(directState);
+      const { events, deletions, comments, droppedDirectEvents } =
+        planInstagramWebhookWork(body, directPlan.ingestPrivateEvents, IG_BUSINESS_ID);
+      if (droppedDirectEvents > 0) {
+        console.log("instagram direct disabled: dropped", droppedDirectEvents);
+      }
       for (const mid of deletions){
         await deleteMessageByMid(mid);
       }
@@ -768,10 +1075,10 @@ Deno.serve(async (req)=>{
         }
       }
       await Promise.all([...touched.entries()].map(([convId, info])=>
-        replyConversation(convId, info.igsid, info.lastMsgId).catch((e)=>console.log("reply err", String(e)))
+        replyConversation(convId, info.igsid, info.lastMsgId, directPlan.allowPrivateEgress).catch((e)=>console.log("reply err", String(e)))
       ));
       for (const cv of comments){
-        try { await handleComment(cv); } catch (e) { console.log("comment err", String(e)); }
+        try { await handleComment(cv, directPlan.allowPrivateEgress); } catch (e) { console.log("comment err", String(e)); }
       }
     })());
     return new Response("EVENT_RECEIVED", { status: 200 });
