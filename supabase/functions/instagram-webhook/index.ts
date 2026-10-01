@@ -576,7 +576,12 @@ async function uploadToStorage(kind, convId, msgId, bytes, mime) {
     headers: { Authorization: "Bearer " + SR, apikey: SR, "Content-Type": ct, "x-upsert": "true", "Cache-Control": "3600" },
     body: bytes
   });
-  if (!r.ok) throw new Error("storage " + r.status + " " + (await r.text()).slice(0, 140));
+  if (!r.ok) {
+    const corpo = (await r.text()).slice(0, 140);
+    // Tipo fora da lista do bucket: guarda como arquivo comum (a tela oferece baixar), em vez de perder
+    if (ct !== "application/octet-stream" && /mime|type/i.test(corpo)) return uploadToStorage(kind, convId, msgId, bytes, "application/octet-stream");
+    throw new Error("storage " + r.status + " " + corpo);
+  }
   return SU + "/storage/v1/object/public/chat-attachments/" + path;
 }
 async function transcribeAudio(base64, mime) {

@@ -1020,7 +1020,12 @@ async function uploadToStorage(kind, convId, msgId, bytes, mime, nomeArquivo) {
     },
     body: bytes
   });
-  if (!r.ok) throw new Error("storage " + r.status + " " + (await r.text()).slice(0, 140));
+  if (!r.ok) {
+    const corpo = (await r.text()).slice(0, 140);
+    // Tipo fora da lista do bucket: guarda como arquivo comum (a tela oferece baixar), em vez de perder
+    if (ct !== "application/octet-stream" && /mime|type/i.test(corpo)) return uploadToStorage(kind, convId, msgId, bytes, "application/octet-stream", nomeArquivo);
+    throw new Error("storage " + r.status + " " + corpo);
+  }
   return SU + "/storage/v1/object/public/chat-attachments/" + path;
 }
 // ─── ARQUIVOS p/ a tela do Canggu (01/10/2026): documento, figurinha, localizacao, contato ───
@@ -1090,7 +1095,7 @@ async function guardarArquivo(m, convId) {
     const url = await uploadToStorage(tipo, convId, m.id, arq.bytes, mime, obj.filename);
     if (tipo === "document") {
       meta.document_url = url;
-      meta.document_mimetype = mime;
+      meta.document_mimetype = mime; // tipo original (a tela usa o nome e o tipo para escolher o visualizador)
     } else {
       meta.sticker_url = url;
       meta.sticker_mimetype = mime;
