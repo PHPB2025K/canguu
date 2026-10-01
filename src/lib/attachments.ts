@@ -295,6 +295,13 @@ export function viewerMode(a: Attachment): ViewerMode {
   return "file";
 }
 
+// Arquivo que roda programa no computador de quem abre: a tela avisa antes de baixar
+const RISKY_EXT = new Set(["exe", "msi", "bat", "cmd", "com", "scr", "ps1", "vbs", "js", "jar", "apk", "app", "dmg", "pkg", "sh", "lnk", "reg", "hta"]);
+
+export function isRiskyFile(a: Attachment): boolean {
+  return RISKY_EXT.has(extensionOf(a.filename ?? a.url));
+}
+
 export function formatBytes(bytes: number | null | undefined): string | null {
   if (!bytes || bytes <= 0) return null;
   if (bytes < 1024) return `${bytes} B`;

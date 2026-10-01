@@ -30,6 +30,7 @@ import {
   formatBytes,
   downloadHref,
   mapsHref,
+  isRiskyFile,
 } from "@/lib/attachments";
 
 export interface MediaLightboxProps {
@@ -134,7 +135,7 @@ export function MediaLightbox({ open, onOpenChange, attachment, caption, senderL
   } else if (url) {
     body = (
       <Panel icon={FileText} title={name} subtitle={meta} className="w-[min(94vw,460px)]" actions={<Actions url={url} filename={attachment.filename} />} caption={caption}>
-        <FileBody url={url} filename={attachment.filename} />
+        <FileBody url={url} filename={attachment.filename} risky={isRiskyFile(attachment)} />
       </Panel>
     );
   }
@@ -589,11 +590,16 @@ function LinkBody({ link }: { link: string }) {
   );
 }
 
-function FileBody({ url, filename }: { url: string; filename: string | null }) {
+function FileBody({ url, filename, risky }: { url: string; filename: string | null; risky: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
       <FileText className="h-14 w-14 text-muted-foreground/60" />
       <p className="text-sm text-muted-foreground">Esse tipo de arquivo não abre dentro do painel. Baixe para abrir no computador.</p>
+      {risky && (
+        <div className="text-left">
+          <Problem text="Atenção: este arquivo pode instalar ou rodar um programa no computador. Só abra se tiver certeza de quem mandou." />
+        </div>
+      )}
       <a
         href={downloadHref(url, filename)}
         className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"

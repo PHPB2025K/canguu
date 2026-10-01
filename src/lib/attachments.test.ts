@@ -125,3 +125,13 @@ describe("conteúdo compartilhado do Instagram", () => {
     expect(card).toMatchObject({ kind: "image", title: "Conteúdo compartilhado", note: "Kit 5 potes", link: "https://budamix.com.br/produto/kit", missing: false });
   });
 });
+
+describe("arquivo que roda programa", () => {
+  it("marca executável e deixa PDF em paz", async () => {
+    const { isRiskyFile } = await import("./attachments");
+    const doc = (filename: string) => getAttachments({ ...base, message_type: "document", metadata: { document_url: `${ST}/document/c/x`, document_filename: filename } })[0];
+    expect(isRiskyFile(doc("instalador.exe"))).toBe(true);
+    expect(isRiskyFile(doc("app.APK"))).toBe(true);
+    expect(isRiskyFile(doc("nota.pdf"))).toBe(false);
+  });
+});
