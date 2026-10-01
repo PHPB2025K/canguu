@@ -165,6 +165,68 @@ async function saveMessage(conversationId, sender, content, extra = {}) {
     })
   });
 }
+// Grava devolvendo o id (o aceno publico de reclamacao reserva a vez com uma linha).
+async function salvarComId(conversationId, sender, content, extra = {}) {
+  try {
+    const r = await db("messages", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ conversation_id: conversationId, sender, content, ...extra })
+    });
+    const j = await r.json().catch(()=>null);
+    return r.ok && Array.isArray(j) && j[0] ? j[0].id : null;
+  } catch (_e) { return null; }
+}
+async function patchMensagem(id, patch) {
+  if (!id) return;
+  try { await db("messages?id=eq." + id, { method: "PATCH", body: JSON.stringify(patch) }); } catch (_e) {}
+}
+async function apagarMensagem(id) {
+  if (!id) return;
+  try { await db("messages?id=eq." + id, { method: "DELETE" }); } catch (_e) {}
+}
+// ─── Modelo (01/10/2026): a Ana segue agent_config.model (Opus 5.5, esforco high) ───
+// Claude 4.7+ recusa temperature e pensa antes de responder; o texto vem no bloco
+// "text". Se o modelo principal falhar, 1 tentativa no modelo de reserva.
+const MODELO_PADRAO = "claude-sonnet-4-6";
+const MODELO_RESERVA = "claude-sonnet-4-6";
+const MODELOS_COM_RACIOCINIO = /claude-(opus-4-[7-9]|opus-[5-9]|sonnet-[5-9]|fable)/i;
+let MODELO_CACHE = { v: "", t: 0 };
+async function getAgentModel() {
+  if (MODELO_CACHE.v && Date.now() - MODELO_CACHE.t < 60000) return MODELO_CACHE.v;
+  let v = "";
+  try {
+    const r = await db("agent_config?config_key=eq.model&select=config_value");
+    const rows = await r.json();
+    v = Array.isArray(rows) && rows[0]?.config_value ? String(rows[0].config_value).trim() : "";
+  } catch (_e) {}
+  MODELO_CACHE = { v: v.startsWith("claude") ? v : MODELO_PADRAO, t: Date.now() };
+  return MODELO_CACHE.v;
+}
+async function chamarClaude(system, messages, maxTokens = 800) {
+  const principal = await getAgentModel();
+  const fila = [principal, ...[MODELO_RESERVA].filter((m)=>m !== principal)];
+  for (const modelo of fila) {
+    const body = { model: modelo, max_tokens: maxTokens, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], messages };
+    if (MODELOS_COM_RACIOCINIO.test(modelo)) { body.max_tokens = Math.max(maxTokens, 8000); body.output_config = { effort: "high" }; }
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": Deno.env.get("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok || j.error) { console.log("anthropic err " + modelo + " http " + res.status, JSON.stringify(j.error || j).slice(0, 300)); continue; }
+      const bloco = Array.isArray(j.content) ? j.content.find((c)=>c && c.type === "text" && c.text) : null;
+      const text = bloco ? bloco.text : "";
+      if (!text.trim()) { console.log("anthropic sem texto " + modelo, String(j.stop_reason || "")); continue; }
+      if (modelo !== principal) console.log("modelo de reserva usado: " + principal + " -> " + modelo);
+      const u = j.usage || {};
+      return { text, tokens_in: u.input_tokens || 0, tokens_out: u.output_tokens || 0, cache_read: u.cache_read_input_tokens || 0, cache_write: u.cache_creation_input_tokens || 0, model: modelo };
+    } catch (e) { console.log("anthropic exc " + modelo, String(e)); }
+  }
+  return { text: "", tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0, model: "" };
+}
 async function getSystemPrompt() {
   try {
     const r = await db("agent_config?config_key=eq.system_prompt&select=config_value");
@@ -368,31 +430,10 @@ async function anaReply(systemPrompt, history, contextBlock) {
       }
     }
   }
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": Deno.env.get("ANTHROPIC_API_KEY"),
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 800,
-      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-      messages: merged
-    })
-  });
-  const j = await res.json();
-  if (j.error) {
-    console.log("anthropic err", JSON.stringify(j.error));
-    return { text: "", tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0 };
-  }
-  const text = j.content && j.content[0] && j.content[0].text ? j.content[0].text : "";
-  const tokens_in = j.usage ? (j.usage.input_tokens || 0) : 0;
-  const tokens_out = j.usage ? (j.usage.output_tokens || 0) : 0;
-  const cache_read = j.usage ? (j.usage.cache_read_input_tokens || 0) : 0;
-  const cache_write = j.usage ? (j.usage.cache_creation_input_tokens || 0) : 0;
-  return { text, tokens_in, tokens_out, cache_read, cache_write };
+  // A API recusa historico que termina em 'assistant' (falha muda): corta o fim.
+  while(merged.length && merged[merged.length - 1].role !== "user")merged.pop();
+  if (!merged.length) return { text: "", tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0 };
+  return await chamarClaude(systemPrompt, merged, 800);
 }
 // Quebra a resposta em "balões" e respeita o limite de tamanho do Instagram.
 function hardWrap(s) {
@@ -841,8 +882,9 @@ async function sendPublicCommentReply(commentId, text) {
       body: JSON.stringify({ message: text })
     });
     const j = await r.json();
-    if (j.error) console.log("cmt public reply err", JSON.stringify(j.error));
-  } catch (e) { console.log("cmt public exc", String(e)); }
+    if (j.error) { console.log("cmt public reply err", JSON.stringify(j.error)); return false; }
+    return true;
+  } catch (e) { console.log("cmt public exc", String(e)); return false; }
 }
 // Resposta privada ancorada no comentário (1o balão via comment_id; resto como DM normal).
 // Retorna "complete", "partial" ou "none" para o comentário público nunca prometer mais do que saiu.
@@ -865,6 +907,75 @@ async function sendPrivateReplyToComment(commentId, igsid, text, directEnabled) 
     if (!await guardedSendOne(igsid, chunks[i], directEnabled)) return "partial";
   }
   return "complete";
+}
+// ─── Reclamação em comentário público: 1 frase de acolhimento + equipe (01/10/2026) ───
+// Pedido do Pedro: a Ana responde "com frase de acolhimento coerente ao caso
+// especifico". Antes era silencio ate um humano aparecer (3 a 12 dias em set/2026),
+// com "golpe" exposto no post. A equipe continua sendo chamada e resolve o caso;
+// a Ana so acolhe, 1 vez por pessoa a cada 24 h (quem posta 7 comentarios seguidos
+// recebe 1 resposta), e nunca promete estorno, troca, prazo ou valor.
+function temaReclamacao(t) {
+  const s = String(t || "").toLowerCase();
+  if (/estorno|reembols|meu dinheiro|cobran|cobrad|devolu/.test(s)) return "estorno";
+  if (/n[aã]o (recebi|recebo|chegou|veio)|nunca chegou|atras|entrega|n[aã]o entreg/.test(s)) return "entrega";
+  if (/quebrad|trincad|rachad|defeito|estragad|manchad|riscad|danificad/.test(s)) return "defeito";
+  if (/n[aã]o respond|ningu[eé]m respond|sem resposta|bloque|apag/.test(s)) return "resposta";
+  return "geral";
+}
+const ACOLHIMENTO_PADRAO = {
+  estorno: "Oi! Sentimos muito pela demora com o seu estorno. Nossa equipe já está cuidando do seu caso e vai te responder por aqui.",
+  entrega: "Oi! Sentimos muito pela demora na sua entrega. Nossa equipe já está verificando o seu caso e vai te responder por aqui.",
+  defeito: "Oi! Sentimos muito que o produto tenha chegado assim. Nossa equipe já está cuidando do seu caso e vai te responder por aqui.",
+  resposta: "Oi! Desculpa a demora em te responder. Nossa equipe já está com o seu caso e vai te responder por aqui.",
+  geral: "Oi! Sentimos muito pela sua experiência. Nossa equipe já está cuidando do seu caso e vai te responder por aqui."
+};
+const ACOLHIMENTO_PROIBIDO = /mercado\s*livre|\bmeli\b|\bamazon\b|\bshopee\b|\bmagalu\b|marketplace|R\$|\breais\b|\bpre[cç]o\b|\d+[.,]\d{2}\b|\bdirect\b|\bdm\b|mensage(?:m|ns)\s+privad|(?:no|em)\s+privado|n[uú]mero do pedido|n[ºo°]\s*do pedido|\bfoto\b|\btelefone\b|\bwhats(?:app)?\b|\bendere[cç]o\b|dados pessoais|\bcpf\b|e-?mail|golpe|fraude|vamos (?:estornar|reembolsar|devolver|trocar|reenviar)|(?:estorno|reembolso|troca|devolu[cç][aã]o)\s+(?:em|at[eé])\s+\d|em at[eé] \d+\s*(?:dias|horas)|\bprazo\b|garantimos|\[\[/i;
+function acolhimentoSeguro(gerado, tema) {
+  const t = String(gerado || "").split(CHUNK_SEP).join(" ").replace(/\s+/g, " ").replace(/^["'“]|["'”]$/g, "").trim();
+  if (!t || t.length > 240 || ACOLHIMENTO_PROIBIDO.test(t)) return ACOLHIMENTO_PADRAO[tema] || ACOLHIMENTO_PADRAO.geral;
+  return t;
+}
+const ACOLHIMENTO_SISTEMA = "Você é a Ana, da Budamix (utilidades domésticas). Vai responder em PÚBLICO a um comentário de RECLAMAÇÃO num post ou anúncio da Budamix no Instagram ou no Facebook. Muita gente vai ler.\n"
+  + "Escreva UMA ou DUAS frases curtas (no máximo 220 caracteres), em português do Brasil, que:\n"
+  + "1) acolham com empatia o problema ESPECÍFICO que a pessoa contou (ex.: estorno que não chegou, entrega atrasada, produto que chegou quebrado, falta de resposta), sem repetir xingamento nem acusação;\n"
+  + "2) digam que a equipe da Budamix já está cuidando do caso e vai responder por aqui.\n"
+  + "PROIBIDO: discutir, se defender ou negar acusação (nunca escreva a palavra golpe); prometer reembolso, estorno, troca, reenvio, prazo ou valor; pedir número do pedido, foto, telefone, e-mail ou qualquer dado pessoal; citar direct, DM, WhatsApp ou mensagem privada; citar Mercado Livre, Shopee, Amazon ou qualquer marketplace; falar de preço; usar emoji ou marcadores.\n"
+  + "Escreva só a resposta final, sem aspas.";
+async function gerarAcolhimento(text, isFb) {
+  const tema = temaReclamacao(text);
+  const gen = await chamarClaude(ACOLHIMENTO_SISTEMA, [{ role: "user", content: "Comentário (" + (isFb ? "Facebook" : "Instagram") + "): " + String(text || "").slice(0, 600) }], 300);
+  const texto = enforceRareEmojiPolicy(acolhimentoSeguro(gen.text, tema), String(text || ""));
+  return { texto, tema, modelo: gen.model, gerado: gen.text };
+}
+// 1 aceno por PESSOA a cada 24 h. A reserva leva a chave "acolh:<autor>" e so segue
+// a mais antiga: comentarios em rajada chegam em paralelo e podem abrir conversas
+// diferentes para a mesma pessoa. Se a equipe ja respondeu nas ultimas 24 h, a Ana
+// nao acena.
+async function reservarAcolhimento(convId, autorId) {
+  const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  try {
+    const h = await db("messages?conversation_id=eq." + convId + "&sender=eq.human_agent&created_at=gte." + desde + "&select=id&limit=1");
+    const hj = await h.json();
+    if (Array.isArray(hj) && hj.length) return null;
+  } catch (_e) {}
+  const chave = "acolh:" + autorId;
+  const id = await salvarComId(convId, "agent", "[acolhimento publico em preparo]", { message_type: "text", whatsapp_message_id: chave, metadata: { reply_scope: "acolhimento" } });
+  if (!id) return null;
+  try {
+    const r = await db("messages?whatsapp_message_id=eq." + encodeURIComponent(chave) + "&created_at=gte." + desde + "&select=id&order=created_at.asc,id.asc");
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length && rows[0].id !== id) { await apagarMensagem(id); return null; }
+  } catch (_e) { await apagarMensagem(id); return null; }
+  return id;
+}
+async function acolherReclamacaoPublica(commentId, convId, text, isFb, autorId) {
+  const reserva = await reservarAcolhimento(convId, autorId);
+  if (!reserva) { console.log("cmt reclamacao: ja houve resposta nas ultimas 24 h, sem novo aceno", convId); return "sem aceno (24h)"; }
+  const a = await gerarAcolhimento(text, isFb);
+  const publicado = isFb ? await sendPublicFacebookReply(commentId, a.texto) : await sendPublicCommentReply(commentId, a.texto);
+  if (!publicado) { await apagarMensagem(reserva); return "aceno falhou"; }
+  await patchMensagem(reserva, { content: a.texto, metadata: { reply_scope: "acolhimento", tema: a.tema, model: a.modelo } });
+  return "aceno publicado";
 }
 async function handleComment(value, directEnabled, platform = "instagram") {
   const isFb = platform === "facebook";
@@ -935,7 +1046,9 @@ async function handleComment(value, directEnabled, platform = "instagram") {
         body: JSON.stringify({ status: "escalated", assigned_to: "human" })
       });
     } catch (_e) {}
-    return "reclamacao -> humano";
+    let aceno = "";
+    try { aceno = await acolherReclamacaoPublica(commentId, convId, text, isFb, igsid); } catch (e) { console.log("aceno exc", String(e)); }
+    return "reclamacao -> humano" + (aceno ? " + " + aceno : "");
   }
 
   // Facebook: SEMPRE só público. Sem Messenger, a resposta tem que se bastar.
@@ -1000,6 +1113,15 @@ Deno.serve(async (req)=>{
   // Verificação do webhook (handshake da Meta)
   if (req.method === "GET") {
     const u = new URL(req.url);
+    // SONDA (01/10): gera o aceno publico de reclamacao sem publicar nem gravar.
+    // Uso: GET ?probe=acolhimento&key=<IG_VERIFY_TOKEN>&q=<comentario>[&fb=1]
+    if (u.searchParams.get("probe") === "acolhimento") {
+      if (u.searchParams.get("key") !== Deno.env.get("IG_VERIFY_TOKEN")) return new Response("Forbidden", { status: 403 });
+      const q = (u.searchParams.get("q") || "Golpe! Comprei e não recebi").slice(0, 600);
+      const t0 = Date.now();
+      const a = await gerarAcolhimento(q, u.searchParams.get("fb") === "1");
+      return new Response(JSON.stringify({ ok: true, ms: Date.now() - t0, reclamacao: commentLooksLikeComplaint(q), ...a }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     if (u.searchParams.get("hub.mode") === "subscribe" && u.searchParams.get("hub.verify_token") === Deno.env.get("IG_VERIFY_TOKEN")) {
       return new Response(u.searchParams.get("hub.challenge") || "", { status: 200 });
     }
