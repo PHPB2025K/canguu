@@ -29,7 +29,9 @@ const BUSINESS_HOURS_FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; reason: string
   { pattern: /\bretornar?\s+(?:depois|amanh[ãa]|na\s+segunda)\b/i,                      reason: 'retornar depois/amanhã/segunda' },
 ]
 
-const BUSINESS_HOURS_SAFE_REPLY = 'Estou disponível 24 horas por dia, 7 dias por semana. Como posso te ajudar? 😊'
+const BUSINESS_HOURS_SAFE_REPLY = 'Estou disponível 24 horas por dia, 7 dias por semana. Como posso te ajudar?'
+const EMPTY_RESPONSE_SAFE_REPLY = 'Desculpe, não consegui processar sua mensagem. Pode tentar novamente?'
+const META_REASONING_SAFE_REPLY = 'Oi! Como posso te ajudar?'
 
 /**
  * Detector puro — não muta. Retorna razões legíveis pra log/análise.
@@ -114,10 +116,10 @@ export function validateResponse(text: string): ValidationResult {
   // Empty check
   if (!text || text.trim().length === 0) {
     return {
-      text: 'Desculpe, não consegui processar sua mensagem. Pode tentar novamente? 😊',
+      text: EMPTY_RESPONSE_SAFE_REPLY,
       warnings: ['empty_response'],
       chunkCount: 1,
-      totalChars: 74,
+      totalChars: EMPTY_RESPONSE_SAFE_REPLY.length,
     }
   }
 
@@ -163,10 +165,10 @@ export function validateResponse(text: string): ValidationResult {
   // If filtering removed >70% of text OR left it empty, entire response was reasoning
   if (!cleaned || cleaned.trim().length === 0 || cleaned.length < originalLength * 0.3) {
     return {
-      text: 'Oi! Como posso te ajudar? 😊',
+      text: META_REASONING_SAFE_REPLY,
       warnings: [...warnings, 'meta_reasoning_fallback'],
       chunkCount: 1,
-      totalChars: 29,
+      totalChars: META_REASONING_SAFE_REPLY.length,
     }
   }
 

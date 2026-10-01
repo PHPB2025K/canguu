@@ -154,8 +154,8 @@ export const REGRAS_CORRECAO_ML = `COMO ESCREVER resposta_correta (OBRIGATÓRIO 
 - NÃO introduzir informação fora da VERDADE DO CATÁLOGO nem deixar a correção mais longa que o necessário.`
 
 export const REGRAS_CORRECAO_CHAT = `COMO ESCREVER resposta_correta (chat WhatsApp/Instagram — correção que violar é descartada automaticamente):
-- Curta e humana (máximo ${CHAT_MAX_TOTAL_CHARS} caracteres). Emojis com moderação são ok.
-- FORMATO EM BLOCOS (obrigatório): a Ana envia a mensagem em bolhas separadas. Se a resposta tem mais de uma ideia/frase, separe em 2 a 4 blocos curtos usando EXATAMENTE \\\\ entre eles (ex.: "Que situação chata, sinto muito! 😔\\\\Ninguém merece receber o pedido assim.\\\\Me passa o número do pedido e seu nome completo? Assim a equipe agiliza tudo pra você! 💛"). NUNCA use quebra de linha para separar bolhas e NUNCA passe de 4 blocos. Só resposta de UMA frase curta pode ficar sem \\\\.
+- Curta e humana (máximo ${CHAT_MAX_TOTAL_CHARS} caracteres). SEM emoji: aprendizados são modelos reutilizáveis e devem ser neutros.
+- FORMATO EM BLOCOS (obrigatório): a Ana envia a mensagem em bolhas separadas. Se a resposta tem mais de uma ideia/frase, separe em 2 a 4 blocos curtos usando EXATAMENTE \\\\ entre eles (ex.: "Que situação chata, sinto muito!\\\\Ninguém merece receber o pedido assim.\\\\Me passa o número do pedido e seu nome completo? Assim a equipe agiliza tudo pra você!"). NUNCA use quebra de linha para separar bolhas e NUNCA passe de 4 blocos. Só resposta de UMA frase curta pode ficar sem \\\\.
 - Em reclamação/problema (quebrado/com defeito/errado/faltando/não chegou) de compra em MARKETPLACE: empatia primeiro + coletar nº do pedido/foto quando ajudar + orientar o cliente a abrir a solicitação de devolução/troca NO PRÓPRIO app onde comprou (autoatendimento — ML "Devolver ou reclamar", Shopee "Pedido de Devolução/Reembolso", Amazon "Devolver ou substituir itens"), se oferecendo pra guiar passo a passo. Compra no SITE Budamix ou caso crítico: coletar dados + encaminhar pra equipe. NUNCA prometer troca/reembolso/prazo/coleta (só a equipe humana promete) e NUNCA mencionar horário de atendimento.
 - Não inflar o texto nem introduzir informação que não se sabe.`
 
@@ -179,6 +179,8 @@ export function validateCorrectionText(
   const s = (scopes && scopes.length ? scopes : ['all']).map((x) => String(x).toLowerCase())
   const appliesToMarketplace = s.includes('all') || s.includes('mercado_livre')
 
+  if (hasEmoji(t)) violations.push('emoji (aprendizado reutilizável deve ser neutro)')
+
   if (appliesToMarketplace) {
     for (const { pattern, reason } of FORBIDDEN_CLAIM_PATTERNS) {
       if (pattern.test(t)) violations.push(reason)
@@ -189,7 +191,7 @@ export function validateCorrectionText(
     for (const { pattern, reason } of FORBIDDEN_ADMIN_LEAK_PATTERNS) {
       if (pattern.test(t)) violations.push(`frase proibida: ${reason}`)
     }
-    if (hasEmoji(t)) violations.push('emoji (proibido em resposta pública de marketplace)')
+
     if (/https?:\/\//i.test(t)) violations.push('link externo')
     if (t.length > ML_QUESTION_MAX_CHARS) {
       violations.push(`${t.length} caracteres (máximo ${ML_QUESTION_MAX_CHARS} em resposta pública do ML)`)

@@ -70,7 +70,7 @@ ${COMUM}
 
 ${REGRAS_CORRECAO_ML}`
 
-const RUBRICA_CHAT = `Voce e auditor do atendimento da "Ana" (Budamix) em CHAT (WhatsApp/Instagram, suporte ao cliente). Avalie a RESPOSTA da Ana dada a ultima mensagem do cliente, no contexto da conversa. No chat emojis (com moderacao) e links do site sao permitidos (diferente do marketplace). REPROVE (inadequada) se houver qualquer um:
+const RUBRICA_CHAT = `Voce e auditor do atendimento da "Ana" (Budamix) em CHAT (WhatsApp/Instagram, suporte ao cliente). Avalie a RESPOSTA da Ana dada a ultima mensagem do cliente, no contexto da conversa. Links do site sao permitidos. Emojis devem ser raros: normalmente zero; no maximo 1 somente se o cliente usou emoji e a mensagem for claramente celebrativa. REPROVE uso decorativo em saudacao, confirmacao, explicacao, coleta de dados, reclamacao ou escalonamento. REPROVE (inadequada) se houver qualquer um:
 - Frase proibida / burocratica: "nao consta no cadastro", "vamos/vou verificar internamente", "vou conferir e te retorno", "horario de atendimento/comercial", "responderemos assim que possivel".
 - Inventar dado de produto, preco ou prazo; ou afirmar estoque/atributo que nao sabe.
 - Reclamacao/problema: nao demonstrar empatia primeiro, OU prometer troca/reembolso/prazo/coleta (so a equipe humana promete — a Ana coleta dados e escala). Ferimento/dano: tem que acolher + escalar.
@@ -85,7 +85,7 @@ const SCHEMA_HINT = `Responda SOMENTE um JSON valido:
 {"veredito":"adequada"|"inadequada","confianca":0.0-1.0,"motivo":"...","resposta_correta":"...","licao":"...","escopo":"todos"|"so_marketplace"|"so_conversa"|"so_este_canal","categoria":"<tema curto: entrega|troca|compatibilidade|material|cor|pagamento|tom|outro>"}
 Se adequada: resposta_correta/licao podem ser "".
 escopo: "todos" = vale em qualquer canal (politica, prazo de entrega, fato de produto); "so_marketplace" = so faz sentido em anuncio publico; "so_conversa" = so em chat (WhatsApp/Instagram Direct); "so_este_canal" = especifico do canal avaliado.
-ATENCAO: escopo "todos" exige resposta_correta que sirva TAMBEM em marketplace (sem emoji, max 350 caracteres). Se a correcao precisa de emoji/tom de chat, use "so_conversa".`
+ATENCAO: resposta_correta e aprendizado reutilizavel e deve ficar SEM emoji em qualquer escopo. Escopo "todos" exige texto que sirva TAMBEM em marketplace (max 350 caracteres).`
 
 // escopo sugerido pelo juiz -> array de canais ({all} eh canonico para "todos")
 // WhatsApp e Instagram sao tipos de atendimento DIFERENTES (quem chama num nao
@@ -174,7 +174,7 @@ ${REGRAS_CORRECAO_CHAT}
 ${CATALOGO}
 
 ESCOLHA DO ESCOPO:
-- Pergunta que veio de CHAT (WhatsApp/Instagram) cuja resposta e adequada so pra chat (emoji, tom pessoal, comprimento) -> escopo "so_conversa" e pode MANTER o texto/emoji se ja obedecer as regras de chat.
+- Pergunta que veio de CHAT (WhatsApp/Instagram) cuja resposta e adequada so pra chat (tom pessoal, comprimento) -> escopo "so_conversa", sempre SEM emoji porque o aprendizado sera reutilizado.
 - Pergunta que veio de MARKETPLACE -> escopo "so_marketplace" com a resposta na regua de marketplace (sem emoji, max 350 caracteres, sem "estamos a disposicao").
 - So use "todos" se o MESMO texto obedecer a regua de marketplace.
 REGRA ESPECIAL: se a resposta orienta abrir reclamacao/disputa/devolucao, troque pela orientacao canonica: acolher em UMA frase e orientar acompanhar pela aba de MENSAGENS DO PEDIDO no proprio Mercado Livre ("Minhas Compras" -> o pedido). NUNCA mencione reclamacao/disputa.
