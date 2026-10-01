@@ -959,7 +959,10 @@ async function downloadWaMedia(mediaId) {
     mime: meta.mime_type || "application/octet-stream"
   };
 }
-function extFor(mime) {
+function extFor(mime, nomeArquivo) {
+  // Documento: vale a extensao do nome original (nota.pdf, planilha.xlsx)
+  const doNome = /\.([a-z0-9]{1,5})$/i.exec(String(nomeArquivo || "").trim());
+  if (doNome) return doNome[1].toLowerCase();
   const mm = (mime || "").split(";")[0].trim().toLowerCase();
   const map = {
     "image/jpeg": "jpg",
@@ -967,13 +970,31 @@ function extFor(mime) {
     "image/png": "png",
     "image/webp": "webp",
     "image/gif": "gif",
+    "image/heic": "heic",
     "audio/ogg": "ogg",
     "audio/mpeg": "mp3",
     "audio/mp4": "m4a",
     "audio/aac": "aac",
     "audio/amr": "amr",
     "audio/wav": "wav",
-    "video/mp4": "mp4"
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/3gpp": "3gp",
+    "application/pdf": "pdf",
+    "text/plain": "txt",
+    "text/csv": "csv",
+    "text/xml": "xml",
+    "application/xml": "xml",
+    "application/json": "json",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "application/zip": "zip",
+    "application/vnd.rar": "rar",
+    "application/x-rar-compressed": "rar"
   };
   if (map[mm]) return map[mm];
   if (mm.startsWith("image/")) return "jpg";
@@ -981,10 +1002,13 @@ function extFor(mime) {
   if (mm.startsWith("video/")) return "mp4";
   return "bin";
 }
-async function uploadToStorage(kind, convId, msgId, bytes, mime) {
+// Tipo que o navegador executaria (pagina, script, svg) e guardado como arquivo comum: so baixa, nao abre.
+const TIPOS_QUE_EXECUTAM = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/javascript|application\/(x-)?javascript|application\/ecmascript)$/i;
+async function uploadToStorage(kind, convId, msgId, bytes, mime, nomeArquivo) {
   const safeId = String(msgId).replace(/[^A-Za-z0-9_-]/g, "_");
-  const path = kind + "/" + convId + "/" + safeId + "." + extFor(mime);
-  const ct = (mime || "").split(";")[0].trim() || "application/octet-stream";
+  const path = kind + "/" + convId + "/" + safeId + "." + extFor(mime, nomeArquivo);
+  let ct = (mime || "").split(";")[0].trim() || "application/octet-stream";
+  if (TIPOS_QUE_EXECUTAM.test(ct)) ct = "application/octet-stream";
   const r = await fetch(SU + "/storage/v1/object/chat-attachments/" + path, {
     method: "POST",
     headers: {
@@ -998,6 +1022,127 @@ async function uploadToStorage(kind, convId, msgId, bytes, mime) {
   });
   if (!r.ok) throw new Error("storage " + r.status + " " + (await r.text()).slice(0, 140));
   return SU + "/storage/v1/object/public/chat-attachments/" + path;
+}
+// ─── ARQUIVOS p/ a tela do Canggu (01/10/2026): documento, figurinha, localizacao, contato ───
+// A Ana continua sem abrir PDF; o arquivo fica guardado para a EQUIPE ver no painel
+// (antes so foto, audio e video ficavam; PDF e figurinha se perdiam).
+const LIMITE_ARQUIVO = 25 * 1024 * 1024; // limite do bucket chat-attachments
+async function baixarArquivoWa(mediaId) {
+  const info = await fetch(GRAPH + "/" + mediaId, {
+    headers: {
+      Authorization: "Bearer " + WA_TOKEN
+    }
+  }).then((r)=>r.json());
+  if (!info || !info.url) throw new Error("media url indisponivel");
+  const mime = info.mime_type || null;
+  const declarado = Number(info.file_size) || 0;
+  // Grande demais: nem baixa (o arquivo inteiro iria para a memoria da funcao)
+  if (declarado > LIMITE_ARQUIVO) return {
+    bytes: null,
+    size: declarado,
+    mime
+  };
+  const res = await fetch(info.url, {
+    headers: {
+      Authorization: "Bearer " + WA_TOKEN
+    }
+  });
+  if (!res.ok) throw new Error("download " + res.status);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > LIMITE_ARQUIVO) return {
+    bytes: null,
+    size: bytes.length,
+    mime
+  };
+  return {
+    bytes,
+    size: bytes.length,
+    mime
+  };
+}
+function nomeLimpo(nome) {
+  const n = String(nome || "").replace(/[\\/\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+  return n ? n.slice(0, 120) : null;
+}
+// Documento e figurinha: baixa da Meta e guarda no Storage. Devolve o metadata da mensagem.
+async function guardarArquivo(m, convId) {
+  const tipo = m.type;
+  const obj = m[tipo] || {};
+  const meta = {};
+  if (tipo === "document") {
+    const nome = nomeLimpo(obj.filename);
+    if (nome) meta.document_filename = nome;
+    if (obj.mime_type) meta.document_mimetype = obj.mime_type;
+    if (obj.caption && String(obj.caption).trim()) meta.caption = String(obj.caption).trim();
+  } else {
+    if (obj.mime_type) meta.sticker_mimetype = obj.mime_type;
+    if (obj.animated) meta.sticker_animated = true;
+  }
+  if (!obj.id) return meta;
+  try {
+    const arq = await baixarArquivoWa(obj.id);
+    const mime = arq.mime || obj.mime_type || "application/octet-stream";
+    if (tipo === "document" && arq.size) meta.document_size = arq.size;
+    if (!arq.bytes) {
+      meta.upload_error = "arquivo maior que 25 MB";
+      return meta;
+    }
+    const url = await uploadToStorage(tipo, convId, m.id, arq.bytes, mime, obj.filename);
+    if (tipo === "document") {
+      meta.document_url = url;
+      meta.document_mimetype = mime;
+    } else {
+      meta.sticker_url = url;
+      meta.sticker_mimetype = mime;
+    }
+  } catch (e) {
+    console.log(tipo + " upload err", String(e));
+    meta.upload_error = String(e).slice(0, 160);
+  }
+  return meta;
+}
+// Localizacao, contato, reacao e "unsupported": o que a Meta manda vai para metadata (a tela mostra).
+function metaSemArquivo(m) {
+  if (m.type === "location" && m.location) {
+    const l = m.location;
+    return {
+      location: {
+        latitude: l.latitude,
+        longitude: l.longitude,
+        name: l.name || null,
+        address: l.address || null,
+        url: l.url || null
+      }
+    };
+  }
+  if (m.type === "contacts" && Array.isArray(m.contacts)) {
+    return {
+      contacts: m.contacts.slice(0, 10).map((c)=>({
+          name: c.name && (c.name.formatted_name || [
+            c.name.first_name,
+            c.name.last_name
+          ].filter(Boolean).join(" ")) || "Contato",
+          org: c.org && c.org.company || null,
+          phones: (c.phones || []).map((p)=>p.phone || p.wa_id).filter(Boolean),
+          emails: (c.emails || []).map((e)=>e.email).filter(Boolean)
+        }))
+    };
+  }
+  if (m.type === "reaction" && m.reaction) {
+    return {
+      reaction: {
+        emoji: m.reaction.emoji || "",
+        message_id: m.reaction.message_id || null
+      }
+    };
+  }
+  if (m.type === "unsupported") {
+    const meta = {};
+    if (Array.isArray(m.errors) && m.errors.length) meta.wa_errors = m.errors.slice(0, 3);
+    if (m.unsupported) meta.unsupported = m.unsupported;
+    return meta;
+  }
+  return {};
 }
 async function transcribeAudio(base64, mime) {
   if (!GROQ_KEY) return null;
@@ -1182,12 +1327,22 @@ function parseInbound(m) {
       pickedSource = rid.slice(4);
       text = "[Cliente selecionou canal: " + rtitle + "]";
     } else text = rtitle ? "[" + rtitle + "]" : "[interactive]";
+  } else if (m.type === "reaction") {
+    // Reacao nao pede resposta; antes ia para o historico como "formato que voce nao consegue ler"
+    const emoji = m.reaction && m.reaction.emoji;
+    text = emoji ? "[reaction: " + emoji + "]" : "[reaction removida]";
+  } else if (m.type === "button") {
+    // Toque em botao de modelo de mensagem (campanha): o texto do botao e a resposta
+    text = m.button && m.button.text ? "[" + m.button.text + "]" : "[button]";
   } else {
     const AVISO = {
       video: AVISO_VIDEO,
       document: "[O cliente enviou um DOCUMENTO/PDF. Voce NAO consegue abrir. Peca o numero do pedido ou uma foto.]",
       sticker: "[O cliente enviou uma figurinha. Nao ha conteudo — apenas siga a conversa, sem inventar assunto.]",
-      location: "[O cliente enviou uma LOCALIZACAO. Se for sobre entrega, peca o CEP em texto.]",
+      location: "[O cliente enviou uma LOCALIZACAO" + (m.location && (m.location.name || m.location.address) ? ": " + [
+        m.location.name,
+        m.location.address
+      ].filter(Boolean).join(", ") : "") + ". Se for sobre entrega, peca o CEP em texto.]",
       contacts: "[O cliente enviou um CONTATO. Se precisar falar com outra pessoa, peca o telefone em texto.]"
     };
     text = AVISO[m.type] || "[" + m.type + " — formato que voce nao consegue ler. Peca para o cliente escrever em texto.]";
@@ -1227,9 +1382,14 @@ async function handleValue(value) {
     // anterior do cliente era respondida sozinha e a Ana respondia de novo depois:
     // 18% das respostas de set/2026 sairam em dobro.
     const legenda = temMidia && m[m.type] && m[m.type].caption ? String(m[m.type].caption).trim() : "";
+    const temArquivo = m.type === "document" || m.type === "sticker";
+    const metaFixa = metaSemArquivo(m);
     const rowId = await saveMessage(convId, "customer", temMidia ? (legenda ? legenda + "\n" : "") + PREVIA_MIDIA[m.type] : text, {
       message_type: m.type,
-      whatsapp_message_id: m.id
+      whatsapp_message_id: m.id,
+      ...Object.keys(metaFixa).length ? {
+        metadata: metaFixa
+      } : {}
     });
     if (await copiaRepetida(m.id, rowId)) {
       console.log("dedup: copia simultanea descartada", m.id);
@@ -1242,6 +1402,15 @@ async function handleValue(value) {
       else patch.content = (legenda ? legenda + "\n" : "") + FALHA_MIDIA[m.type];
       if (r && r.meta && Object.keys(r.meta).length) patch.metadata = r.meta;
       await patchMessage(rowId, patch);
+    }
+    if (temArquivo) {
+      const metaArq = await guardarArquivo(m, convId);
+      if (Object.keys(metaArq).length) await patchMessage(rowId, {
+        metadata: {
+          ...metaFixa,
+          ...metaArq
+        }
+      });
     }
     if (pickedSource) await updateCustomerSource(customerId, pickedSource);
     // TRAVA 1: atendimento automatico de empresa — grava e nao responde.

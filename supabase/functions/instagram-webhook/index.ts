@@ -557,17 +557,20 @@ async function downloadUrl(url) {
 }
 function extFor(mime) {
   const mm = (mime || "").split(";")[0].trim().toLowerCase();
-  const map = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/wav": "wav", "video/mp4": "mp4" };
+  const map = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/wav": "wav", "video/mp4": "mp4", "video/quicktime": "mov", "application/pdf": "pdf", "text/plain": "txt", "text/csv": "csv", "application/zip": "zip" };
   if (map[mm]) return map[mm];
   if (mm.startsWith("image/")) return "jpg";
   if (mm.startsWith("audio/")) return "ogg";
   if (mm.startsWith("video/")) return "mp4";
   return "bin";
 }
+// Tipo que o navegador executaria (pagina, script, svg) e guardado como arquivo comum: so baixa, nao abre.
+const TIPOS_QUE_EXECUTAM = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/javascript|application\/(x-)?javascript|application\/ecmascript)$/i;
 async function uploadToStorage(kind, convId, msgId, bytes, mime) {
   const safeId = String(msgId).replace(/[^A-Za-z0-9_-]/g, "_");
   const path = kind + "/" + convId + "/" + safeId + "." + extFor(mime);
-  const ct = (mime || "").split(";")[0].trim() || "application/octet-stream";
+  let ct = (mime || "").split(";")[0].trim() || "application/octet-stream";
+  if (TIPOS_QUE_EXECUTAM.test(ct)) ct = "application/octet-stream";
   const r = await fetch(SU + "/storage/v1/object/chat-attachments/" + path, {
     method: "POST",
     headers: { Authorization: "Bearer " + SR, apikey: SR, "Content-Type": ct, "x-upsert": "true", "Cache-Control": "3600" },
@@ -605,8 +608,93 @@ async function describeImage(base64, mime) {
   const t = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text;
   return t || null;
 }
-// Processa anexos do Instagram (image / audio / video / share / story_mention).
+// ─── ANEXOS p/ a tela do Canggu (01/10/2026) ───
+// Antes so o 1o anexo de foto/audio/video ficava guardado. Story, post ou reels compartilhado,
+// card de produto, arquivo e a 2a foto em diante se perdiam (a equipe via "[template recebido]").
+// Agora cada anexo vai para metadata.attachments com o arquivo guardado (quando ha) e o link.
+const IG_COMPARTILHADO = {
+  share: "Publicação compartilhada",
+  ig_post: "Publicação compartilhada",
+  story_mention: "Story que menciona a Budamix",
+  story_reply: "Resposta a um story",
+  ig_reel: "Reels compartilhado",
+  reel: "Reels compartilhado",
+  template: "Conteúdo compartilhado",
+  fallback: "Link compartilhado"
+};
+const IG_KIND = { image: "image", animated_image: "image", video: "video", audio: "audio", file: "document" };
+const LIMITE_ARQUIVO = 25 * 1024 * 1024; // limite do bucket chat-attachments
+async function baixarLimitado(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("download " + res.status);
+  if ((Number(res.headers.get("content-length")) || 0) > LIMITE_ARQUIVO) {
+    try { await res.body?.cancel(); } catch (_e) {}
+    return null;
+  }
+  const mime = (res.headers.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > LIMITE_ARQUIVO) return null;
+  return { bytes, mime, size: bytes.length };
+}
+// URL da midia, link e titulo, no formato de cada tipo (post, reels, card de produto, link)
+function midiaDoAnexo(a) {
+  const p = a && a.payload || {};
+  const el = p.generic && p.generic.elements && p.generic.elements[0] || p.elements && p.elements[0] || p.product && p.product.elements && p.product.elements[0] || null;
+  if (a && a.type === "fallback") return { url: null, link: p.url || null, title: p.title || null };
+  return {
+    url: p.url || el && el.image_url || null,
+    link: el && el.default_action && el.default_action.url || el && el.url || p.link || null,
+    title: el && el.title || p.title || null
+  };
+}
+async function guardarAnexosExtras(message, convId, msgId, metaPrimeiro) {
+  const atts = message && message.attachments || [];
+  const lista = [];
+  for (let i = 0; i < atts.length && i < 10; i++) {
+    const a = atts[i] || {};
+    const tipo = a.type || "anexo";
+    // 1o anexo de foto/audio/video e tratado em processarPrimeiroAnexo (chaves image_url/audio_url/video_url)
+    if (i === 0 && (tipo === "image" || tipo === "audio" || tipo === "video")) continue;
+    const { url, link, title } = midiaDoAnexo(a);
+    const rotulo = IG_COMPARTILHADO[tipo] || null;
+    const item = { kind: IG_KIND[tipo] || "link", url: null, title: rotulo, link };
+    if (rotulo && title && title !== rotulo) item.caption = String(title).slice(0, 300);
+    if (url) {
+      try {
+        const arq = await baixarLimitado(url);
+        if (!arq) item.upload_error = "arquivo maior que 25 MB";
+        else {
+          const kind = IG_KIND[tipo] || (arq.mime.startsWith("image/") ? "image" : arq.mime.startsWith("video/") ? "video" : arq.mime.startsWith("audio/") ? "audio" : "document");
+          // IG entrega voz como video/mp4: normaliza p/ o <audio> tocar (igual ao 1o anexo)
+          const mime = kind === "audio" && !arq.mime.startsWith("audio/") ? "audio/mp4" : arq.mime;
+          item.kind = kind;
+          item.mime = mime;
+          item.size = arq.size;
+          item.url = await uploadToStorage(kind, convId, i ? msgId + "_" + i : msgId, arq.bytes, mime);
+        }
+      } catch (e) {
+        console.log("anexo extra err", String(e));
+        item.upload_error = String(e).slice(0, 160);
+      }
+    }
+    lista.push(item);
+  }
+  return lista;
+}
 async function processAttachments(message, convId, msgId) {
+  const r = await processarPrimeiroAnexo(message, convId, msgId);
+  if (!r) return r;
+  const lista = await guardarAnexosExtras(message, convId, msgId, r.meta || {});
+  if (lista.length) {
+    r.meta = r.meta || {};
+    r.meta.attachments = lista;
+    // Formato cru dos tipos novos (story, card, reels...) para conferencia: so tipo e payload
+    r.meta.ig_payload = JSON.stringify((message.attachments || []).map((a)=>({ type: a && a.type, payload: a && a.payload }))).slice(0, 2000);
+  }
+  return r;
+}
+// Processa o 1o anexo do Instagram (image / audio / video / share / story_mention): o texto que a Ana le.
+async function processarPrimeiroAnexo(message, convId, msgId) {
   const atts = message && message.attachments || [];
   if (!atts.length) return null;
   const a = atts[0];
@@ -645,10 +733,17 @@ async function processAttachments(message, convId, msgId) {
     }
     if (a.type === "video" && url) {
       try {
-        const md = await downloadUrl(url);
-        meta.video_url = await uploadToStorage("video", convId, msgId, md.bytes, md.mime);
-        meta.video_mimetype = md.mime;
-      } catch (e) { console.log("video upload err", String(e)); }
+        // sem base64 e com teto: video grande nem entra na memoria da funcao
+        const md = await baixarLimitado(url);
+        if (!md) meta.upload_error = "arquivo maior que 25 MB";
+        else {
+          meta.video_url = await uploadToStorage("video", convId, msgId, md.bytes, md.mime);
+          meta.video_mimetype = md.mime;
+        }
+      } catch (e) {
+        console.log("video upload err", String(e));
+        meta.upload_error = String(e).slice(0, 160);
+      }
       return { text: "[Video recebido]", meta };
     }
   } catch (e) {
