@@ -44,7 +44,7 @@ export function useMarketplaceQuestions(platform?: string, status?: string, sear
         query = query.eq('platform', platform);
       }
       if (status && status !== 'all') {
-        query = query.eq('status', status);
+        query = status === 'unanswered' ? query.in('status', ['unanswered', 'pending', 'failed']) : query.eq('status', status);
       }
       if (search) {
         query = query.or(`question_text.ilike.%${search}%,product_name.ilike.%${search}%`);
@@ -57,6 +57,7 @@ export function useMarketplaceQuestions(platform?: string, status?: string, sear
       // inativo, sem ação possível) vai pro FIM — senão uma pergunta antiga ignorada sobe ao topo.
       const priority: Record<string, number> = {
         unanswered: 0,
+        pending: 0,
         failed: 1,
         ai_suggested: 2,
         answered: 3,
@@ -82,7 +83,7 @@ export function useMarketplaceQuestionCounts() {
       const { count: unanswered } = await supabase
         .from('marketplace_questions')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'unanswered')
+        .in('status', ['unanswered', 'pending', 'failed'])
         .not('seller_id', 'is', null);
       const { count: aiSuggested } = await supabase
         .from('marketplace_questions')
@@ -101,7 +102,7 @@ export function useUnansweredCount() {
       const { count } = await supabase
         .from('marketplace_questions')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'unanswered')
+        .in('status', ['unanswered', 'pending', 'failed'])
         .not('seller_id', 'is', null);
       return count ?? 0;
     },
@@ -255,6 +256,16 @@ export function useAnswerQuestion() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, answer_text, answered_by }: { id: string; answer_text: string; answered_by: string }) => {
+      const { data: question, error: readError } = await supabase.from('marketplace_questions').select('platform').eq('id', id).single();
+      if (readError) throw readError;
+      if (question.platform === 'mercado_livre') {
+        const { data, error } = await supabase.functions.invoke('ml-webhook', { body: { action: 'manual_answer', id, answer: answer_text } });
+        if (error) throw error;
+        if (!data?.ok || !['answered_verified', 'already_answered_verified'].includes(data.state)) {
+          throw new Error('O envio ainda não foi confirmado no Mercado Livre. Confira a pergunta antes de tentar novamente.');
+        }
+        return;
+      }
       const { error } = await supabase
         .from('marketplace_questions')
         .update({

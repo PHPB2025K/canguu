@@ -13,6 +13,7 @@ import type { MarketplaceQuestion } from '@/types/database';
 
 const statusConfig: Record<string, { label: string; className: string; icon: typeof Circle }> = {
   unanswered: { label: 'Não respondida', className: 'bg-warning/15 text-warning', icon: Circle },
+  pending: { label: 'Atendimento humano', className: 'bg-warning/15 text-warning', icon: User },
   answered: { label: 'Respondida', className: 'bg-success/15 text-success', icon: CheckCircle },
   ai_suggested: { label: 'Sugestão IA', className: 'bg-primary/10 text-primary', icon: Sparkles },
   failed: { label: 'Erro', className: 'bg-destructive/10 text-destructive', icon: AlertCircle },
@@ -149,6 +150,11 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <PlatformBadge platform={question.platform} />
+          {question.platform === 'mercado_livre' && question.seller_id && (
+            <span className="text-xs font-medium text-muted-foreground">
+              {({ '532562281': 'ML1 · Budamix', '3642409154': 'ML2 · Kanoa', '2237203375': 'ML3 · SPBROGLIO' } as Record<string, string>)[question.seller_id] ?? 'Conta ML'}
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">{relativeTime}</span>
           {question.ai_response_time_ms != null && (
             <AiResponseTimeBadge ms={question.ai_response_time_ms} />

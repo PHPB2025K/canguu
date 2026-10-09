@@ -6,6 +6,11 @@ on:
     paths:
       - 'supabase/functions/**'
   workflow_dispatch:
+    inputs:
+      functions:
+        description: 'Nomes das funções, separados por espaço; deploy global desabilitado'
+        required: true
+        type: string
 
 concurrency:
   group: deploy-edge-functions
@@ -32,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - uses: supabase/setup-cli@v1
         with:
@@ -40,42 +45,26 @@ jobs:
 
       - name: Detect changed paths
         id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          MANUAL_FUNCTIONS: ${{ inputs.functions }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed=$(git diff --name-only HEAD^ HEAD -- 'supabase/functions/' || git diff --name-only HEAD -- 'supabase/functions/')
-          echo "Changed files:"
-          echo "$changed"
-          if echo "$changed" | grep -qE '^supabase/functions/_shared/'; then
-            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
+            functions=$(printf '%s\n' "$MANUAL_FUNCTIONS" | tr ' ' '\n')
           else
-            functions=$(echo "$changed" | sed -nE 's|^supabase/functions/([^/]+)/.*|\1|p' | sort -u | grep -v '^_shared$' || true)
-            echo "functions<<EOF" >> "$GITHUB_OUTPUT"
-            echo "$functions" >> "$GITHUB_OUTPUT"
-            echo "EOF" >> "$GITHUB_OUTPUT"
-            echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+            functions=$(python3 scripts/affected-edge-functions.py "$BEFORE" "$AFTER")
           fi
-
-      - name: Deploy all functions (shared code changed)
-        if: steps.detect.outputs.deploy_all == 'true'
-        run: |
-          for dir in supabase/functions/*/; do
-            name=$(basename "$dir")
-            [ "$name" = "_shared" ] && continue
-            echo "::group::Deploying $name"
-            if echo " $NO_JWT_FUNCTIONS " | grep -q " $name "; then
-              echo "  -> $name está em NO_JWT_FUNCTIONS, usando --no-verify-jwt"
-              supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
-            else
-              supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
-            fi
-            echo "::endgroup::"
-          done
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            [[ "$name" =~ ^[a-z0-9-]+$ ]] && [ -f "supabase/functions/$name/index.ts" ] || exit 1
+          done <<< "$functions"
+          echo "functions<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$functions" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Deploy changed functions only
-        if: steps.detect.outputs.deploy_all == 'false' && steps.detect.outputs.functions != ''
+        if: steps.detect.outputs.functions != ''
         run: |
           while IFS= read -r name; do
             [ -z "$name" ] && continue

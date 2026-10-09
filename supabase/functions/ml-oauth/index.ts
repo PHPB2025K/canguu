@@ -178,19 +178,41 @@ async function handleRefresh(req: Request): Promise<Response> {
     return jsonResponse({ success: false, error: 'No tokens found to refresh', count: 0 })
   }
 
-  const results: Array<{ sellerId: string; success: boolean; error?: string }> = []
+  const results: Array<{ sellerId: string; success: boolean; managedExternally?: boolean; error?: string }> = []
 
   for (const token of tokens) {
+    // ML2/3 share access-only tokens; the existing VPS owner alone rotates refresh tokens.
+    if (token.metadata?.token_owner === 'vps-openclaw') {
+      results.push({ sellerId: token.seller_id, success: true, managedExternally: true });
+      continue;
+    }
+    if (String(token.app_id) !== Deno.env.get('ML_APP_ID')) {
+      results.push({ sellerId: token.seller_id, success: false, error: 'app_id_mismatch' });
+      continue;
+    }
+
+    const lockKey = `token-refresh:${token.seller_id}`;
+    const lock = await supabase.rpc('claim_ml_work', { p_key: lockKey, p_ttl: 60 });
+    if(lock.error || !lock.data) {
+      results.push({sellerId:token.seller_id,success:false,error:'refresh_in_progress'});
+      continue;
+    }
     try {
-      if (!token.refresh_token) {
+      const {data:current,error:readError}=await supabase.from('marketplace_tokens').select('refresh_token,token_expires_at').eq('id',token.id).single();
+      if(readError || !current)throw new Error('token_read_failed');
+      if(Date.parse(current.token_expires_at)>Date.now()+300000) {
+        results.push({sellerId:token.seller_id,success:true});
+        continue;
+      }
+      if (!current.refresh_token) {
         results.push({ sellerId: token.seller_id, success: false, error: 'No refresh_token' })
         continue
       }
 
-      const newTokenData = await refreshAccessToken(token.refresh_token)
+      const newTokenData = await refreshAccessToken(current.refresh_token)
       const newExpiresAt = new Date(Date.now() + newTokenData.expires_in * 1000).toISOString()
 
-      await supabase
+      const {error: saveError} = await supabase
         .from('marketplace_tokens')
         .update({
           access_token: newTokenData.access_token,
@@ -199,6 +221,7 @@ async function handleRefresh(req: Request): Promise<Response> {
           status: 'active',
         })
         .eq('id', token.id)
+      if(saveError)throw new Error('token_store_failed');
 
       results.push({ sellerId: token.seller_id, success: true })
       log('token_refreshed', { seller_id: token.seller_id })
@@ -206,13 +229,15 @@ async function handleRefresh(req: Request): Promise<Response> {
       const message = err instanceof Error ? err.message : String(err)
       results.push({ sellerId: token.seller_id, success: false, error: message })
 
-      // Mark as expired if refresh failed
-      await supabase
+      // A transient provider/database failure must not disconnect a valid account.
+      if(/invalid_grant|invalid_token|invalid_client|unauthorized/i.test(message)) await supabase
         .from('marketplace_tokens')
         .update({ status: 'expired' })
         .eq('id', token.id)
 
       log('refresh_failed', { seller_id: token.seller_id, error: message })
+    } finally {
+      await supabase.from('ml_work_leases').update({state:'retry',retry_after:new Date().toISOString()}).eq('work_key',lockKey);
     }
   }
 
