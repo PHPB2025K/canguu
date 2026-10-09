@@ -155,6 +155,17 @@ export function buildGrounding(
       })),
     },
   };
+  // Observed catalog defect: title says aluminum while MATERIAL says porcelain.
+  // Do not let a microwave-safe flag override contradictory material sources.
+  const material = stable.attributes.find((a: any) => a.id === "MATERIAL");
+  if (
+    /aluminio/.test(norm(item.title || "")) &&
+    /porcelana|ceramica/.test(norm(material?.value || "")) &&
+    /micro|forno|aquec|material|porcelana|aluminio/.test(q)
+  ) {
+    facts.conflito_de_material =
+      "Título informa alumínio, mas o atributo de material informa porcelana/cerâmica. Encaminhar para humano; não confirmar material nem uso com aquecimento até corrigir as fontes.";
+  }
   // Existing catalog is shared by exact SKU or an unambiguous explicit listing map.
   // Never inherit other listing prices, stock, titles, kit quantities or all variations.
   if (product) {
@@ -197,6 +208,11 @@ export function validateGroundedAnswer(
   answer: string,
   context: string,
 ): string | null {
+  try {
+    if (JSON.parse(context).conflito_de_material) {
+      return "material_sources_conflict_requires_human";
+    }
+  } catch { /* Other callers may supply plain-text grounding. */ }
   if (/\[\[\s*ESCALAR/i.test(answer)) return "missing_verified_information";
   // Reject invented quantities/dimensions/temperature/price, even if the prose sounds plausible.
   const nums = (s: string) =>

@@ -131,6 +131,43 @@ const fixture = (seller: string) => ({
   last_updated: "2026-10-09",
 });
 
+Deno.test("contradictory aluminum/porcelain sources cannot authorize microwave use", () => {
+  const item = {
+    ...fixture("532562281"),
+    title: "Canequinha alumínio",
+    attributes: [
+      { id: "MATERIAL", name: "Material", value_name: "Porcelana" },
+      {
+        id: "IS_MICROWAVE_SAFE",
+        name: "Apto para micro-ondas",
+        value_name: "Sim",
+      },
+    ],
+  };
+  const context = buildGrounding(
+    "532562281",
+    item,
+    { description: "" },
+    null,
+    "Pode ir ao micro-ondas?",
+  );
+  assert.equal(
+    validateGroundedAnswer("Sim, pode ir ao micro-ondas.", context),
+    "material_sources_conflict_requires_human",
+  );
+  const stock = buildGrounding(
+    "532562281",
+    item,
+    { description: "" },
+    null,
+    "Está disponível?",
+  );
+  assert.equal(
+    validateGroundedAnswer("Sim, está disponível neste anúncio.", stock),
+    null,
+  );
+});
+
 Deno.test("account and item ownership is mandatory", () => {
   assert.throws(() => assertOwner("3642409154", fixture("532562281")), /owner/);
   assert.throws(

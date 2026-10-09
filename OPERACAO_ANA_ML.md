@@ -7,7 +7,7 @@ O webhook e a reconciliação periódica usam o mesmo caminho: confirmar vendedo
 - A chave do conhecimento é `(seller_id, item_id)`; SKU, identificadores de variação e atributos vêm do anúncio. O vínculo com `products` exige correspondência determinística. Conflitos ficam sem vínculo; o anúncio continua utilizável.
 - Informações estáveis ficam em `ml_listing_knowledge`. Atualização por versão do anúncio, com revisão diária da descrição. O conteúdo é comparado por hash; não há chamadas ao modelo na sincronização.
 - Preço de venda usa `/items/{id}/sale_price?context=channel_marketplace` quando solicitado. Estoque e disponibilidade por variação vêm da API atual e são revalidados antes da publicação. O estoque agregado do catálogo interno não determina disponibilidade no anúncio.
-- O modelo recebe somente o anúncio e trechos pertinentes à pergunta, além de orientações do canal. Correções são limitadas ao mesmo vendedor e anúncio. Divergências ou evidências ausentes devem produzir decisão `human`.
+- O modelo recebe somente o anúncio e trechos pertinentes à pergunta, além de orientações do canal. Correções são limitadas ao mesmo vendedor e anúncio. Divergências ou evidências ausentes devem produzir decisão `human`. Uma trava determinística impede confirmar material/aquecimento quando título indica alumínio e atributo indica porcelana/cerâmica, contradição observada em anúncio real.
 - Evidência literal, números e regras do canal são validados antes do envio. Isso reduz erros; não substitui a correção dos dados de origem.
 
 ## Autorização e credenciais
