@@ -47,8 +47,8 @@ def run():
             label=LABELS.get(row['seller_id'],'ML')
             if h.get('ack_status')=='pending' and age>300:
                 issues.append(('ack_'+row['platform_question_id'],f"{label} · {row['platform_item_id']} · acolhimento ainda não confirmado há {round(age/60)} min; novas tentativas continuam. Verificar acesso e anúncio na Canggu."))
-            elif age>900:
-                issues.append(('human_'+row['platform_question_id'],f"{label} · {row['platform_item_id']} · atendimento humano pendente há {round(age/60)} min. A resposta pública não resolve o caso interno; confirmar dados e registrar a resolução na Canggu."))
+            if not h.get('escalation_id') and age>300:
+                issues.append(('escalation_'+row['platform_question_id'],f"{label} · {row['platform_item_id']} · registro no módulo de Escalonamentos ainda não confirmado. Verificar integração Canggu."))
     except Exception:issues.append(('human_queue_check','Não foi possível verificar a fila humana da ANA na Canggu.'))
     try: previous=json.loads(STATE.read_text())
     except Exception: previous={}

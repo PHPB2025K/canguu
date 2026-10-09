@@ -44,7 +44,7 @@ function database() {
         or(_expression: string) {
           filters.push((r) =>
             r.ai_classification?.handoff?.ack_status === "pending" ||
-            !r.ai_classification?.handoff?.notified_at
+            !r.ai_classification?.handoff?.escalation_id
           );
           return q;
         },
@@ -103,7 +103,64 @@ function database() {
       };
       return q;
     },
-    async rpc(_name: string, { p_key }: any) {
+    async rpc(name: string, args: any) {
+      if (name === "ensure_ml_escalation") {
+        const row = tables.marketplace_questions.find((r) =>
+          r.id === args.p_question_id
+        );
+        db.events?.push("escalate");
+        db.attempts?.push({
+          delivery: row.ai_classification.handoff.ack_status,
+        });
+        if (db.options?.failNotify) {
+          return { error: { message: "temporary database failure" } };
+        }
+        tables.escalations ||= [];
+        let e = tables.escalations.find((x) =>
+          x.marketplace_question_id === row.id
+        );
+        if (!e) {
+          e = {
+            id: crypto.randomUUID(),
+            marketplace_question_id: row.id,
+            status: "pending",
+          };
+          tables.escalations.push(e);
+        }
+        e.marketplace_context = args.p_context;
+        row.ai_classification.handoff.escalation_id = e.id;
+        return { data: e.id };
+      }
+      if (name === "resolve_ml_handoff") {
+        const row = tables.marketplace_questions.find((r) =>
+          r.id === args.p_question_id
+        );
+        const e = tables.escalations.find((r) =>
+          r.marketplace_question_id === row.id
+        );
+        Object.assign(e, {
+          status: "resolved",
+          notes: args.p_note,
+          resolved_by: args.p_user,
+        });
+        Object.assign(row.ai_classification.handoff, {
+          resolved_at: new Date().toISOString(),
+          resolved_by: args.p_user,
+          resolution_note: args.p_note,
+        });
+        row.status = row.ai_classification.handoff.ack_status === "unavailable"
+          ? "skipped"
+          : "answered";
+        return {
+          data: {
+            ok: true,
+            state: "human_resolved",
+            public_message_sent: false,
+          },
+        };
+      }
+      assert.equal(name, "claim_ml_work");
+      const { p_key } = args;
       tables.ml_work_leases ||= [];
       let old = tables.ml_work_leases.find((x) => x.work_key === p_key);
       if (
@@ -276,6 +333,7 @@ async function scenario(seller: string, options: any = {}) {
   let calls = 0;
   const notifications: any[] = [];
   const events: string[] = [];
+  Object.assign(db, { events, attempts: notifications, options });
   const original = globalThis.fetch;
   const question = {
     id: 12345,
@@ -348,11 +406,6 @@ async function scenario(seller: string, options: any = {}) {
       };
     },
     async () => ({}),
-    async (seller, q, item, reason, delivery) => {
-      events.push("notify");
-      notifications.push({ seller, q, item, reason, delivery });
-      return !options.failNotify;
-    },
   );
   return {
     db,
@@ -429,7 +482,7 @@ Deno.test("dry run reads real path, generates, never sends or persists questions
     s.restore();
   }
 });
-Deno.test("unknown information receives acknowledgement before notifying and stays pending", async () => {
+Deno.test("unknown information receives acknowledgement before panel escalation and stays pending", async () => {
   const s = await scenario("2237203375", { human: true });
   try {
     const r = await s.support.process("2237203375", "12345");
@@ -439,7 +492,7 @@ Deno.test("unknown information receives acknowledgement before notifying and sta
       s.posted[0].body.text,
       handoffAcknowledgement("Qual o material?"),
     );
-    assert.deepEqual(s.events, ["post", "notify"]);
+    assert.deepEqual(s.events, ["post", "escalate"]);
     assert.equal(s.notifications[0].delivery, "verified");
     assert.equal(s.db.tables.marketplace_questions[0].status, "pending");
     assert.equal(
@@ -452,6 +505,7 @@ Deno.test("unknown information receives acknowledgement before notifying and sta
     assert.equal(s.notifications.length, 1);
     await s.support.reconcile("2237203375");
     assert.equal(s.db.tables.marketplace_questions[0].status, "pending");
+    assert.equal(s.db.tables.escalations.length, 1);
   } finally {
     s.restore();
   }
@@ -568,6 +622,14 @@ for (const seller of Object.keys(ML_ACCOUNTS)) {
       assert.equal(done.public_message_sent, false);
       assert.equal(row.status, "answered");
       assert.equal(row.ai_classification.handoff.resolved_by, "human");
+      const e = s.db.tables.escalations[0];
+      assert.equal(e.status, "resolved");
+      assert.equal(
+        e.marketplace_context.account_label,
+        ML_ACCOUNTS[seller].label,
+      );
+      assert.equal(e.marketplace_context.subject, "Qual o material?");
+      assert.equal(e.marketplace_context.order.status, "not_linked");
       assert.equal(s.posted.length, 1);
       await s.support.reconcile(seller);
       assert.equal(row.status, "answered");
@@ -684,7 +746,7 @@ Deno.test("legacy open human queue is acknowledged by reconciliation", async () 
     s.restore();
   }
 });
-Deno.test("failed internal notification retries without reposting public acknowledgement", async () => {
+Deno.test("failed panel escalation retries without reposting public acknowledgement", async () => {
   const seller = "3642409154";
   const options = { human: true, failNotify: true };
   const s = await scenario(seller, options);
@@ -692,20 +754,74 @@ Deno.test("failed internal notification retries without reposting public acknowl
     await s.support.process(seller, "12345");
     assert.equal(
       s.db.tables.marketplace_questions[0].ai_classification.handoff
-        .notified_at,
+        .escalation_id,
       undefined,
     );
     options.failNotify = false;
     s.db.tables.ml_work_leases.find((l: any) =>
-      l.work_key === `handoff-notify:${seller}:12345`
+      l.work_key === `handoff-escalation:${seller}:12345`
     ).retry_after = "2000-01-01";
     await s.support.reconcile(seller);
     assert(
       s.db.tables.marketplace_questions[0].ai_classification.handoff
-        .notified_at,
+        .escalation_id,
     );
     assert.equal(s.posted.length, 1);
     assert.equal(s.notifications.length, 2);
+  } finally {
+    s.restore();
+  }
+});
+
+Deno.test("panel registration retries independently while the acknowledgement waits for its next attempt", async () => {
+  const seller = "3642409154";
+  const options = { human: true, failSend: true, failNotify: true };
+  const s = await scenario(seller, options);
+  try {
+    await s.support.process(seller, "12345");
+    options.failNotify = false;
+    s.db.tables.ml_work_leases.find((l: any) =>
+      l.work_key === `handoff-escalation:${seller}:12345`
+    ).retry_after = "2000-01-01";
+    await s.support.reconcile(seller);
+    assert.equal(s.db.tables.escalations.length, 1);
+    assert.equal(s.posted.length, 1);
+    assert.equal(
+      s.db.tables.marketplace_questions[0].ai_classification.handoff.ack_status,
+      "pending",
+    );
+  } finally {
+    s.restore();
+  }
+});
+
+Deno.test("previously notified human cases are recovered into the panel without another public reply", async () => {
+  const seller = "2237203375";
+  const s = await scenario(seller);
+  try {
+    s.db.tables.marketplace_questions = [{
+      id: "legacy",
+      platform: "mercado_livre",
+      seller_id: seller,
+      platform_question_id: "12345",
+      platform_item_id: "MLB100",
+      status: "pending",
+      question_text: "Qual o material?",
+      product_name: "Jogo de memória",
+      ai_classification: {
+        handoff: {
+          required: true,
+          ack_status: "verified",
+          reason: "confirmar material",
+          notified_at: "2026-10-09",
+        },
+      },
+    }];
+    s.setRemoteAnswer("Olá! Sua dúvida está em acompanhamento.");
+    await s.support.reconcile(seller);
+    assert.equal(s.db.tables.escalations.length, 1);
+    assert.equal(s.posted.length, 0);
+    assert.equal(s.calls(), 0);
   } finally {
     s.restore();
   }

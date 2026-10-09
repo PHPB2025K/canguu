@@ -300,7 +300,7 @@ export function useResolveMLHandoff() {
       }
     },
     onSuccess: () => {
-      for (const key of ['marketplace-questions', 'marketplace-question-counts', 'marketplace-unanswered-count', 'sidebar-marketplace-count']) {
+      for (const key of ['marketplace-questions', 'marketplace-question-counts', 'marketplace-unanswered-count', 'sidebar-marketplace-count', 'escalations', 'escalation-counts', 'dashboard']) {
         qc.invalidateQueries({ queryKey: [key] });
       }
     },

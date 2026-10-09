@@ -17,6 +17,9 @@ export function useEscalationList(statusFilter?: string) {
         queryClient.invalidateQueries({ queryKey: ["escalations"] });
         queryClient.invalidateQueries({ queryKey: ["escalation-counts"] });
       })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "marketplace_questions", filter: "platform=eq.mercado_livre" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["escalations"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
@@ -26,7 +29,7 @@ export function useEscalationList(statusFilter?: string) {
     queryFn: async (): Promise<EscalationWithMessages[]> => {
       let q = supabase
         .from("escalations")
-        .select("*, conversations(*, customers(*))")
+        .select("*, conversations(*, customers(*)), marketplace_questions(id,seller_id,platform_question_id,platform_item_id,product_name,question_text,answer_text,ai_classification)")
         .order("escalated_at", { ascending: false });
 
       if (statusFilter && statusFilter !== "all") {
@@ -37,7 +40,7 @@ export function useEscalationList(statusFilter?: string) {
       if (error) throw error;
 
       const escalations = (data ?? []) as unknown as EscalationWithDetails[];
-      const convIds = [...new Set(escalations.map((e) => e.conversation_id))];
+      const convIds = [...new Set(escalations.map((e) => e.conversation_id).filter((id): id is string => !!id))];
 
       let messagesMap: Record<string, Message[]> = {};
       if (convIds.length > 0) {
@@ -62,7 +65,7 @@ export function useEscalationList(statusFilter?: string) {
 
       return escalations.map((e) => ({
         ...e,
-        recentMessages: messagesMap[e.conversation_id] ?? [],
+        recentMessages: e.conversation_id ? messagesMap[e.conversation_id] ?? [] : [],
       }));
     },
   });
@@ -91,6 +94,16 @@ export function useAssignEscalation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, email }: { id: string; email: string }) => {
+      const { data: escalation, error: readError } = await supabase.from("escalations")
+        .select("marketplace_question_id").eq("id", id).single();
+      if (readError) throw readError;
+      if (escalation.marketplace_question_id) {
+        const { data, error } = await supabase.functions.invoke("ml-webhook", {
+          body: { action: "assign_handoff", id: escalation.marketplace_question_id },
+        });
+        if (error || !data?.ok) throw new Error("Não foi possível assumir o escalonamento.");
+        return;
+      }
       const { error } = await supabase
         .from("escalations")
         .update({ status: "in_progress", resolved_by: email })
@@ -100,6 +113,7 @@ export function useAssignEscalation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["escalations"] });
       qc.invalidateQueries({ queryKey: ["escalation-counts"] });
+      qc.invalidateQueries({ queryKey: ["sidebar-escalation-count"] });
     },
   });
 }
@@ -108,6 +122,16 @@ export function useResolveEscalation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const { data: escalation, error: readError } = await supabase.from("escalations")
+        .select("marketplace_question_id").eq("id", id).single();
+      if (readError) throw readError;
+      if (escalation.marketplace_question_id) {
+        const { data, error } = await supabase.functions.invoke("ml-webhook", {
+          body: { action: "resolve_handoff", id: escalation.marketplace_question_id, note: notes },
+        });
+        if (error || !data?.ok) throw new Error("A resolução não foi confirmada. Verifique o acolhimento e registre ao menos 20 caracteres.");
+        return;
+      }
       const { data, error } = await supabase
         .from("escalations")
         .update({ status: "resolved", notes, resolved_at: new Date().toISOString() })
@@ -129,6 +153,9 @@ export function useResolveEscalation() {
       qc.invalidateQueries({ queryKey: ["escalations"] });
       qc.invalidateQueries({ queryKey: ["escalation-counts"] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
+      for (const key of ["marketplace-questions", "marketplace-question-counts", "marketplace-unanswered-count", "sidebar-marketplace-count", "sidebar-escalation-count", "dashboard"]) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
     },
   });
 }

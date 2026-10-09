@@ -7,6 +7,7 @@ import {
   stableItem,
   validateGroundedAnswer,
 } from "./ml-grounding.ts";
+import { escalationContext } from "./ml-escalation.ts";
 import { validateMLQuestionResponse } from "./ml-response-validator.ts";
 import {
   handoffAcknowledgement,
@@ -275,13 +276,6 @@ export function makeSupport(
   getToken: TokenResolver,
   generate: Generator,
   getConfig: () => Promise<any>,
-  notify?: (
-    seller: string,
-    question: any,
-    item: any,
-    reason: string,
-    delivery?: string,
-  ) => Promise<any>,
 ) {
   async function prepare(
     seller: string,
@@ -424,33 +418,33 @@ export function makeSupport(
     );
     return { ...latest, ...value };
   }
-  async function notifyHandoff(row: any) {
+  async function recordEscalation(row: any) {
     const h = row.ai_classification.handoff;
-    if (!notify || h.notified_at || h.resolved_at) return;
-    const key = `handoff-notify:${row.seller_id}:${row.platform_question_id}`;
+    if (h.escalation_id || h.resolved_at) return;
+    const key =
+      `handoff-escalation:${row.seller_id}:${row.platform_question_id}`;
     if (!check(await db.rpc("claim_ml_work", { p_key: key, p_ttl: 180 }))) {
       return;
     }
     try {
-      const sent = await notify(
-        row.seller_id,
-        {
-          id: row.platform_question_id,
-          text: row.question_text,
-          item_id: row.platform_item_id,
-        },
-        { title: row.product_name },
-        h.reason,
-        h.ack_status,
+      const context = await escalationContext(row, async (path) => {
+        const token = await getToken(db, row.seller_id);
+        if (!token) throw new Error("account_token_unavailable");
+        return mlRead(path, token);
+      });
+      const id = check(
+        await db.rpc("ensure_ml_escalation", {
+          p_question_id: row.id,
+          p_context: context,
+        }),
       );
-      if (sent !== true) throw new Error("handoff_notification_unconfirmed");
-      await patchHandoff(row, { notified_at: iso() });
-      await finish(key, "done", { notified: true });
+      if (!id) throw new Error("escalation_unconfirmed");
+      await finish(key, "done", { escalation_id: id });
     } catch {
       await finish(
         key,
         "retry",
-        { reason: "handoff_notification_failed" },
+        { reason: "escalation_registration_failed" },
         new Date(Date.now() + 120000).toISOString(),
       );
     }
@@ -463,10 +457,11 @@ export function makeSupport(
     const key = `handoff:${seller}:${qid}`;
     let h = row.ai_classification.handoff;
     if (["verified", "external_answer", "unavailable"].includes(h.ack_status)) {
-      await notifyHandoff(row);
+      await recordEscalation(row);
       return { ok: true, state: "human", acknowledgement: h.ack_status };
     }
     if (!check(await db.rpc("claim_ml_work", { p_key: key, p_ttl: 300 }))) {
+      await recordEscalation(row);
       return { ok: true, state: "handoff_busy_or_retry_scheduled" };
     }
     try {
@@ -486,7 +481,7 @@ export function makeSupport(
             last_error: "remote_question_not_open",
           });
           await finish(key, "done", { reason: "remote_question_not_open" });
-          await notifyHandoff(row);
+          await recordEscalation(row);
           return { ok: true, state: "human", acknowledgement: "unavailable" };
         }
         const item = await mlRead("/items/" + remote.item_id, token);
@@ -557,7 +552,7 @@ export function makeSupport(
         ).toISOString(),
       );
     }
-    await notifyHandoff(row);
+    await recordEscalation(row);
     h = row.ai_classification.handoff;
     return {
       ok: h.ack_status !== "pending",
@@ -601,16 +596,16 @@ export function makeSupport(
     if (
       !["verified", "external_answer", "unavailable"].includes(h.ack_status)
     ) throw new Error("acknowledgement_not_confirmed");
-    await patchHandoff(row, {
-      resolved_at: iso(),
-      resolved_by: user,
-      resolution_note: note.trim(),
-    }, {
-      status: h.ack_status === "unavailable" ? "skipped" : "answered",
-      error_message: null,
-    });
-    return { ok: true, state: "human_resolved", public_message_sent: false };
+    await recordEscalation(row);
+    return check(
+      await db.rpc("resolve_ml_handoff", {
+        p_question_id: id,
+        p_note: note.trim(),
+        p_user: user,
+      }),
+    );
   }
+
   async function process(
     seller: string,
     qid: string,
@@ -943,7 +938,7 @@ export function makeSupport(
           "failed",
           "ai_suggested",
         ]).or(
-          "ai_classification->handoff->>ack_status.eq.pending,ai_classification->handoff->>notified_at.is.null",
+          "ai_classification->handoff->>ack_status.eq.pending,ai_classification->handoff->>escalation_id.is.null",
         ).limit(20),
     );
     const openIds = new Set(questions.map((q: any) => String(q.id)));

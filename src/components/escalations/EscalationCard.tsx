@@ -7,6 +7,7 @@ import { RelativeTime } from "@/components/common/RelativeTime";
 import { formatPhone, truncateText, displayName } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { EscalationWithMessages } from "@/hooks/useEscalations";
+import { MLDetails, mlHandoff } from "./MLDetails";
 
 const borderByUrgency: Record<string, string> = {
   critical: "border-l-4 border-l-destructive",
@@ -31,6 +32,8 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
   const navigate = useNavigate();
   const customer = escalation.conversations?.customers;
   const isResolved = escalation.status === "resolved";
+  const isML = !!escalation.marketplace_question_id;
+  const canResolve = !isML || ["verified", "external_answer", "unavailable"].includes(mlHandoff(escalation)?.ack_status);
 
   return (
     <Card className={cn("p-5 border-border shadow-sm transition-colors", borderByUrgency[escalation.urgency ?? "medium"] ?? borderByUrgency.medium)}>
@@ -55,6 +58,7 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
           </p>
         )}
         <p className="text-foreground mt-2">{escalation.reason}</p>
+        <MLDetails escalation={escalation} />
 
         {/* Message preview */}
         {escalation.recentMessages.length > 0 && (
@@ -89,21 +93,21 @@ export function EscalationCard({ escalation, onAssign, onResolve }: EscalationCa
 
       {/* Footer */}
       <div className="flex gap-2 mt-4">
-        <Button
+        {!isML && escalation.conversation_id && <Button
           variant="outline"
           size="sm"
           onClick={() => navigate(`/conversations/${escalation.conversation_id}`)}
         >
           <MessageSquare className="h-3.5 w-3.5 mr-1" />
           Ver Conversa
-        </Button>
+        </Button>}
         {!isResolved && (
           <>
             <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onAssign}>
               <UserCheck className="h-3.5 w-3.5 mr-1" />
               Assumir
             </Button>
-            <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={onResolve}>
+            <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={onResolve} disabled={!canResolve}>
               <CheckCircle className="h-3.5 w-3.5 mr-1" />
               Resolver
             </Button>

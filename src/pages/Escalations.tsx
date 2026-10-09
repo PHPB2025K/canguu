@@ -27,6 +27,7 @@ const Escalations = () => {
   const handleAssign = (id: string) => {
     assignMut.mutate({ id, email: user?.email ?? "unknown" }, {
       onSuccess: () => toast({ title: "Escalonamento assumido" }),
+      onError: (error) => toast({ title: "Não foi possível assumir", description: error.message, variant: "destructive" }),
     });
   };
 
@@ -37,6 +38,7 @@ const Escalations = () => {
         toast({ title: "Escalonamento resolvido" });
         setResolveId(null);
       },
+      onError: (error) => toast({ title: "Não foi possível resolver", description: error.message, variant: "destructive" }),
     });
   };
 
@@ -100,6 +102,8 @@ const Escalations = () => {
       </Tabs>
 
       <ResolveDialog
+        key={resolveId ?? "closed"}
+        minLength={escalations?.find((e) => e.id === resolveId)?.marketplace_question_id ? 20 : 1}
         open={!!resolveId}
         onOpenChange={(v) => { if (!v) setResolveId(null); }}
         onConfirm={handleResolve}

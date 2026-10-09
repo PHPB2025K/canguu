@@ -12,7 +12,7 @@ O webhook e a reconciliação periódica usam o mesmo caminho: confirmar vendedo
 
 ## Autorização e credenciais
 
-`ml-webhook` precisa aceitar notificações públicas. Toda ação administrativa, entretanto, exige autenticação. `dry_run` e `manual_answer` aceitam usuário autenticado da Canggu. `sync_account`, `sync_listing` e `reconcile` exigem credencial de serviço validada.
+`ml-webhook` precisa aceitar notificações públicas. Toda ação administrativa, entretanto, exige autenticação. `dry_run`, `manual_answer`, `assign_handoff` e `resolve_handoff` aceitam usuário autenticado da Canggu. `sync_account`, `sync_listing` e `reconcile` exigem credencial de serviço validada.
 
 ML1 conserva o OAuth Canggu. A renovação possui exclusão mútua entre webhook e `ml-oauth`. ML2/ML3 reutilizam apenas o acesso de curta duração da integração operacional existente; o processo que já renova suas credenciais continua sendo o único dono dos refresh tokens. Não copiar nem renovar refresh tokens no conector ANA.
 
@@ -26,22 +26,37 @@ A Canggu só apresenta envio confirmado depois de reler a resposta no ML. Uma re
 
 O acolhimento confirmado tem autoria `ai_handoff` e **mantém `status=pending`**. Os dados em `ai_classification.handoff` registram motivo, texto, tentativas, confirmação, notificação e resolução humana. A ação autenticada `resolve_handoff` exige nota da equipe com confirmação/fonte/ação; não publica uma segunda mensagem. A equipe deve corrigir a fonte do produto/anúncio quando necessário. A nota interna não é automaticamente transformada em característica do produto.
 
-Travas separadas `handoff:` e `handoff-notify:` evitam duplicar a resposta e o aviso interno. Confirmação por leitura remota também cobre timeout depois de envio bem-sucedido. Falha do acolhimento continua em novas tentativas, com espera limitada a 30 minutos, sem abandono após três tentativas e sem nova geração de IA. O aviso interno vem depois da tentativa pública e indica se o acolhimento foi confirmado; falha de notificação também é repetida. Se o ML demonstrar que a pergunta foi encerrada/removida, registrar a impossibilidade e manter tratamento humano; nunca fabricar confirmação.
+Travas separadas `handoff:` e `handoff-escalation:` evitam duplicar a resposta e o registro na fila. Confirmação por leitura remota também cobre timeout depois de envio bem-sucedido. Falha do acolhimento continua em novas tentativas, com espera limitada a 30 minutos, sem abandono após três tentativas e sem nova geração de IA. O registro no módulo **Escalonamentos** vem depois da tentativa pública e mostra se o acolhimento foi confirmado. Falha de gravação é repetida independentemente do prazo da próxima tentativa de acolhimento. Se o ML demonstrar que a pergunta foi encerrada/removida, registrar a impossibilidade e manter tratamento humano; nunca fabricar confirmação.
 
 Perguntas que já receberam acolhimento têm somente **Registrar resolução interna** no painel. O filtro **Pendentes de atendimento** inclui essa fila. A conciliação automática não encerra um caso humano só porque o ML passou a apresentar `ANSWERED`.
+
+## Escalonamentos para Yasmin (decisão de 09/10/2026)
+
+Usar o módulo já existente **Canggu → Escalonamentos**. Não automatizar continuidade em chat de pedido. O webhook também não envia mais aviso de caso humano ao Telegram; permanecem somente alertas técnicos do monitor operacional.
+
+Uma pergunta ML tem no máximo um registro em `escalations`, vinculado por `marketplace_question_id` (FK única). `conversation_id` fica nulo para ML; os outros canais continuam com suas conversas. O cartão mostra conta, assunto, anúncio, ID/texto da pergunta, motivo, acolhimento e referência de pedido. A equipe pode assumir e resolver. Resolver atualiza a pergunta e o escalonamento numa única transação, sem mensagens públicas ou privadas e sem reabrir conversa de outro canal. RPCs de criação e resolução são exclusivas do serviço; o painel usa a função autenticada. A resolução fica bloqueada enquanto o acolhimento estiver pendente (salvo impossibilidade comprovada pelo ML).
+
+Perguntas não trazem automaticamente um pedido. Consulta de pedidos só ocorre diante de relato de compra ou número explícito, sem usar IA:
+
+- Número explícito: validar vendedor, comprador, anúncio e data na API antes de marcar confirmado.
+- Sem número: buscar pedidos do mesmo comprador/vendedor (até 50 resultados), conferir anúncio e data. Resultado único é **candidato, vínculo a confirmar**, não associação comprovada.
+- Resultado múltiplo/parcial, API indisponível ou falta de identificação: explicitar no cartão para conferência humana. Pré-venda fica **sem pedido vinculado à pergunta**.
+- Nenhuma consulta de chat ou envio de mensagem de pós-venda. ID da pergunta nunca vira número do pedido.
+
+Não há consumo adicional de tokens nessa etapa. A consulta de pedidos é feita uma vez por criação de caso, com chamadas de leitura e registro estruturado.
 
 ## Rotinas na VPS
 
 - `ana-ml-bridge.py`: a cada 2 minutos, importa acessos ML2/ML3 e reconcilia as três contas. ML1 preserva a notificação imediata; o conector aguarda pelo menos 60 segundos antes de recuperá-la. Limite de cinco perguntas por conta/ciclo.
 - `ana-ml-bridge.py --catalog`: diariamente às 05:17, horário local São Paulo. Compara alterações e mantém checkpoints por item; também revisita dados com mais de 24 horas. Novos anúncios são carregados sob demanda ao chegar a primeira pergunta.
-- `ana-ml-monitor.py`: substitui o monitor de perguntas existente, no mesmo agendamento de 10 minutos. Verifica saúde do conector, acesso real às contas, perguntas aguardando mais de 15 minutos, acolhimento não confirmado após 5 minutos e casos humanos pendentes após 15 minutos mesmo quando já respondidos publicamente. HTTP com erro nunca é considerado fila vazia. Reutiliza o destino operacional de alertas já configurado.
+- `ana-ml-monitor.py`: substitui o monitor de perguntas existente, no mesmo agendamento de 10 minutos. Verifica saúde do conector, acesso real às contas, perguntas aguardando mais de 15 minutos, acolhimento ou registro em Escalonamentos não confirmado após 5 minutos. A fila humana já registrada não gera lembrete após 15 minutos; Yasmin a consulta diariamente. HTTP com erro nunca é considerado fila vazia. Reutiliza o destino operacional de alertas já configurado.
 - Estado e checkpoints ficam na pasta privada de estado `ana-ml` da VPS. Backups do monitor e crontab são preservados antes de substituição.
 - Limite atual da listagem de catálogo: 1.000 anúncios ativos por conta. Ao alcançá-lo, o job sinaliza erro explícito; migrar a enumeração para scan antes de ampliar acima desse volume.
 
 ## Validação
 
 ```sh
-npx -y deno test --no-config supabase/functions/_shared/ml-support.test.ts
+npx -y deno test --no-config supabase/functions/_shared/ml-support.test.ts supabase/functions/_shared/ml-escalation.test.ts
 npx -y deno check --no-config supabase/functions/ml-webhook/index.ts supabase/functions/ml-oauth/index.ts
 npm test -- --run
 npm run build

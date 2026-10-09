@@ -216,7 +216,9 @@ export type Database = {
       }
       escalations: {
         Row: {
-          conversation_id: string
+          conversation_id: string | null
+          marketplace_question_id: string | null
+          marketplace_context: Json | null
           escalated_at: string | null
           id: string
           notes: string | null
@@ -227,7 +229,9 @@ export type Database = {
           urgency: string | null
         }
         Insert: {
-          conversation_id: string
+          conversation_id?: string | null
+          marketplace_question_id?: string | null
+          marketplace_context?: Json | null
           escalated_at?: string | null
           id?: string
           notes?: string | null
@@ -238,7 +242,9 @@ export type Database = {
           urgency?: string | null
         }
         Update: {
-          conversation_id?: string
+          conversation_id?: string | null
+          marketplace_question_id?: string | null
+          marketplace_context?: Json | null
           escalated_at?: string | null
           id?: string
           notes?: string | null
@@ -249,6 +255,13 @@ export type Database = {
           urgency?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "escalations_marketplace_question_id_fkey"
+            columns: ["marketplace_question_id"]
+            isOneToOne: true
+            referencedRelation: "marketplace_questions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "escalations_conversation_id_fkey"
             columns: ["conversation_id"]

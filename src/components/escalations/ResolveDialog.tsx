@@ -15,15 +15,15 @@ interface ResolveDialogProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: (notes: string) => void;
   loading?: boolean;
+  minLength?: number;
 }
 
-export function ResolveDialog({ open, onOpenChange, onConfirm, loading }: ResolveDialogProps) {
+export function ResolveDialog({ open, onOpenChange, onConfirm, loading, minLength = 1 }: ResolveDialogProps) {
   const [notes, setNotes] = useState("");
 
   const handleSubmit = () => {
-    if (!notes.trim()) return;
+    if (notes.trim().length < minLength) return;
     onConfirm(notes.trim());
-    setNotes("");
   };
 
   return (
@@ -36,16 +36,18 @@ export function ResolveDialog({ open, onOpenChange, onConfirm, loading }: Resolv
           <Label>Notas de resolução *</Label>
           <Textarea
             rows={4}
+            maxLength={2000}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Descreva como o escalonamento foi resolvido..."
           />
+          {minLength > 1 && <p className="text-xs text-muted-foreground">Registre a ação realizada (mínimo de {minLength} caracteres). Esta nota é interna.</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
             onClick={handleSubmit}
-            disabled={!notes.trim() || loading}
+            disabled={notes.trim().length < minLength || loading}
             className="bg-success hover:bg-success/90 text-white"
           >
             Resolver

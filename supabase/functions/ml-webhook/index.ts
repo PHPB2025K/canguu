@@ -530,58 +530,6 @@ ${productContext}${correctionContext}`;
   };
 }
 
-async function notifyTelegramML(
-  supabase: any,
-  questionText: string,
-  productName: string,
-  reason: string,
-  delivery?: string,
-  questionId?: string,
-) {
-  try {
-    const { data } = await supabase.from("integration_tokens").select(
-      "access_token",
-    ).eq("provider", "telegram_bot").single();
-    const bot = data?.access_token;
-    if (!bot) {
-      console.log("ml escalate: sem telegram_bot");
-      return false;
-    }
-    const esc = (s: string) =>
-      String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
-        />/g,
-        "&gt;",
-      );
-    const msg = "🚨 <b>Escalonamento — Mercado Livre (pergunta)</b>\n" +
-      "Produto: " + esc(productName) + "\n" +
-      "Pergunta: <i>" + esc(String(questionText).slice(0, 180)) + "</i>\n" +
-      "Motivo: " + esc(reason) + "\n" +
-      "Pergunta ID: " + esc(questionId || "") + "\n" +
-      "Acolhimento: " + esc(delivery || "pendente") + "\n" +
-      "\n👉 Trate a pendência na Canggu: confirme a informação, corrija o cadastro/anúncio quando necessário e registre a resolução interna. O ML aceita apenas uma resposta por pergunta. O acolhimento público NÃO encerra o caso interno.";
-    const response = await fetch(
-      "https://api.telegram.org/bot" + bot + "/sendMessage",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: "-1003730816228",
-          message_thread_id: 15411,
-          text: msg,
-          parse_mode: "HTML",
-          disable_web_page_preview: true,
-        }),
-        signal: AbortSignal.timeout(15000),
-      },
-    );
-    const result = await response.json();
-    return response.ok && result.ok === true;
-  } catch (e) {
-    console.log("ml escalate notification failed");
-    return false;
-  }
-}
-
 // Administrative actions never trust the public webhook payload as authorization.
 async function authenticate(req: Request, db: any) {
   const bearer = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
@@ -622,15 +570,6 @@ Deno.serve(async (req: Request) => {
     getMLToken,
     generateAIAnswer,
     () => getAgentConfig(db),
-    async (seller, q, item, reason, delivery) =>
-      notifyTelegramML(
-        db,
-        q.text,
-        `${ML_ACCOUNTS[seller].label} · ${item?.title || q.item_id}`,
-        reason,
-        delivery,
-        String(q.id),
-      ),
   );
   const url = new URL(req.url);
   if (req.method === "GET" && url.searchParams.get("probe") === "1") {
@@ -657,7 +596,10 @@ Deno.serve(async (req: Request) => {
     }
   }
   if (req.method !== "POST") {
-    return json({ status: "ok", version: "ana-ml-acolhimento-obrigatorio-20261009" });
+    return json({
+      status: "ok",
+      version: "ana-ml-escalonamentos-painel-20261009",
+    });
   }
   try {
     const body = await req.json();
@@ -689,6 +631,22 @@ Deno.serve(async (req: Request) => {
           user: auth.user,
         });
         return json(r, r.ok ? 200 : 502);
+      }
+      if (body.action === "assign_handoff") {
+        if (typeof body.id !== "string") {
+          return json({ error: "invalid_request" }, 400);
+        }
+        const { data, error } = await db.from("escalations")
+          .update({ status: "in_progress", resolved_by: auth.user })
+          .eq("marketplace_question_id", body.id).in("status", [
+            "pending",
+            "in_progress",
+          ])
+          .select("id").maybeSingle();
+        if (error || !data) {
+          return json({ error: "open_escalation_not_found" }, 409);
+        }
+        return json({ ok: true });
       }
       if (body.action === "resolve_handoff") {
         if (typeof body.id !== "string" || typeof body.note !== "string") {

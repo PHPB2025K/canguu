@@ -125,7 +125,13 @@ export interface FAQ {
 
 export interface Escalation {
   id: string;
-  conversation_id: string;
+  conversation_id: string | null;
+  marketplace_question_id?: string | null;
+  marketplace_context?: {
+    account_label: string;
+    subject: string;
+    order: { status: string; id: string | null };
+  } | null;
   reason: string;
   urgency: string | null;
   status: string | null;
@@ -136,7 +142,17 @@ export interface Escalation {
 }
 
 export interface EscalationWithDetails extends Escalation {
-  conversations: ConversationWithCustomer;
+  conversations: ConversationWithCustomer | null;
+  marketplace_questions?: {
+    id: string;
+    seller_id: string | null;
+    platform_question_id: string;
+    platform_item_id: string | null;
+    product_name: string | null;
+    question_text: string;
+    answer_text: string | null;
+    ai_classification: Json | null;
+  } | null;
 }
 
 export interface AgentConfig {
