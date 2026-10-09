@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { PlatformBadge } from './PlatformBadge';
-import { useAnswerQuestion, useRejectSuggestion, useFeedbackQuestion, useSubmitCorrection } from '@/hooks/useMarketplaces';
+import { useAnswerQuestion, useRejectSuggestion, useFeedbackQuestion, useSubmitCorrection, useResolveMLHandoff } from '@/hooks/useMarketplaces';
 import { useToast } from '@/hooks/use-toast';
 import type { MarketplaceQuestion } from '@/types/database';
 
@@ -38,11 +38,11 @@ function AiResponseTimeBadge({ ms }: { ms: number }) {
 }
 
 function AnsweredByBadge({ answeredBy }: { answeredBy: string }) {
-  if (answeredBy === 'ai_agent' || answeredBy === 'ai') {
+  if (answeredBy === 'ai_agent' || answeredBy === 'ai' || answeredBy === 'ai_handoff') {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
         <Bot className="h-3 w-3" />
-        IA
+        {answeredBy === 'ai_handoff' ? 'Acolhimento ANA' : 'IA'}
       </span>
     );
   }
@@ -85,13 +85,18 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
   const [manualAnswer, setManualAnswer] = useState('');
   const [showCorrectionForm, setShowCorrectionForm] = useState(false);
   const [correctionText, setCorrectionText] = useState('');
+  const [resolutionNote, setResolutionNote] = useState('');
   const { toast } = useToast();
   const answerMutation = useAnswerQuestion();
   const rejectMutation = useRejectSuggestion();
   const feedbackMutation = useFeedbackQuestion();
   const correctionMutation = useSubmitCorrection();
+  const resolutionMutation = useResolveMLHandoff();
+  const handoff = question.platform === 'mercado_livre' ? (question.ai_classification as any)?.handoff : null;
 
-  const status = statusConfig[question.status] ?? statusConfig.unanswered;
+  const status = handoff?.resolved_at
+    ? { label: 'Tratado internamente', className: 'bg-success/15 text-success', icon: CheckCircle }
+    : statusConfig[question.status] ?? statusConfig.unanswered;
   const StatusIcon = status.icon;
   const displayDate = question.external_created_at ?? question.created_at;
   const relativeTime = displayDate
@@ -192,6 +197,31 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
       {/* Expanded */}
       {expanded && (
         <div className="mt-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+          {handoff?.required && (
+            <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 space-y-3">
+              <p className="text-sm font-medium">{handoff.resolved_at ? 'Acompanhamento concluído' : 'Acolhimento e acompanhamento humano'}</p>
+              <p className="text-sm">
+                {handoff.ack_status === 'verified' ? (handoff.resolved_at ? 'Acolhimento confirmado no anúncio. O tratamento interno está concluído.' : 'Acolhimento confirmado no anúncio. A dúvida continua sob responsabilidade da equipe até o registro da resolução.')
+                  : handoff.ack_status === 'external_answer' ? 'Foi confirmada uma resposta de outro atendimento no Mercado Livre. Confira se ela resolve a dúvida.'
+                  : handoff.ack_status === 'unavailable' ? 'O Mercado Livre não permite mais responder a esta pergunta. Registre o encaminhamento adotado.'
+                  : 'O acolhimento ainda não foi confirmado. A ANA continuará tentando; a pendência permanece aberta.'}
+              </p>
+              {question.answer_text && <p className="rounded bg-background p-3 text-sm">{question.answer_text}</p>}
+              <p className="text-xs text-muted-foreground">Motivo interno: {handoff.reason}</p>
+              {handoff.resolved_at ? (
+                <div className="text-sm"><p>{handoff.resolution_note}</p><p className="text-xs text-muted-foreground">Resolvido em {format(new Date(handoff.resolved_at), 'dd/MM/yyyy HH:mm')}. Registro interno, sem novo envio ao cliente.</p></div>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">O ML aceita uma única resposta por pergunta. Confirme a informação e atualize o cadastro ou anúncio quando necessário. O acolhimento orienta uma nova pergunta para consultar a confirmação; casos de pedido seguem por Minhas Compras.</p>
+                  <Textarea placeholder="Registre o que foi confirmado, a fonte e a ação tomada pela equipe. Este texto é interno e não será enviado ao cliente." value={resolutionNote} onChange={(e) => setResolutionNote(e.target.value)} rows={3} maxLength={2000} />
+                  <Button size="sm" disabled={resolutionNote.trim().length < 20 || resolutionMutation.isPending || !['verified', 'external_answer', 'unavailable'].includes(handoff.ack_status)} onClick={() => resolutionMutation.mutate({id: question.id, note: resolutionNote.trim()}, {
+                    onSuccess: () => {toast({title: 'Resolução interna registrada', description: 'Nenhuma nova resposta foi enviada ao Mercado Livre.'}); setResolutionNote('');},
+                    onError: (e) => toast({title: 'Não foi possível registrar', description: e.message, variant: 'destructive'}),
+                  })}>Registrar resolução interna</Button>
+                </>
+              )}
+            </div>
+          )}
           {/* AI suggestion (pending approval) */}
           {question.status === 'ai_suggested' && hasAiSuggestion && (
             <div className="bg-porcelain border border-dashed border-primary rounded-lg p-4">
@@ -215,7 +245,7 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
           )}
 
           {/* Answered display */}
-          {question.status === 'answered' && question.answer_text && (
+          {!handoff?.required && question.status === 'answered' && question.answer_text && (
             <div className="bg-muted rounded-lg p-4">
               <p className="text-sm text-foreground">{question.answer_text}</p>
               <p className="text-xs text-muted-foreground mt-2">
@@ -289,7 +319,7 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
           )}
 
           {/* ─── Feedback buttons (for answered questions) ─── */}
-          {(question.status === 'answered' || isAlreadyAnswered) && (question.answer_text || hasAiSuggestion) && (
+          {!handoff?.required && (question.status === 'answered' || isAlreadyAnswered) && (question.answer_text || hasAiSuggestion) && (
             <div className="space-y-3">
               {/* Status de análise (feedback já dado à Ana) */}
               {(question as any).feedback === 'good' && (
@@ -371,7 +401,7 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
           )}
 
           {/* Manual answer */}
-          {question.status !== 'answered' && (
+          {!handoff?.required && question.status !== 'answered' && (
             <div className="space-y-2">
               <Textarea
                 placeholder="Digite sua resposta..."

@@ -66,7 +66,7 @@ export function QuestionsTab() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
-            <SelectItem value="unanswered">Não Respondidas</SelectItem>
+            <SelectItem value="unanswered">Pendentes de atendimento</SelectItem>
             <SelectItem value="answered">Respondidas</SelectItem>
             <SelectItem value="ai_suggested">Sugestão IA</SelectItem>
             <SelectItem value="already_answered">Respondida externamente</SelectItem>

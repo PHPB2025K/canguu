@@ -8,6 +8,11 @@ import {
   validateGroundedAnswer,
 } from "./ml-grounding.ts";
 import { validateMLQuestionResponse } from "./ml-response-validator.ts";
+import {
+  handoffAcknowledgement,
+  handoffMetadata,
+  unresolvedHandoff,
+} from "./ml-handoff.ts";
 
 type DB = any;
 type Generator = (
@@ -275,6 +280,7 @@ export function makeSupport(
     question: any,
     item: any,
     reason: string,
+    delivery?: string,
   ) => Promise<any>,
 ) {
   async function prepare(
@@ -329,6 +335,7 @@ export function makeSupport(
       await getConfig(),
       p.context,
     );
+    const decision = parseDecision(result.answer, p.context);
     return {
       ok: true,
       seller_id: seller,
@@ -336,7 +343,10 @@ export function makeSupport(
       sku: p.row.sku,
       product_id: p.row.product_id,
       match_method: p.row.match_method,
-      decision: parseDecision(result.answer, p.context),
+      decision,
+      handoff_preview: decision.decision === "human"
+        ? handoffAcknowledgement(question)
+        : null,
       usage: result.usage,
       tokens: result.tokens,
       model: result.model,
@@ -391,6 +401,216 @@ export function makeSupport(
       );
     } else check(await db.from("marketplace_questions").insert(row));
   }
+  async function questionRow(seller: string, qid: string) {
+    return check(
+      await db.from("marketplace_questions").select("*")
+        .eq("platform", "mercado_livre").eq("seller_id", seller)
+        .eq("platform_question_id", qid).maybeSingle(),
+    );
+  }
+  async function patchHandoff(row: any, delta: any, patch: any = {}) {
+    const latest = await questionRow(row.seller_id, row.platform_question_id);
+    if (!latest) throw new Error("handoff_question_not_found");
+    const classification = latest.ai_classification || {};
+    const value = {
+      ...patch,
+      ai_classification: {
+        ...classification,
+        handoff: { ...classification.handoff, ...delta },
+      },
+    };
+    check(
+      await db.from("marketplace_questions").update(value).eq("id", latest.id),
+    );
+    return { ...latest, ...value };
+  }
+  async function notifyHandoff(row: any) {
+    const h = row.ai_classification.handoff;
+    if (!notify || h.notified_at || h.resolved_at) return;
+    const key = `handoff-notify:${row.seller_id}:${row.platform_question_id}`;
+    if (!check(await db.rpc("claim_ml_work", { p_key: key, p_ttl: 180 }))) {
+      return;
+    }
+    try {
+      const sent = await notify(
+        row.seller_id,
+        {
+          id: row.platform_question_id,
+          text: row.question_text,
+          item_id: row.platform_item_id,
+        },
+        { title: row.product_name },
+        h.reason,
+        h.ack_status,
+      );
+      if (sent !== true) throw new Error("handoff_notification_unconfirmed");
+      await patchHandoff(row, { notified_at: iso() });
+      await finish(key, "done", { notified: true });
+    } catch {
+      await finish(
+        key,
+        "retry",
+        { reason: "handoff_notification_failed" },
+        new Date(Date.now() + 120000).toISOString(),
+      );
+    }
+  }
+  async function deliverHandoff(seller: string, qid: string) {
+    let row = await questionRow(seller, qid);
+    if (!row || !unresolvedHandoff(row)) {
+      return { ok: true, state: "no_open_handoff" };
+    }
+    const key = `handoff:${seller}:${qid}`;
+    let h = row.ai_classification.handoff;
+    if (["verified", "external_answer", "unavailable"].includes(h.ack_status)) {
+      await notifyHandoff(row);
+      return { ok: true, state: "human", acknowledgement: h.ack_status };
+    }
+    if (!check(await db.rpc("claim_ml_work", { p_key: key, p_ttl: 300 }))) {
+      return { ok: true, state: "handoff_busy_or_retry_scheduled" };
+    }
+    try {
+      const token = await getToken(db, seller);
+      if (!token) throw new Error("account_token_unavailable");
+      let remote = await mlRead(`/questions/${qid}?api_version=4`, token);
+      if (
+        String(remote.seller_id) !== seller ||
+        remote.item_id !== row.platform_item_id
+      ) {
+        throw new Error("handoff_owner_mismatch");
+      }
+      if (remote.status !== "ANSWERED") {
+        if (remote.status !== "UNANSWERED" || remote.deleted_from_listing) {
+          row = await patchHandoff(row, {
+            ack_status: "unavailable",
+            last_error: "remote_question_not_open",
+          });
+          await finish(key, "done", { reason: "remote_question_not_open" });
+          await notifyHandoff(row);
+          return { ok: true, state: "human", acknowledgement: "unavailable" };
+        }
+        const item = await mlRead("/items/" + remote.item_id, token);
+        assertOwner(seller, item, remote);
+        if (item.status !== "active") throw new Error("handoff_item_inactive");
+        const validation = validateMLQuestionResponse(h.ack_text);
+        if (validation.forbiddenContactDetected || validation.warnings.length) {
+          throw new Error("handoff_template_invalid");
+        }
+        row = await patchHandoff(row, {
+          ack_status: "pending",
+          ack_attempts: (h.ack_attempts || 0) + 1,
+          last_attempt_at: iso(),
+          last_error: null,
+        });
+        // Read back even if the POST times out: delivery may already have succeeded.
+        try {
+          await fetch(API + "/answers", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              question_id: Number(qid),
+              text: h.ack_text,
+            }),
+            signal: AbortSignal.timeout(20000),
+          });
+        } catch { /* Remote state below is the source of truth. */ }
+        remote = await mlRead(`/questions/${qid}?api_version=4`, token);
+        assertOwner(seller, item, remote);
+      }
+      if (remote.status !== "ANSWERED" || !remote.answer?.text) {
+        throw new Error("handoff_send_not_verified");
+      }
+      const ours = remote.answer.text === h.ack_text;
+      row = await patchHandoff(row, {
+        ack_status: ours ? "verified" : "external_answer",
+        verified_at: iso(),
+        last_error: null,
+      }, {
+        // Acknowledgement never closes the HUMAN task.
+        status: "pending",
+        answer_text: remote.answer.text,
+        answered_at: remote.answer.date_created,
+        answered_by: ours ? "ai_handoff" : "marketplace_verified",
+      });
+      await finish(key, "done", { verified: true, ours });
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : "handoff_failed";
+      row = await patchHandoff(row, {
+        ack_status: "pending",
+        last_error: reason,
+      });
+      const lease = check(
+        await db.from("ml_work_leases").select("attempts").eq("work_key", key)
+          .single(),
+      );
+      // No attempt limit: acknowledgement remains mandatory until confirmed or the
+      // marketplace proves the question is no longer answerable.
+      await finish(
+        key,
+        "retry",
+        { reason },
+        new Date(
+          Date.now() + Math.min(30, Math.max(2, lease.attempts * 2)) * 60000,
+        ).toISOString(),
+      );
+    }
+    await notifyHandoff(row);
+    h = row.ai_classification.handoff;
+    return {
+      ok: h.ack_status !== "pending",
+      state: "human",
+      acknowledgement: h.ack_status,
+    };
+  }
+  async function escalate(
+    seller: string,
+    question: any,
+    item: any,
+    reason: string,
+  ) {
+    const qid = String(question.id);
+    const row = await questionRow(seller, qid);
+    await saveQuestion(question, item, {
+      status: "pending",
+      error_message: "escalado_humano: " + reason,
+      ai_classification: handoffMetadata(
+        row?.ai_classification,
+        question.text,
+        reason,
+      ),
+    });
+    await finish(`question:${seller}:${qid}`, "human", { reason });
+    return await deliverHandoff(seller, qid);
+  }
+  async function resolveHandoff(id: string, note: string, user: string) {
+    const row = check(
+      await db.from("marketplace_questions").select("*").eq("id", id)
+        .eq("platform", "mercado_livre").maybeSingle(),
+    );
+    if (!row?.ai_classification?.handoff?.required) {
+      throw new Error("handoff_not_found");
+    }
+    if (!note || note.trim().length < 20 || note.length > 2000) {
+      throw new Error("resolution_note_required_20_to_2000_chars");
+    }
+    const h = row.ai_classification.handoff;
+    if (h.resolved_at) return { ok: true, state: "already_resolved" };
+    if (
+      !["verified", "external_answer", "unavailable"].includes(h.ack_status)
+    ) throw new Error("acknowledgement_not_confirmed");
+    await patchHandoff(row, {
+      resolved_at: iso(),
+      resolved_by: user,
+      resolution_note: note.trim(),
+    }, {
+      status: h.ack_status === "unavailable" ? "skipped" : "answered",
+      error_message: null,
+    });
+    return { ok: true, state: "human_resolved", public_message_sent: false };
+  }
   async function process(
     seller: string,
     qid: string,
@@ -400,6 +620,12 @@ export function makeSupport(
       throw new Error("invalid_scope");
     }
     const key = `question:${seller}:${qid}`;
+    const priorRow = await questionRow(seller, qid);
+    if (unresolvedHandoff(priorRow)) {
+      // Never show success for a second public answer after acknowledgement.
+      if (manual) return { ok: false, state: "human_resolution_required" };
+      return await deliverHandoff(seller, qid);
+    }
     if (manual) {
       const prior = check(
         await db.from("ml_work_leases").select("state").eq("work_key", key)
@@ -457,8 +683,12 @@ export function makeSupport(
         ).limit(1),
       );
       if (!manual && existing[0]?.status === "pending") {
-        await finish(key, "human", { reason: "existing_human_queue" });
-        return { ok: true, state: "human" };
+        return await escalate(
+          seller,
+          question,
+          null,
+          existing[0]?.error_message || "existing_human_queue",
+        );
       }
       const p = await prepare(
         seller,
@@ -548,15 +778,7 @@ export function makeSupport(
           status: "pending",
           error_message: "escalado_humano: " + decision.reason,
         });
-        await finish(key, "human", { reason: decision.reason });
-        if (notify) await notify(seller, question, item, decision.reason);
-        return {
-          ok: true,
-          state: "human",
-          seller_id: seller,
-          question_id: qid,
-          reason: decision.reason,
-        };
+        return await escalate(seller, question, item, decision.reason);
       }
       // Persist draft BEFORE sending. A network error is reconciled against the remote answer.
       await saveQuestion(question, item, {
@@ -638,8 +860,9 @@ export function makeSupport(
         await db.from("ml_work_leases").select("attempts").eq("work_key", key)
           .single(),
       );
-      const human = lease.attempts >= 3 ||
-        /mismatch|invalid_scope|manual_answer_rejected/.test(reason);
+      const ownedQuestion = question && String(question.seller_id) === seller;
+      const human = ownedQuestion && (lease.attempts >= 3 ||
+        /mismatch|invalid_scope|manual_answer_rejected/.test(reason));
       // Do not attach a foreign seller's question to this account.
       if (question && String(question.seller_id) === seller) {
         await saveQuestion(question, item, {
@@ -654,9 +877,9 @@ export function makeSupport(
         new Date(Date.now() + Math.min(30, lease.attempts * 2) * 60000)
           .toISOString(),
       );
-      if (
-        human && question && String(question.seller_id) === seller && notify
-      ) await notify(seller, question, item, reason);
+      if (human && !/owner_mismatch|invalid_scope/.test(reason)) {
+        return await escalate(seller, question, item, reason);
+      }
       return {
         ok: false,
         state: human ? "human" : "retry",
@@ -712,21 +935,40 @@ export function makeSupport(
     }
     // Human replies made directly on ML must close the Canggu queue too.
     const localOpen = check(
-      await db.from("marketplace_questions").select("platform_question_id")
+      await db.from("marketplace_questions").select(
+        "platform_question_id,status,ai_classification,error_message",
+      )
         .eq("platform", "mercado_livre").eq("seller_id", seller).in("status", [
           "pending",
           "failed",
           "ai_suggested",
-        ]).limit(20),
+        ]).or(
+          "ai_classification->handoff->>ack_status.eq.pending,ai_classification->handoff->>notified_at.is.null",
+        ).limit(20),
     );
     const openIds = new Set(questions.map((q: any) => String(q.id)));
     let reconciled = 0;
     for (const row of localOpen) {
       const qid = row.platform_question_id;
-      if (openIds.has(qid)) continue;
+      if (unresolvedHandoff(row)) {
+        outputs.push(await deliverHandoff(seller, qid));
+        continue;
+      }
+      if (openIds.has(qid) && row.status !== "pending") continue;
       const remote = await mlRead(`/questions/${qid}?api_version=4`, token);
       if (String(remote.seller_id) !== seller) {
         throw new Error("question_owner_mismatch");
+      }
+      if (remote.status === "UNANSWERED" && row.status === "pending") {
+        outputs.push(
+          await escalate(
+            seller,
+            remote,
+            null,
+            row.error_message || "existing_human_queue",
+          ),
+        );
+        continue;
       }
       if (remote.status === "ANSWERED" && remote.answer?.text) {
         await saveQuestion(remote, null, {
@@ -763,5 +1005,12 @@ export function makeSupport(
       reconciled,
     };
   }
-  return { dryRun, process, reconcile, prepare };
+  return {
+    dryRun,
+    process,
+    reconcile,
+    prepare,
+    deliverHandoff,
+    resolveHandoff,
+  };
 }

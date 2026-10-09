@@ -35,6 +35,21 @@ def run():
                 age=now-datetime.fromisoformat(q['date_created'].replace('Z','+00:00')).timestamp()
                 if age>900: issues.append((seller+':'+str(q['id']),f"{label} · {q['item_id']} · pergunta {q['id']} sem resposta há {round(age/60)} min. Responder na conta correspondente do Mercado Livre ou pela Canggu."))
         except Exception: issues.append(('access_'+seller,label+': não foi possível verificar as perguntas. Isso não equivale a uma fila vazia.'))
+    human_pending = 0
+    try:
+        r=requests.get(SB+'/rest/v1/marketplace_questions',params={'platform':'eq.mercado_livre','status':'eq.pending','select':'seller_id,platform_question_id,platform_item_id,ai_classification','limit':1000},headers={'apikey':key,'Authorization':'Bearer '+key},timeout=15)
+        r.raise_for_status()
+        for row in r.json():
+            h=(row.get('ai_classification') or {}).get('handoff') or {}
+            if not h.get('required') or h.get('resolved_at'):continue
+            human_pending+=1
+            age=now-datetime.fromisoformat(h['requested_at'].replace('Z','+00:00')).timestamp()
+            label=LABELS.get(row['seller_id'],'ML')
+            if h.get('ack_status')=='pending' and age>300:
+                issues.append(('ack_'+row['platform_question_id'],f"{label} · {row['platform_item_id']} · acolhimento ainda não confirmado há {round(age/60)} min; novas tentativas continuam. Verificar acesso e anúncio na Canggu."))
+            elif age>900:
+                issues.append(('human_'+row['platform_question_id'],f"{label} · {row['platform_item_id']} · atendimento humano pendente há {round(age/60)} min. A resposta pública não resolve o caso interno; confirmar dados e registrar a resolução na Canggu."))
+    except Exception:issues.append(('human_queue_check','Não foi possível verificar a fila humana da ANA na Canggu.'))
     try: previous=json.loads(STATE.read_text())
     except Exception: previous={}
     previous={k:v for k,v in previous.items() if isinstance(v,(int,float)) and now-v<86400}
@@ -45,6 +60,6 @@ def run():
         if r.ok:
             for k,_ in fresh[:12]:previous[k]=now
     tmp=STATE.with_suffix('.tmp');tmp.write_text(json.dumps(previous));tmp.chmod(0o600);tmp.replace(STATE)
-    print(json.dumps({'at':now,'unanswered':counts,'issues':len(issues),'new_alerts':min(len(fresh),12)}),flush=True)
+    print(json.dumps({'at':now,'unanswered':counts,'human_pending':human_pending,'issues':len(issues),'new_alerts':min(len(fresh),12)}),flush=True)
 
 if __name__=='__main__':run()

@@ -20,13 +20,21 @@ ML1 conserva o OAuth Canggu. A renovação possui exclusão mútua entre webhook
 
 `ml_work_leases` e `claim_ml_work` impedem trabalho simultâneo duplicado. A sugestão é salva antes de publicar. Falha de publicação pode ser repetida; quando o contexto não mudou, a sugestão é reutilizada sem uma segunda geração. Após três falhas, encaminhar para a fila humana.
 
-A Canggu só apresenta envio confirmado depois de reler a resposta no ML. Uma resposta feita diretamente no ML também é conciliada, com autoria `marketplace_verified`. Pendências aparecem como **Atendimento humano** no painel, identificadas por conta. A equipe pode responder na Canggu ou diretamente na conta correta do ML.
+A Canggu só apresenta envio confirmado depois de reler a resposta no ML. Uma resposta feita diretamente no ML também é conciliada, com autoria `marketplace_verified`. Pendências aparecem como **Atendimento humano** no painel, identificadas por conta.
+
+**Acolhimento obrigatório, decisão do Pedro em 09/10/2026:** toda escalada de pergunta aberta publica primeiro um texto controlado de acolhimento na conta/anúncio corretos. O ML permite uma única resposta por pergunta, sem alteração posterior ([orientação oficial](https://vendedores.mercadolivre.com.br/aprender/nota/responda-a-todas-as-perguntas-e-conclua-a-transacao-de-forma-mais-rapida?guideKeyId=GE70)). Portanto, não prometer retorno na mesma pergunta: dúvidas de produto orientam nova pergunta no anúncio; casos de pedido orientam a aba de mensagens da compra no próprio ML.
+
+O acolhimento confirmado tem autoria `ai_handoff` e **mantém `status=pending`**. Os dados em `ai_classification.handoff` registram motivo, texto, tentativas, confirmação, notificação e resolução humana. A ação autenticada `resolve_handoff` exige nota da equipe com confirmação/fonte/ação; não publica uma segunda mensagem. A equipe deve corrigir a fonte do produto/anúncio quando necessário. A nota interna não é automaticamente transformada em característica do produto.
+
+Travas separadas `handoff:` e `handoff-notify:` evitam duplicar a resposta e o aviso interno. Confirmação por leitura remota também cobre timeout depois de envio bem-sucedido. Falha do acolhimento continua em novas tentativas, com espera limitada a 30 minutos, sem abandono após três tentativas e sem nova geração de IA. O aviso interno vem depois da tentativa pública e indica se o acolhimento foi confirmado; falha de notificação também é repetida. Se o ML demonstrar que a pergunta foi encerrada/removida, registrar a impossibilidade e manter tratamento humano; nunca fabricar confirmação.
+
+Perguntas que já receberam acolhimento têm somente **Registrar resolução interna** no painel. O filtro **Pendentes de atendimento** inclui essa fila. A conciliação automática não encerra um caso humano só porque o ML passou a apresentar `ANSWERED`.
 
 ## Rotinas na VPS
 
 - `ana-ml-bridge.py`: a cada 2 minutos, importa acessos ML2/ML3 e reconcilia as três contas. ML1 preserva a notificação imediata; o conector aguarda pelo menos 60 segundos antes de recuperá-la. Limite de cinco perguntas por conta/ciclo.
 - `ana-ml-bridge.py --catalog`: diariamente às 05:17, horário local São Paulo. Compara alterações e mantém checkpoints por item; também revisita dados com mais de 24 horas. Novos anúncios são carregados sob demanda ao chegar a primeira pergunta.
-- `ana-ml-monitor.py`: substitui o monitor de perguntas existente, no mesmo agendamento de 10 minutos. Verifica saúde do conector, acesso real às contas e perguntas aguardando mais de 15 minutos. HTTP com erro nunca é considerado fila vazia. Reutiliza o destino operacional de alertas já configurado.
+- `ana-ml-monitor.py`: substitui o monitor de perguntas existente, no mesmo agendamento de 10 minutos. Verifica saúde do conector, acesso real às contas, perguntas aguardando mais de 15 minutos, acolhimento não confirmado após 5 minutos e casos humanos pendentes após 15 minutos mesmo quando já respondidos publicamente. HTTP com erro nunca é considerado fila vazia. Reutiliza o destino operacional de alertas já configurado.
 - Estado e checkpoints ficam na pasta privada de estado `ana-ml` da VPS. Backups do monitor e crontab são preservados antes de substituição.
 - Limite atual da listagem de catálogo: 1.000 anúncios ativos por conta. Ao alcançá-lo, o job sinaliza erro explícito; migrar a enumeração para scan antes de ampliar acima desse volume.
 

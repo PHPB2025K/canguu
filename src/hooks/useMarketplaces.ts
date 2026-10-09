@@ -256,9 +256,12 @@ export function useAnswerQuestion() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, answer_text, answered_by }: { id: string; answer_text: string; answered_by: string }) => {
-      const { data: question, error: readError } = await supabase.from('marketplace_questions').select('platform').eq('id', id).single();
+      const { data: question, error: readError } = await supabase.from('marketplace_questions').select('platform,ai_classification').eq('id', id).single();
       if (readError) throw readError;
       if (question.platform === 'mercado_livre') {
+        if ((question.ai_classification as any)?.handoff?.required) {
+          throw new Error('Esta pergunta tem acompanhamento humano. Use Registrar resolução interna; o Mercado Livre aceita apenas uma resposta pública.');
+        }
         const { data, error } = await supabase.functions.invoke('ml-webhook', { body: { action: 'manual_answer', id, answer: answer_text } });
         if (error) throw error;
         if (!data?.ok || !['answered_verified', 'already_answered_verified'].includes(data.state)) {
@@ -282,6 +285,24 @@ export function useAnswerQuestion() {
       qc.invalidateQueries({ queryKey: ['marketplace-question-counts'] });
       qc.invalidateQueries({ queryKey: ['marketplace-unanswered-count'] });
       qc.invalidateQueries({ queryKey: ['sidebar-marketplace-count'] });
+    },
+  });
+}
+
+export function useResolveMLHandoff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, note }: { id: string; note: string }) => {
+      const { data, error } = await supabase.functions.invoke('ml-webhook', { body: { action: 'resolve_handoff', id, note } });
+      if (error) throw error;
+      if (!data?.ok || !['human_resolved', 'already_resolved'].includes(data.state)) {
+        throw new Error('A resolução não foi confirmada. Confira se o acolhimento já foi enviado.');
+      }
+    },
+    onSuccess: () => {
+      for (const key of ['marketplace-questions', 'marketplace-question-counts', 'marketplace-unanswered-count', 'sidebar-marketplace-count']) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
     },
   });
 }
