@@ -49,3 +49,18 @@ describe('ML human handoff', () => {
     expect(screen.queryByRole('button', {name: 'Enviar Resposta'})).not.toBeInTheDocument();
   });
 });
+
+describe('ML account and visible answer', () => {
+  for (const [seller, label] of [['532562281','ML1 · Budamix'], ['3642409154','ML2 · Kanoa'], ['2237203375','ML3 · SPBROGLIO']]) {
+    it(`shows ${label} and the new answer without expanding the card`, () => {
+      const question: any = {id:'q',platform:'mercado_livre',seller_id:seller,product_name:'Jogo',question_text:'Qual o material?',status:'unanswered'};
+      const {rerender}=render(<QuestionCard question={question}/>);
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.queryByText('Resposta da ANA')).not.toBeInTheDocument();
+      rerender(<QuestionCard question={{...question,status:'answered',answered_by:'ai_agent',answer_text:'Olá! O material é MDF.'}}/>);
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText('Resposta da ANA')).toBeInTheDocument();
+      expect(screen.getByText('Olá! O material é MDF.')).toBeInTheDocument();
+    });
+  }
+});

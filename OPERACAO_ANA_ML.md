@@ -45,6 +45,16 @@ Perguntas não trazem automaticamente um pedido. Consulta de pedidos só ocorre 
 
 Não há consumo adicional de tokens nessa etapa. A consulta de pedidos é feita uma vez por criação de caso, com chamadas de leitura e registro estruturado.
 
+## Perguntas e respostas em tempo real
+
+`marketplace_questions` deve estar na publicação `supabase_realtime` (migração `20261009150000_marketplace_questions_realtime.sql`). Em 09/10, havia assinatura no painel, mas a tabela estava fora da publicação — não transmitia eventos. RLS autenticada preservada, sem habilitar publicação da tabela de credenciais.
+
+A tela Marketplaces usa um canal de perguntas independente do canal opcional de chats e confirma prontidão pelo evento `system` da extensão `postgres_changes`, não somente por `SUBSCRIBED`. Eventos invalidam as consultas; confirmação de reconexão, foco e retorno à aba recuperam lacunas. Enquanto a conexão não está pronta, há leitura de segurança a cada 15s com a aba visível e rede disponível. O estado é mostrado ao usuário.
+
+Cada cartão mostra a conta **ML1 · Budamix / ML2 · Kanoa / ML3 · SPBROGLIO**, com resposta confirmada visível mesmo recolhido. A tela permite filtrar por conta; o filtro é aplicado na consulta e na chave de cache. Identificação vem de `seller_id` gravado pelo fluxo que valida o vendedor, nunca do produto compartilhado. Sugestão não enviada continua separada da resposta publicada.
+
+Validação do transporte real: assinatura autenticada, prontidão confirmada e evento de UPDATE recebido em 1.621 ms desde a requisição de teste (inclui latência da API). O ensaio dedicado apenas regravou o mesmo texto de uma resposta ML1 existente; comparação antes/depois confirmou todos os campos iguais. Sem pergunta de teste nem envio ao cliente. ML2/ML3 sem registros de perguntas no corte; seus eventos/filtros foram exercitados com testes do painel, sem afirmar envio real nessas contas.
+
 ## Rotinas na VPS
 
 - `ana-ml-bridge.py`: a cada 2 minutos, importa acessos ML2/ML3 e reconcilia as três contas. ML1 preserva a notificação imediata; o conector aguarda pelo menos 60 segundos antes de recuperá-la. Limite de cinco perguntas por conta/ciclo.

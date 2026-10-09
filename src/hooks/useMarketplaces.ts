@@ -1,38 +1,73 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { MarketplaceQuestion, MarketplaceChat, MarketplaceChatMessage } from '@/types/database';
 // CARTILHA ÚNICA — mesmas regras da geração/juiz/validador (edge functions).
 import { validateCorrectionText } from '../../supabase/functions/_shared/marketplace-rules';
 
-/** Realtime hook — call once at module level (e.g. in Marketplaces page) */
+/** One subscription for questions, independently of optional chat integration. */
 export function useMarketplaceRealtime() {
   const qc = useQueryClient();
+  const [state, setState] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
 
   useEffect(() => {
-    const channel = supabase
-      .channel('marketplace-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_questions' }, () => {
-        qc.invalidateQueries({ queryKey: ['marketplace-questions'] });
-        qc.invalidateQueries({ queryKey: ['marketplace-question-counts'] });
-        qc.invalidateQueries({ queryKey: ['marketplace-unanswered-count'] });
-        qc.invalidateQueries({ queryKey: ['sidebar-marketplace-count'] });
+    let active = true;
+    let live = false;
+    const refreshQuestions = () => {
+      if (!active) return;
+      for (const key of ['marketplace-questions', 'marketplace-question-counts', 'marketplace-unanswered-count',
+        'sidebar-marketplace-count', 'platform-answered-count', 'platform-avg-response']) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
+    };
+    const questions = supabase.channel('marketplace-questions-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_questions' }, refreshQuestions)
+      .on('system', {}, (payload) => {
+        if (!active || payload.extension !== 'postgres_changes') return;
+        live = payload.status === 'ok';
+        setState(live ? 'live' : 'reconnecting');
+        if (live) refreshQuestions(); // Catch changes between initial fetch and listener readiness.
       })
+      .subscribe((status) => {
+        if (!active) return;
+        // SUBSCRIBED alone does not prove the database listener is ready.
+        if (status !== 'SUBSCRIBED') {
+          live = false;
+          setState('reconnecting');
+        }
+      });
+    const chats = supabase.channel('marketplace-chats-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_chats' }, () => {
-        qc.invalidateQueries({ queryKey: ['marketplace-chats'] });
-        qc.invalidateQueries({ queryKey: ['marketplace-active-chats'] });
-        qc.invalidateQueries({ queryKey: ['marketplace-total-unread'] });
-        qc.invalidateQueries({ queryKey: ['sidebar-marketplace-count'] });
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+        for (const key of ['marketplace-chats', 'marketplace-active-chats', 'marketplace-total-unread', 'sidebar-marketplace-count']) {
+          qc.invalidateQueries({ queryKey: [key] });
+        }
+      }).subscribe();
+    const resume = () => { if (document.visibilityState === 'visible') refreshQuestions(); };
+    const offline = () => { live = false; if (active) setState('reconnecting'); };
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', resume);
+    window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume);
+    const fallback = window.setInterval(() => {
+      if (!live && navigator.onLine && document.visibilityState === 'visible') refreshQuestions();
+    }, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(fallback);
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('focus', resume);
+      document.removeEventListener('visibilitychange', resume);
+      supabase.removeChannel(questions);
+      supabase.removeChannel(chats);
+    };
   }, [qc]);
+  return state;
 }
 
-export function useMarketplaceQuestions(platform?: string, status?: string, search?: string) {
+export function useMarketplaceQuestions(platform?: string, status?: string, search?: string, sellerId?: string) {
   return useQuery({
-    queryKey: ['marketplace-questions', platform, status, search],
+    queryKey: ['marketplace-questions', platform, status, search, sellerId],
     queryFn: async () => {
       let query = supabase
         .from('marketplace_questions')
@@ -42,6 +77,9 @@ export function useMarketplaceQuestions(platform?: string, status?: string, sear
 
       if (platform && platform !== 'all') {
         query = query.eq('platform', platform);
+      }
+      if (sellerId && sellerId !== 'all') {
+        query = query.eq('platform', 'mercado_livre').eq('seller_id', sellerId);
       }
       if (status && status !== 'all') {
         query = status === 'unanswered' ? query.in('status', ['unanswered', 'pending', 'failed']) : query.eq('status', status);

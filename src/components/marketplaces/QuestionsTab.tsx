@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PlatformBadge } from './PlatformBadge';
 import { QuestionCard } from './QuestionCard';
 import { useMarketplaceQuestions } from '@/hooks/useMarketplaces';
+import { ML_ACCOUNT_OPTIONS } from '@/lib/marketplace-accounts';
 import { cn } from '@/lib/utils';
 
 const platforms = [
@@ -18,6 +19,7 @@ const platforms = [
 
 export function QuestionsTab() {
   const [platform, setPlatform] = useState('all');
+  const [sellerId, setSellerId] = useState('all');
   const [status, setStatus] = useState('all');
   const [analysis, setAnalysis] = useState('all');
   const [search, setSearch] = useState('');
@@ -25,7 +27,8 @@ export function QuestionsTab() {
   const { data: questions, isLoading, isError, refetch } = useMarketplaceQuestions(
     platform,
     status,
-    search || undefined
+    search || undefined,
+    sellerId
   );
 
   // Filtro client-side por análise (feedback já dado à Ana)
@@ -49,7 +52,7 @@ export function QuestionsTab() {
               key={p.value}
               variant={platform === p.value ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setPlatform(p.value)}
+              onClick={() => { setPlatform(p.value); if (!['all', 'mercado_livre'].includes(p.value)) setSellerId('all'); }}
               className={cn(
                 'h-8',
                 platform === p.value && p.value === 'all' && 'bg-primary text-primary-foreground'
@@ -59,6 +62,18 @@ export function QuestionsTab() {
             </Button>
           ))}
         </div>
+
+        {['all', 'mercado_livre'].includes(platform) && (
+          <Select value={sellerId} onValueChange={setSellerId}>
+            <SelectTrigger className="w-[200px] h-8" aria-label="Conta do Mercado Livre">
+              <SelectValue placeholder="Todas as contas ML" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as contas ML</SelectItem>
+              {ML_ACCOUNT_OPTIONS.map((account) => <SelectItem key={account.sellerId} value={account.sellerId}>{account.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
 
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-[180px] h-8">

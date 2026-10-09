@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { mlAccountLabel } from '@/lib/marketplace-accounts';
 import { PlatformBadge } from './PlatformBadge';
 import { useAnswerQuestion, useRejectSuggestion, useFeedbackQuestion, useSubmitCorrection, useResolveMLHandoff } from '@/hooks/useMarketplaces';
 import { useToast } from '@/hooks/use-toast';
@@ -152,12 +153,12 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
       onClick={() => setExpanded(!expanded)}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2">
           <PlatformBadge platform={question.platform} />
-          {question.platform === 'mercado_livre' && question.seller_id && (
-            <span className="text-xs font-medium text-muted-foreground">
-              {({ '532562281': 'ML1 · Budamix', '3642409154': 'ML2 · Kanoa', '2237203375': 'ML3 · SPBROGLIO' } as Record<string, string>)[question.seller_id] ?? 'Conta ML'}
+          {question.platform === 'mercado_livre' && (
+            <span className="text-xs font-semibold bg-primary/10 text-primary rounded px-2 py-1">
+              {mlAccountLabel(question.seller_id)}
             </span>
           )}
           <span className="text-xs text-muted-foreground">{relativeTime}</span>
@@ -193,6 +194,15 @@ export function QuestionCard({ question }: { question: MarketplaceQuestion }) {
           {question.buyer_nickname}
         </p>
       </div>
+
+      {!expanded && question.answer_text && (
+        <div className="mt-3 rounded-lg bg-muted p-3 text-sm">
+          <p className="font-medium mb-1">{question.answered_by === 'ai_handoff' ? 'Acolhimento da ANA'
+            : ['ai_agent', 'ai'].includes(question.answered_by || '') ? 'Resposta da ANA' : 'Resposta enviada'}</p>
+          <p className="whitespace-pre-wrap">{question.answer_text}</p>
+          {question.answered_at && <p className="mt-2 text-xs text-muted-foreground">Enviada em {format(new Date(question.answered_at), 'dd/MM/yyyy HH:mm')}</p>}
+        </div>
+      )}
 
       {/* Expanded */}
       {expanded && (

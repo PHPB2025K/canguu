@@ -6,26 +6,21 @@ import { ChatsTab } from '@/components/marketplaces/ChatsTab';
 import { ConfigTab } from '@/components/marketplaces/ConfigTab';
 import { LearningTab } from '@/components/marketplaces/LearningTab';
 import { useUnansweredCount, useTotalUnreadCount, useMarketplaceRealtime, useLearningQueueCount } from '@/hooks/useMarketplaces';
+import { ML_ACCOUNT_OPTIONS } from '@/lib/marketplace-accounts';
 import { useMarketplaceTokenStatus } from '@/hooks/useMarketplaceTokens';
 
 function ConnectionIndicators() {
   const { data: tokens } = useMarketplaceTokenStatus();
-  const mlToken = tokens?.find(t => t.platform === 'mercado_livre');
-
-  const mlConnected = mlToken?.connection_status === 'connected';
-  const mlLabel = mlConnected
-    ? `Conectado (${mlToken?.seller_nickname ?? ''})`
-    : mlToken?.connection_status === 'expired'
-      ? 'Expirado'
-      : 'Não configurado';
-  const mlDot = mlConnected ? 'bg-success' : mlToken ? 'bg-destructive' : 'bg-muted-foreground';
-
   return (
     <div className="flex items-center gap-4 text-[13px] text-muted-foreground flex-wrap">
-      <span className="inline-flex items-center gap-1.5">
-        <span className={`h-2 w-2 rounded-full ${mlDot}`} />
-        Mercado Livre: {mlLabel}
-      </span>
+      {ML_ACCOUNT_OPTIONS.map((account) => {
+        const token = tokens?.find(t => t.platform === 'mercado_livre' && t.seller_id === account.sellerId);
+        const connected = token?.connection_status === 'connected';
+        return <span key={account.sellerId} className="inline-flex items-center gap-1.5">
+          <span className={`h-2 w-2 rounded-full ${connected ? 'bg-success' : token ? 'bg-destructive' : 'bg-muted-foreground'}`} />
+          {account.label}: {connected ? 'Conectada' : token?.connection_status === 'expired' ? 'Expirada' : 'Não configurada'}
+        </span>;
+      })}
       <span className="text-border">•</span>
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2 w-2 rounded-full bg-warning" />
@@ -41,7 +36,7 @@ function ConnectionIndicators() {
 }
 
 const Marketplaces = () => {
-  useMarketplaceRealtime();
+  const realtime = useMarketplaceRealtime();
   const { data: unanswered = 0 } = useUnansweredCount();
   const { data: totalUnread = 0 } = useTotalUnreadCount();
   const { data: learningCount = 0 } = useLearningQueueCount();
@@ -54,6 +49,11 @@ const Marketplaces = () => {
           description="Gerencie perguntas e chats do Mercado Livre, Shopee e Amazon"
         />
         <ConnectionIndicators />
+        <p role="status" className={`text-xs ${realtime === 'live' ? 'text-success' : 'text-muted-foreground'}`}>
+          {realtime === 'live' ? 'Perguntas e respostas em tempo real'
+            : realtime === 'connecting' ? 'Conectando atualização em tempo real…'
+            : 'Reconectando — conferência automática a cada 15 segundos'}
+        </p>
       </div>
 
       <div className="shrink-0">
