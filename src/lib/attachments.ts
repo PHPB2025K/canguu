@@ -46,7 +46,9 @@ export interface Attachment {
 
 export type Notice =
   | { kind: "unsupported"; label: string | null; detail: string | null }
-  | { kind: "reaction"; emoji: string | null };
+  | { kind: "reaction"; emoji: string | null }
+  | { kind: "album" }
+  | { kind: "system"; body: string | null };
 
 type Rec = Record<string, unknown>;
 
@@ -239,8 +241,15 @@ const UNSUPPORTED_LABEL: Record<string, string> = {
 export function getNotice(message: Pick<Message, "metadata" | "message_type" | "content">): Notice | null {
   const type = message.message_type ?? "";
   const meta = metaOf(message);
+  if (type === "system") {
+    // Aviso do próprio WhatsApp (ex.: cliente trocou de número)
+    const body = str(asRec(meta.system)?.body) ?? (/^\[Aviso do WhatsApp:\s*([^\]]+)\]/i.exec(message.content ?? "")?.[1] ?? null);
+    return { kind: "system", body };
+  }
   if (type === "unsupported") {
     const sub = str(asRec(meta.unsupported)?.type);
+    // "álbum" é só o cabeçalho de várias fotos: as fotos chegam logo depois, uma por uma
+    if (sub && sub.toLowerCase() === "album") return { kind: "album" };
     const err = Array.isArray(meta.wa_errors) ? asRec(meta.wa_errors[0]) : null;
     const detail = err ? str(asRec(err.error_data)?.details) ?? str(err.message) ?? str(err.title) : null;
     return { kind: "unsupported", label: sub ? UNSUPPORTED_LABEL[sub.toLowerCase()] ?? sub : null, detail };

@@ -348,6 +348,27 @@ function AttachmentPreview({
 }
 
 function NoticeView({ notice }: { notice: Notice }) {
+  if (notice.kind === "album") {
+    return (
+      <div className="flex items-start gap-2">
+        <Image className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <p className="text-sm text-foreground">Enviou um álbum de fotos (as fotos aparecem logo abaixo)</p>
+      </div>
+    );
+  }
+  if (notice.kind === "system") {
+    return (
+      <div className="flex items-start gap-2">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium text-foreground">Aviso do WhatsApp</p>
+          <p className="text-xs text-muted-foreground">
+            {notice.body ?? "Aviso automático do WhatsApp (por exemplo, o cliente trocou de número)."}
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (notice.kind === "reaction") {
     return (
       <p className="text-sm text-foreground">
