@@ -72,6 +72,7 @@ const MEDIA_PREVIEW_LABEL: Record<string, string> = {
   location: "📍 Localização",
   contacts: "👤 Contato",
   unsupported: "Mensagem que o WhatsApp não repassa",
+  system: "Aviso do WhatsApp",
   share: "🔗 Publicação compartilhada",
   ig_post: "🔗 Publicação compartilhada",
   story_mention: "📣 Mencionou a Budamix no story",
@@ -111,4 +112,19 @@ export function getRelativeTime(isoDate: string): string {
   if (diffHour < 24) return `há ${diffHour}h`;
   if (diffDay === 1) return "ontem";
   return `há ${diffDay} dias`;
+}
+
+/**
+ * Horário da última mensagem na lista de conversas:
+ * até 24h atrás → "14:32"; mais antigo → "03/11 14:32" (com ano se for outro ano: "28/12/25 09:10").
+ */
+export function formatListTime(isoDate: string, now: number = Date.now()): string {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (now - d.getTime() < 24 * 60 * 60 * 1000) return hhmm;
+  const ddmm = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+  const sameYear = d.getFullYear() === new Date(now).getFullYear();
+  return sameYear ? `${ddmm} ${hhmm}` : `${ddmm}/${String(d.getFullYear()).slice(-2)} ${hhmm}`;
 }

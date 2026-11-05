@@ -7,7 +7,7 @@ import { SearchBar } from "@/components/common/SearchBar";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { SentimentBadge } from "@/components/common/SentimentBadge";
 import { SourceBadge } from "@/components/common/SourceBadge";
-import { RelativeTime } from "@/components/common/RelativeTime";
+import { ListTime } from "@/components/common/ListTime";
 import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { useConversationList } from "@/hooks/useConversations";
@@ -118,7 +118,7 @@ export function ConversationList({ selectedId, onSelect, channel }: Conversation
       </div>
 
       {/* List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-w-0 [&>[data-radix-scroll-area-viewport]>div]:!block">
         {isLoading ? (
           <div className="p-3">
             <LoadingState type="list" />
@@ -158,8 +158,11 @@ export function ConversationList({ selectedId, onSelect, channel }: Conversation
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {isUnread && <div className="w-2 h-2 bg-primary rounded-full" />}
-                        {conv.updated_at && (
-                          <RelativeTime date={conv.updated_at} className="text-xs text-muted-foreground" />
+                        {(conv.lastMessage?.created_at || conv.updated_at) && (
+                          <ListTime
+                            date={(conv.lastMessage?.created_at || conv.updated_at) as string}
+                            className="text-xs text-muted-foreground tabular-nums whitespace-nowrap"
+                          />
                         )}
                       </div>
                     </div>
